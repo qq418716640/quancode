@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +30,7 @@ var (
 	delegateContextDiff    string
 	delegateContextMaxSize int
 	delegateNoContext      bool
+	delegateDryRun         bool
 	delegateVerify         []string
 	delegateVerifyStrict   []string
 	delegateVerifyTimeout  int
@@ -38,6 +40,14 @@ var (
 	// Tests can replace this to avoid blocking on os.Stdin.
 	stdinReader *bufio.Reader
 )
+
+type dryRunResult struct {
+	Agent     string      `json:"agent"`
+	Task      string      `json:"task"`
+	Isolation string      `json:"isolation"`
+	WorkDir   string      `json:"work_dir"`
+	Verify    *verifySpec `json:"verify,omitempty"`
+}
 
 type DelegationResult struct {
 	Agent          string                 `json:"agent"`
@@ -126,8 +136,10 @@ var delegateCmd = &cobra.Command{
 			return fmt.Errorf("agent %s is disabled", agentKey)
 		}
 		a := agent.FromConfig(agentKey, ac)
-		if ok, _ := a.IsAvailable(); !ok {
-			return fmt.Errorf("agent %s: command %q not found in PATH", agentKey, ac.Command)
+		if !delegateDryRun {
+			if ok, _ := a.IsAvailable(); !ok {
+				return fmt.Errorf("agent %s: command %q not found in PATH", agentKey, ac.Command)
+			}
 		}
 
 		// Validate verify flags (mutually exclusive)
@@ -151,6 +163,43 @@ var delegateCmd = &cobra.Command{
 				Strict:     verifyStrict,
 				TimeoutSec: delegateVerifyTimeout,
 			}
+		}
+
+		// Dry-run: show what would be sent to the agent, then exit
+		if delegateDryRun {
+			var ctxPrefix string
+			if !delegateNoContext {
+				builder := qcontext.NewBuilder(cfg.ContextDefaults, ac.Context)
+				bundle := builder.Build(workDir, delegateContextFiles, delegateContextDiff, delegateContextMaxSize)
+				ctxPrefix = qcontext.Format(bundle)
+				for _, w := range bundle.Warnings {
+					fmt.Fprintf(os.Stderr, "[quancode] context: %s\n", w)
+				}
+			}
+			fullTask := task
+			if ctxPrefix != "" {
+				fullTask = ctxPrefix + "\n\n=== TASK ===\n\n" + task
+			}
+			if delegateFormat == "json" {
+				data, _ := json.MarshalIndent(dryRunResult{
+					Agent:     agentKey,
+					Task:      fullTask,
+					Isolation: isolation,
+					WorkDir:   workDir,
+					Verify:    vs,
+				}, "", "  ")
+				fmt.Println(string(data))
+			} else {
+				fmt.Fprintf(os.Stderr, "[quancode] dry-run: would delegate to %s\n", agentKey)
+				fmt.Fprintf(os.Stderr, "[quancode] isolation: %s\n", isolation)
+				fmt.Fprintf(os.Stderr, "[quancode] work_dir: %s\n", workDir)
+				if vs != nil {
+					fmt.Fprintf(os.Stderr, "[quancode] verify: %v (strict=%v)\n", vs.Commands, vs.Strict)
+				}
+				fmt.Fprintf(os.Stderr, "[quancode] --- full prompt ---\n")
+				fmt.Print(fullTask)
+			}
+			return nil
 		}
 
 		// Run attempt with fallback loop
@@ -323,6 +372,7 @@ func init() {
 	delegateCmd.Flags().StringVar(&delegateContextDiff, "context-diff", "", "include git diff: staged, working, or empty for off")
 	delegateCmd.Flags().IntVar(&delegateContextMaxSize, "context-max-size", 0, "override max context size in bytes (0 = use config default)")
 	delegateCmd.Flags().BoolVar(&delegateNoContext, "no-context", false, "disable automatic context injection")
+	delegateCmd.Flags().BoolVar(&delegateDryRun, "dry-run", false, "show what would be sent to the agent without executing")
 	delegateCmd.Flags().StringArrayVar(&delegateVerify, "verify", nil, "verification command to run after delegation (record only, can be specified multiple times)")
 	delegateCmd.Flags().StringArrayVar(&delegateVerifyStrict, "verify-strict", nil, "verification command — fail delegation if verification fails (can be specified multiple times)")
 	delegateCmd.Flags().IntVar(&delegateVerifyTimeout, "verify-timeout", 120, "timeout in seconds for each verification command")

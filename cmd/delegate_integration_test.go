@@ -625,6 +625,124 @@ agents:
 	}
 }
 
+func TestDelegateRunEDryRunShowsPrompt(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+  codex:
+    name: Codex CLI
+    command: /bin/sh
+    enabled: true
+    delegate_args:
+      - -c
+      - echo should-not-run
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	oldDryRun := delegateDryRun
+	oldNoContext := delegateNoContext
+	cfgFile = cfgPath
+	delegateAgent = "codex"
+	delegateWorkdir = dir
+	delegateFormat = "text"
+	delegateIsolation = "inplace"
+	delegateDryRun = true
+	delegateNoContext = true
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+		delegateDryRun = oldDryRun
+		delegateNoContext = oldNoContext
+	}()
+
+	out := captureStdout(t, func() {
+		if err := delegateCmd.RunE(delegateCmd, []string{"fix", "the", "bug"}); err != nil {
+			t.Fatalf("delegate RunE returned error: %v", err)
+		}
+	})
+
+	// Should show the task, not the agent's output
+	if !strings.Contains(out, "fix the bug") {
+		t.Fatalf("expected dry-run output to contain task, got:\n%s", out)
+	}
+	if strings.Contains(out, "should-not-run") {
+		t.Fatal("dry-run should not execute the agent")
+	}
+}
+
+func TestDelegateRunEDryRunJSON(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+  codex:
+    name: Codex CLI
+    command: /bin/sh
+    enabled: true
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	oldDryRun := delegateDryRun
+	oldNoContext := delegateNoContext
+	cfgFile = cfgPath
+	delegateAgent = "codex"
+	delegateWorkdir = dir
+	delegateFormat = "json"
+	delegateIsolation = "worktree"
+	delegateDryRun = true
+	delegateNoContext = true
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+		delegateDryRun = oldDryRun
+		delegateNoContext = oldNoContext
+	}()
+
+	out := captureStdout(t, func() {
+		if err := delegateCmd.RunE(delegateCmd, []string{"write", "tests"}); err != nil {
+			t.Fatalf("delegate RunE returned error: %v", err)
+		}
+	})
+
+	var got map[string]interface{}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("expected valid JSON from dry-run, got:\n%s", out)
+	}
+	if got["agent"] != "codex" {
+		t.Fatalf("expected agent=codex, got %v", got["agent"])
+	}
+	if got["isolation"] != "worktree" {
+		t.Fatalf("expected isolation=worktree, got %v", got["isolation"])
+	}
+	task, _ := got["task"].(string)
+	if !strings.Contains(task, "write tests") {
+		t.Fatalf("expected task to contain 'write tests', got %q", task)
+	}
+}
+
 func TestDelegateRunEFallbackChainRecordsRunTracking(t *testing.T) {
 	// First agent times out, triggers fallback to second agent which succeeds.
 	// Verify ledger entries share the same RunID with correct attempt/fallback fields.

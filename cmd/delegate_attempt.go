@@ -17,9 +17,9 @@ import (
 
 // verifySpec holds the parsed verification configuration for a delegation.
 type verifySpec struct {
-	Commands   []string
-	Strict     bool
-	TimeoutSec int
+	Commands   []string `json:"commands"`
+	Strict     bool     `json:"strict"`
+	TimeoutSec int      `json:"timeout_sec"`
 }
 
 // attemptResult holds everything produced by a single delegation attempt.
