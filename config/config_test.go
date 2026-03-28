@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestApplyKnownAgentDefaultsBackfillsPromptFields(t *testing.T) {
 	cfg := &Config{
@@ -47,5 +51,277 @@ func TestApplyKnownAgentDefaultsKeepsExplicitValues(t *testing.T) {
 	}
 	if ac.PromptFile != "CUSTOM.md" {
 		t.Fatalf("expected explicit prompt_file to be preserved, got %q", ac.PromptFile)
+	}
+}
+
+func TestLoadExplicitPath(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "quancode.yaml")
+	content := []byte(`default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: claude
+    enabled: true
+    timeout_secs: 120
+`)
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DefaultPrimary != "claude" {
+		t.Fatalf("expected default_primary=claude, got %q", cfg.DefaultPrimary)
+	}
+	ac, ok := cfg.Agents["claude"]
+	if !ok {
+		t.Fatal("expected claude agent in config")
+	}
+	if ac.Command != "claude" {
+		t.Fatalf("expected command=claude, got %q", ac.Command)
+	}
+	if ac.TimeoutSecs != 120 {
+		t.Fatalf("expected timeout_secs=120, got %d", ac.TimeoutSecs)
+	}
+	if !ac.Enabled {
+		t.Fatal("expected enabled=true")
+	}
+}
+
+func TestLoadExplicitPathNotFound(t *testing.T) {
+	_, err := Load("/nonexistent/path/quancode.yaml")
+	if err == nil {
+		t.Fatal("expected error for missing explicit config path")
+	}
+}
+
+func TestLoadInvalidYAML(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "bad.yaml")
+	if err := os.WriteFile(cfgPath, []byte("{{not valid yaml"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(cfgPath)
+	if err == nil {
+		t.Fatal("expected error for invalid YAML")
+	}
+}
+
+func TestLoadFallsBackToDefaults(t *testing.T) {
+	// Use a temp dir as HOME so no user config is found, and run from a dir
+	// with no quancode.yaml.
+	dir := t.TempDir()
+	origHome := os.Getenv("HOME")
+	origWd, _ := os.Getwd()
+	defer func() {
+		os.Setenv("HOME", origHome)
+		os.Chdir(origWd)
+	}()
+	os.Setenv("HOME", dir)
+	os.Chdir(dir)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DefaultPrimary != "claude" {
+		t.Fatalf("expected default_primary=claude from defaults, got %q", cfg.DefaultPrimary)
+	}
+	if _, ok := cfg.Agents["claude"]; !ok {
+		t.Fatal("expected claude agent from defaults")
+	}
+	if _, ok := cfg.Agents["codex"]; !ok {
+		t.Fatal("expected codex agent from defaults")
+	}
+}
+
+func TestDefaultConfig(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.DefaultPrimary != "claude" {
+		t.Fatalf("expected default_primary=claude, got %q", cfg.DefaultPrimary)
+	}
+	if len(cfg.Agents) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(cfg.Agents))
+	}
+
+	claude, ok := cfg.Agents["claude"]
+	if !ok {
+		t.Fatal("expected claude agent")
+	}
+	if claude.Command != "claude" {
+		t.Fatalf("expected claude command=claude, got %q", claude.Command)
+	}
+	if !claude.Enabled {
+		t.Fatal("expected claude enabled=true")
+	}
+
+	codex, ok := cfg.Agents["codex"]
+	if !ok {
+		t.Fatal("expected codex agent")
+	}
+	if codex.Command != "codex" {
+		t.Fatalf("expected codex command=codex, got %q", codex.Command)
+	}
+	if !codex.Enabled {
+		t.Fatal("expected codex enabled=true")
+	}
+	if codex.PromptMode != "file" {
+		t.Fatalf("expected codex prompt_mode=file, got %q", codex.PromptMode)
+	}
+}
+
+func TestValidateValidConfig(t *testing.T) {
+	cfg := DefaultConfig()
+	problems := cfg.Validate()
+	if len(problems) != 0 {
+		t.Fatalf("expected no problems, got %v", problems)
+	}
+}
+
+func TestValidateEmptyAgents(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "claude",
+		Agents:         map[string]AgentConfig{},
+	}
+	problems := cfg.Validate()
+	if len(problems) == 0 {
+		t.Fatal("expected problems for empty agents")
+	}
+	found := false
+	for _, p := range problems {
+		if p == "no agents configured" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected 'no agents configured' problem, got %v", problems)
+	}
+}
+
+func TestValidateMissingDefaultPrimary(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "",
+		Agents: map[string]AgentConfig{
+			"claude": {Command: "claude", Enabled: true},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if p == "default_primary is not set" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected 'default_primary is not set' problem, got %v", problems)
+	}
+}
+
+func TestValidateDefaultPrimaryNotInAgents(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "nonexistent",
+		Agents: map[string]AgentConfig{
+			"claude": {Command: "claude", Enabled: true},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if p == `default_primary "nonexistent" not found in agents` {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected default_primary not found problem, got %v", problems)
+	}
+}
+
+func TestValidateDefaultPrimaryDisabled(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "claude",
+		Agents: map[string]AgentConfig{
+			"claude": {Command: "claude", Enabled: false},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if p == `default_primary "claude" is disabled` {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected default_primary disabled problem, got %v", problems)
+	}
+}
+
+func TestValidateEmptyCommand(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "claude",
+		Agents: map[string]AgentConfig{
+			"claude": {Command: "", Enabled: true},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if p == `agent "claude": command is empty` {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected empty command problem, got %v", problems)
+	}
+}
+
+func TestValidateNegativeTimeout(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "claude",
+		Agents: map[string]AgentConfig{
+			"claude": {Command: "claude", Enabled: true, TimeoutSecs: -1},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if p == `agent "claude": timeout_secs is negative` {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected negative timeout problem, got %v", problems)
+	}
+}
+
+func TestApplyKnownAgentDefaultsUnknownAgent(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "myagent",
+		Agents: map[string]AgentConfig{
+			"myagent": {
+				Name:       "My Agent",
+				Command:    "myagent",
+				Enabled:    true,
+				PromptMode: "",
+				TaskMode:   "",
+				OutputMode: "",
+			},
+		},
+	}
+
+	applyKnownAgentDefaults(cfg)
+
+	ac := cfg.Agents["myagent"]
+	if ac.PromptMode != "" {
+		t.Fatalf("expected empty prompt_mode for unknown agent, got %q", ac.PromptMode)
+	}
+	if ac.TaskMode != "" {
+		t.Fatalf("expected empty task_mode for unknown agent, got %q", ac.TaskMode)
+	}
+	if ac.OutputMode != "" {
+		t.Fatalf("expected empty output_mode for unknown agent, got %q", ac.OutputMode)
 	}
 }
