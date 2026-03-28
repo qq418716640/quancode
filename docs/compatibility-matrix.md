@@ -30,6 +30,7 @@ CI coverage does not mean every third-party CLI behavior has been validated on t
 | Codex CLI | Yes | Expected to work | Expected to work | Covered in [`docs/manual-smoke-tests.md`](manual-smoke-tests.md) |
 | Aider | Yes | Not yet validated | Expected to work | No dedicated smoke checklist yet |
 | OpenCode | Yes | Not yet validated | Expected to work | No dedicated smoke checklist yet |
+| Qoder CLI | Yes | Not yet validated | Expected to work | Covered in [`docs/manual-smoke-tests.md`](manual-smoke-tests.md) |
 
 ## Important Limits
 

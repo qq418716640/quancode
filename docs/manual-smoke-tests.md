@@ -102,9 +102,23 @@ Expected:
 - command prints valid JSON
 - JSON includes `agent`, `task`, `exit_code`, `timed_out`, `duration_ms`, and `output`
 
+## Qoder CLI Smoke Tests
+
+### 7. Delegate a one-shot task to Qoder
+
+```bash
+quancode --config /tmp/quancode-smoke.yaml delegate --agent qoder "explain what this project does"
+```
+
+Expected:
+
+- command exits with code 0
+- output is non-empty plain text
+- no unexpected error messages appear
+
 ## Optional Isolation Checks
 
-### 7. Patch isolation
+### 8. Patch isolation
 
 Run this inside a git repository:
 

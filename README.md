@@ -63,6 +63,8 @@ quancode start
 quancode start --primary codex
 ```
 
+The `--primary` and `--agent` flags support tab-completion for agent names.
+
 ## What It Does
 
 - Starts a primary coding CLI with delegation instructions injected via CLI args, env vars, or a managed file.
@@ -70,6 +72,7 @@ quancode start --primary codex
 - Routes tasks by keyword match and static priority. It does not do LLM-based routing.
 - Supports in-place execution, isolated git worktrees, or patch-only delegation.
 - Logs delegation calls to JSONL and supports optional per-agent quota limits.
+- Auto-fallback: if an agent times out or hits a rate limit, QuanCode automatically retries with the next available agent. Disable with `--no-fallback`.
 
 ## Configuration
 
@@ -116,12 +119,15 @@ Built-in defaults currently cover:
 
 - Claude Code
 - Codex CLI
+- Qoder CLI (code-analysis, debugging, explanation, MCP integration)
 - Aider
 - OpenCode
 
 Support is adapter-based rather than hardcoded per command path. Different CLIs may use different prompt injection modes such as CLI args, env vars, or a managed file like `AGENTS.md`.
 
 Coverage is not uniform across adapters. Claude Code currently has the most validation; other built-in adapters have less test and smoke coverage.
+
+A `/quancode` skill is available for Claude Desktop, Cowork, and Dispatch, enabling multi-agent delegation from those environments.
 
 QuanCode is an independent project. Compatibility may vary by CLI version.
 
@@ -131,6 +137,7 @@ For a conservative status table of current adapter confidence, see [`docs/compat
 
 ## Safety Notes
 
+- Use `--auto-approve` to skip confirmation prompts during delegation.
 - Delegated agents run in your working directory unless you use an isolation mode.
 - `--isolation worktree` and `--isolation patch` require a git repository.
 - File-based prompt injection is managed by QuanCode and should restore original content after the primary exits.

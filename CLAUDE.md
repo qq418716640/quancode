@@ -15,14 +15,14 @@ No CGO or special build flags required.
 
 ## Architecture
 
-QuanCode is a Go CLI that launches a primary AI coding agent and lets it delegate tasks to other CLIs as sub-agents. All CLIs use the same data-driven `genericAgent` adapter — no per-CLI Go code needed.
+QuanCode is a Go CLI that launches a primary AI coding agent and lets it delegate tasks to other CLIs as sub-agents. All CLIs use the same data-driven `genericAgent` adapter — no per-CLI Go code needed. Built-in defaults cover Claude Code, Codex CLI, and Qoder CLI.
 
 ### Package flow
 
 ```
 cmd/start.go → prompt/injection.go → agent/agent.go (LaunchAsPrimary)
-cmd/delegate.go → router/router.go → agent/agent.go (Delegate) → runner/
-                                                                → ledger/
+cmd/delegate.go → cmd/delegate_attempt.go → router/router.go → agent/agent.go (Delegate) → runner/
+                  cmd/fallback.go (auto-retry)                                              → ledger/
 ```
 
 ### Key packages
@@ -32,7 +32,8 @@ cmd/delegate.go → router/router.go → agent/agent.go (Delegate) → runner/
 - **prompt/** — Builds the system prompt injected into the primary CLI. Uses `text/template`. Excludes the actual primary from the listed agents.
 - **router/** — `SelectAgent()` picks the best sub-agent: preferred_for keyword match > priority number > alphabetical.
 - **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection.
-- **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Quota system supports calls/minutes/hours units with monthly/weekly/rolling_hours reset modes.
+- **approval/** — Handles `--auto-approve` and interactive confirmation for delegation commands.
+- **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Quota system supports calls/minutes/hours units with monthly/weekly/rolling_hours reset modes. Multiple quota rules can be defined per agent.
 
 ### Prompt injection modes
 
@@ -46,6 +47,10 @@ The primary CLI receives delegation instructions via one of:
 `--isolation inplace` (default): run in working directory, detect changes via git status snapshot diff.
 `--isolation worktree`: git worktree, collect patch, auto-apply to main directory.
 `--isolation patch`: like worktree but returns patch without applying.
+
+### Statusline
+
+`quancode init` configures the Claude Code statusline to show delegation cost and quota usage in the terminal status bar.
 
 ## Design principles
 

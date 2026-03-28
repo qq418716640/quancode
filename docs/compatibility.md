@@ -12,6 +12,7 @@ QuanCode currently ships built-in defaults for:
 - Codex CLI
 - Aider
 - OpenCode
+- Qoder CLI
 
 This means QuanCode knows how to route to them and has default adapter settings for startup or delegation. It does not mean every version of every CLI is fully validated.
 

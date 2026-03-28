@@ -110,6 +110,7 @@ quancode delegate "write unit tests for config loading"
 ```bash
 quancode delegate --agent claude "review this patch for regressions"
 quancode delegate --agent codex "refactor this helper and update tests"
+quancode delegate --agent qoder "review this code for issues"
 ```
 
 指定工作目录：
@@ -227,6 +228,15 @@ quancode quota --set-agent claude --unit hours --limit 5 --reset-mode rolling_ho
 quancode quota --set-agent codex --unit calls --limit 200 --reset-mode weekly --reset-day 1 --notes "Codex Pro"
 ```
 
+同一个 agent 可以设置 **多条 quota 规则**。使用 `--rule` 标志为每条规则命名，避免互相覆盖：
+
+```bash
+quancode quota --set-agent claude --rule 5h-window --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5
+quancode quota --set-agent claude --rule weekly-cap --unit calls --limit 200 --reset-mode weekly --reset-day 1
+```
+
+每条规则独立计算。任何一条规则达到上限，该 agent 就会被阻止。
+
 支持的 unit：
 
 - `calls`
@@ -240,6 +250,17 @@ quancode quota --set-agent codex --unit calls --limit 200 --reset-mode weekly --
 - `rolling_hours`
 
 quota 视图会展示当前周期内的使用量和剩余额度。
+
+### Statusline
+
+`quancode init` 会自动配置 Claude Code 的 statusline。配置完成后，statusline 会显示：
+
+- QuanCode 会话标识和当前模型
+- 上下文窗口使用百分比
+- 5 小时和 7 天的 quota 消耗
+- 当前会话的累计费用
+
+除了运行 `quancode init` 之外不需要额外配置。
 
 ### `quancode version`
 
@@ -294,7 +315,25 @@ quancode approve req_123456 --deny --approval-dir /path/to/approval-dir --reason
 - 审批请求的超时时间为 120 秒
 - 超时未响应时，QuanCode 会自动记录一条 deny 决策
 
-## 7. 配置 Recipes
+## 7. 自动降级（Auto-Fallback）
+
+当委派任务因为 **超时** 或 **限速** 错误而失败时，QuanCode 会按照路由优先级自动选择下一个可用 agent 重试任务。这就是自动降级。
+
+关键行为：
+
+- 降级 **仅在** 超时或限速错误时触发。
+- 普通任务失败（例如 agent 运行了但输出不正确，或以错误码退出）**不会** 触发降级。
+- 下一个 agent 按照与正常路由相同的优先级规则选出。
+- QuanCode 最多尝试 **3 次**（原始调用 + 最多 2 次降级）。
+- 在 `inplace` 隔离模式下，如果失败的 agent 已经修改了工作树中的文件，降级会被 **阻止**。这是为了防止第二个 agent 在不完整或有问题的修改基础上继续工作。
+
+要在某次委派中完全禁用降级：
+
+```bash
+quancode delegate --no-fallback "migrate the database schema"
+```
+
+## 8. 配置 Recipes
 
 完整字段说明见 [`agent-config-schema.md`](agent-config-schema.md)（英文）。
 
@@ -348,7 +387,7 @@ agents:
     timeout_secs: 600
 ```
 
-## 8. 故障排查
+## 9. 故障排查
 
 ### `doctor` 报配置或命令缺失
 
@@ -382,3 +421,28 @@ quancode doctor
 `quancode stats` 读取的是 `~/.config/quancode/logs` 下的本地 JSONL ledger。
 
 如果你刚清空过这个目录，统计会从新的空白基线重新开始。
+
+## 10. `/quancode` Skill
+
+QuanCode 附带了一个 Claude Code skill，让 Claude Desktop（Code 模式）和 Dispatch 可以在对话中直接编排子 agent 委派，无需离开当前会话。
+
+### 安装
+
+将 skill 目录复制或软链接到 Claude Code 的 skills 文件夹：
+
+```bash
+# 软链接
+ln -s /path/to/QuanCode/skills/quancode ~/.claude/skills/quancode
+
+# 或者复制
+cp -r /path/to/QuanCode/skills/quancode ~/.claude/skills/quancode
+```
+
+安装完成后，Claude Code 会识别 `/quancode` 斜杠命令，并可以通过 `quancode delegate` 将编码任务路由到任何已启用的 QuanCode agent。
+
+### 使用方式
+
+该 skill 适用于：
+
+- **Claude Desktop Code 模式** — 在对话中调用 `/quancode` 来委派一个有明确边界的编码任务。
+- **Dispatch** — 作为多 agent 工作流的一部分，由 Claude Code 充当编排器，QuanCode agents 负责具体实现。

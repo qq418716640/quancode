@@ -108,6 +108,7 @@ Target a specific agent:
 ```bash
 quancode delegate --agent claude "review this patch for regressions"
 quancode delegate --agent codex "refactor this helper and update tests"
+quancode delegate --agent qoder "review this code for issues"
 ```
 
 Change the working directory:
@@ -225,6 +226,15 @@ quancode quota --set-agent claude --unit hours --limit 5 --reset-mode rolling_ho
 quancode quota --set-agent codex --unit calls --limit 200 --reset-mode weekly --reset-day 1 --notes "Codex Pro"
 ```
 
+A single agent can have **multiple quota rules**. Use the `--rule` flag to name each rule so they don't overwrite each other:
+
+```bash
+quancode quota --set-agent claude --rule 5h-window --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5
+quancode quota --set-agent claude --rule weekly-cap --unit calls --limit 200 --reset-mode weekly --reset-day 1
+```
+
+Each rule is evaluated independently. The agent is blocked when any rule's limit is reached.
+
 Supported units:
 
 - `calls`
@@ -238,6 +248,17 @@ Supported reset modes:
 - `rolling_hours`
 
 The quota view shows current usage and remaining budget in the active period.
+
+### Statusline
+
+`quancode init` auto-configures the Claude Code statusline. Once configured, the statusline shows:
+
+- QuanCode session indicator and current model
+- Context window usage percentage
+- 5-hour and 7-day quota consumption
+- Accumulated cost for the current session
+
+No extra setup is needed beyond running `quancode init`.
 
 ### `quancode version`
 
@@ -292,7 +313,25 @@ If `--approval-dir` is omitted, `approve` falls back to the `QUANCODE_APPROVAL_D
 - Approval requests time out after 120 seconds
 - When that timeout is reached without a response, QuanCode records an automatic deny decision
 
-## 7. Configuration Recipes
+## 7. Auto-Fallback
+
+When a delegated task fails due to a **timeout** or **rate-limit** error, QuanCode automatically retries the task with the next available agent according to router priority. This is called auto-fallback.
+
+Key behaviors:
+
+- Fallback **triggers** on timeout or rate-limit errors only.
+- Fallback does **not** trigger on normal task failures (e.g., the agent ran but produced incorrect output or exited with an error).
+- The next agent is selected by the router using the same priority rules as normal routing.
+- QuanCode attempts a maximum of **3 attempts** (the original plus up to 2 fallbacks).
+- In `inplace` isolation mode, fallback is **blocked** if the failed agent already changed files in the working tree. This prevents a second agent from building on top of a partial or broken edit.
+
+To disable fallback entirely for a delegation:
+
+```bash
+quancode delegate --no-fallback "migrate the database schema"
+```
+
+## 8. Configuration Recipes
 
 For the full field reference, see [`agent-config-schema.md`](agent-config-schema.md).
 
@@ -346,7 +385,7 @@ agents:
     timeout_secs: 600
 ```
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 ### `doctor` fails on config or missing commands
 
@@ -380,3 +419,28 @@ This should be rare. If it happens:
 `quancode stats` reads local JSONL ledger files under `~/.config/quancode/logs`.
 
 If you recently cleared that directory, the stats view starts from a fresh baseline.
+
+## 10. The `/quancode` Skill
+
+QuanCode ships a Claude Code skill that lets Claude Desktop (Code mode) and Dispatch orchestrate sub-agent delegation without leaving the conversation.
+
+### Installation
+
+Copy or symlink the skill directory into your Claude Code skills folder:
+
+```bash
+# symlink
+ln -s /path/to/QuanCode/skills/quancode ~/.claude/skills/quancode
+
+# or copy
+cp -r /path/to/QuanCode/skills/quancode ~/.claude/skills/quancode
+```
+
+Once installed, Claude Code recognizes the `/quancode` slash command and can route coding tasks to any enabled QuanCode agent through `quancode delegate`.
+
+### Usage
+
+The skill works with:
+
+- **Claude Desktop Code mode** — invoke `/quancode` in conversation to delegate a bounded coding task.
+- **Dispatch** — use the skill as part of a multi-agent workflow where Claude Code acts as the orchestrator and QuanCode agents handle implementation.
