@@ -133,7 +133,7 @@ QuanCode is an independent project. Compatibility may vary by CLI version.
 
 For current compatibility expectations and non-goals, see [`docs/compatibility.md`](docs/compatibility.md).
 
-For a conservative status table of current adapter confidence, see [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md).
+For a conservative status table of current adapter confidence, see [`docs/compatibility.md`](docs/compatibility.md).
 
 ## Safety Notes
 

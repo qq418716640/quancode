@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.0] - 2026-03-29
+
+### Theme: Delegation Observability & Resilience
+
+Completes the delegation execution loop — from context injection and verification, through failure classification and fallback chain tracking, to patch conflict recovery and dry-run preview.
+
 ### Added
 
 - Automatic project context injection for delegations (`CLAUDE.md`, `AGENTS.md`)
@@ -14,12 +20,22 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - `--verify-timeout` flag for verification command timeout
 - `context_defaults` and per-agent `context` configuration in YAML config
 - `FinalStatus` and verification results in ledger entries
+- Ledger run/attempt tracking: `RunID`, `Attempt`, `FallbackFrom`, `FallbackReason` fields link multiple attempts within a single delegate invocation
+- `quancode stats` fallback chain analysis: trigger rate, recovery rate, reason distribution, agent chain frequency
+- `delegate --dry-run` preview mode: shows the full prompt (context + task) without executing, supports text/json output
+- Patch apply failure recovery: conflict pre-check via `git apply --check` prevents work tree pollution, outputs preserved patch and conflict file list for manual recovery
+- Unified failure classification (`FailureClass`): `launch_failure`, `timed_out`, `rate_limited`, `agent_failed`, `patch_conflict`, `verify_failed`
+- `quancode stats` failure breakdown section
+- Core design philosophy and flag restraint principle in CLAUDE.md
 
 ### Changed
 
 - `buildDelegationResult` now accepts an `attemptResult` struct instead of 11 parameters
 - `applyPatch` failure in `worktree` mode is now an error instead of a warning
 - Fallback rebuilding now regenerates the context bundle per agent so agent-specific `context` config is respected
+- Fallback logic now driven by `FailureClass` via `isTransientFailure()` instead of direct stderr pattern matching
+- `FallbackReason` in ledger entries now uses `FailureClass` values instead of separate constants
+- `DelegationResult` JSON output includes `conflict_files` and `patch` on apply failure
 
 ## [v0.1.0-alpha] - 2026-03-27
 
