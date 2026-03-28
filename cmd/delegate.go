@@ -132,55 +132,65 @@ var delegateCmd = &cobra.Command{
 		attemptNum := 1
 
 		for {
-			ar := runDelegateAttempt(a, agentKey, task, workDir, isolation, cfg)
+			ar := runDelegateAttempt(a, agentKey, task, workDir, isolation)
 
 			// Check if fallback is needed and allowed
 			shouldFallback := !delegateNoFallback &&
 				attemptNum < 3 &&
-				ar.result != nil &&
-				isFallbackEligible(ar.result, ar.output)
+				isFallbackEligible(ar.result, ar.output, ar.stderr)
 
 			// For inplace mode, block fallback if files were changed
 			if shouldFallback && (isolation == "" || isolation == "inplace") {
-				if changes := detectNewChanges(workDir, ar.preSnapshot); len(changes) > 0 {
+				if !runner.IsGitRepo(workDir) {
+					// Non-git directory: can't detect changes, block fallback to be safe.
+					fmt.Fprintf(os.Stderr, "[quancode] %s failed in non-git directory — skipping fallback\n", agentKey)
+					shouldFallback = false
+				} else if changes := detectNewChanges(workDir, ar.preSnapshot); len(changes) > 0 {
 					fmt.Fprintf(os.Stderr, "[quancode] %s failed but modified files — skipping fallback\n", agentKey)
 					shouldFallback = false
 				}
 			}
 
 			if !shouldFallback {
-				// Final result — format and return
 				return finalizeDelegation(agentKey, task, workDir, isolation, ar)
 			}
 
 			// Log failure and find fallback
 			reason := "timed out"
-			if !ar.result.TimedOut {
+			if ar.result == nil || !ar.result.TimedOut {
 				reason = "rate-limited or transient error"
 			}
 			fmt.Fprintf(os.Stderr, "[quancode] %s %s, looking for fallback...\n", agentKey, reason)
-
-			// Log failed attempt to ledger
 			logAttempt(agentKey, task, workDir, isolation, ar)
 
-			sel := router.SelectAgentExcluding(cfg, task, tried)
-			if sel == nil {
+			// Find next available agent
+			found := false
+			for {
+				sel := router.SelectAgentExcluding(cfg, task, tried)
+				if sel == nil {
+					break
+				}
+				tried[sel.AgentKey] = true
+
+				nextAc := cfg.Agents[sel.AgentKey]
+				nextA := agent.FromConfig(sel.AgentKey, nextAc)
+				if ok, _ := nextA.IsAvailable(); !ok {
+					fmt.Fprintf(os.Stderr, "[quancode] fallback %s not available, skipping\n", sel.AgentKey)
+					continue
+				}
+
+				agentKey = sel.AgentKey
+				a = nextA
+				found = true
+				fmt.Fprintf(os.Stderr, "[quancode] falling back to %s (%s)\n", agentKey, sel.Reason)
+				break
+			}
+
+			if !found {
 				fmt.Fprintf(os.Stderr, "[quancode] no fallback agents available\n")
 				return finalizeDelegation(agentKey, task, workDir, isolation, ar)
 			}
-
-			agentKey = sel.AgentKey
-			tried[agentKey] = true
 			attemptNum++
-
-			ac = cfg.Agents[agentKey]
-			a = agent.FromConfig(agentKey, ac)
-			if ok, _ := a.IsAvailable(); !ok {
-				fmt.Fprintf(os.Stderr, "[quancode] fallback %s not available, skipping\n", agentKey)
-				continue
-			}
-
-			fmt.Fprintf(os.Stderr, "[quancode] falling back to %s (%s)\n", agentKey, sel.Reason)
 		}
 	},
 }

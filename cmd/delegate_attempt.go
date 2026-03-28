@@ -11,7 +11,6 @@ import (
 
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/approval"
-	"github.com/qq418716640/quancode/config"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/runner"
 )
@@ -21,6 +20,7 @@ type attemptResult struct {
 	result         *runner.Result
 	err            error
 	output         string
+	stderr         string
 	patch          string
 	patchFiles     []string
 	changedFiles   []string
@@ -30,7 +30,7 @@ type attemptResult struct {
 
 // runDelegateAttempt executes one delegation attempt against a single agent,
 // including worktree setup, approval polling, and result collection.
-func runDelegateAttempt(a agent.Agent, agentKey, task, workDir, isolation string, cfg *config.Config) attemptResult {
+func runDelegateAttempt(a agent.Agent, agentKey, task, workDir, isolation string) attemptResult {
 	var ar attemptResult
 
 	execDir := workDir
@@ -47,6 +47,12 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, workDir, isolation string
 			return ar
 		}
 		cleanupWorktree = cleanup
+		// Ensure worktree is cleaned up even if later setup steps fail.
+		defer func() {
+			if cleanupWorktree != nil {
+				cleanupWorktree()
+			}
+		}()
 		execDir = wt
 		fmt.Fprintf(os.Stderr, "[quancode] running in isolated worktree: %s\n", wt)
 	}
@@ -251,14 +257,14 @@ loop:
 			}
 		}
 
-		if cleanupWorktree != nil {
-			cleanupWorktree()
-		}
+		// cleanupWorktree is handled by defer above
+		cleanupWorktree = nil // prevent double cleanup
 	}
 
 	// Build output
 	if result != nil {
 		ar.output = result.Stdout
+		ar.stderr = result.Stderr
 		if ar.output == "" {
 			ar.output = result.Stderr
 		}
@@ -327,5 +333,3 @@ func finalizeDelegation(agentKey, task, workDir, isolation string, ar attemptRes
 	return nil
 }
 
-// Ensure config import is used.
-var _ *config.Config
