@@ -37,38 +37,51 @@ Completes the delegation execution loop — from context injection and verificat
 - `FallbackReason` in ledger entries now uses `FailureClass` values instead of separate constants
 - `DelegationResult` JSON output includes `conflict_files` and `patch` on apply failure
 
-## [v0.1.0-alpha] - 2026-03-27
+## [v0.3.0] - 2026-03-28
 
-First public alpha focused on making QuanCode publishable and usable by external developers.
+### Theme: Parallel Delegation & Worktree Hardening
 
 ### Added
 
-- Primary-agent startup and delegation flows for the built-in adapters in `config/defaults.go`
-- Managed file-based prompt injection for CLIs that need a prompt file such as `AGENTS.md`
-- Backward-compatible config field backfills for older `quancode.yaml` files
-- Initial open-source project assets:
-  - `README.md`
-  - `LICENSE`
-  - `quancode.example.yaml`
-  - GitHub Actions CI
-- Initial automated coverage for:
-  - config default backfills
-  - prompt construction
-  - router selection
-  - prompt file restore behavior
-  - delegate result shaping
-  - environment merge semantics
-  - changed-files helpers
+- `quancode apply-patch` command for manual patch application with preview
+- Parallel delegation support via prompt guidance + `--isolation patch` + `apply-patch`
+- Worktree auto-exclusion of build caches (`.tmp/`, `.gocache/`, `node_modules/`, etc.)
+- `PatchSummary` function for patch preview before applying
 
-### Changed
+### Fixed
 
-- File-based primary launch now restores managed prompt files after the primary CLI exits
-- File-based primary launch preserves the child process exit status instead of collapsing non-zero exits to a generic failure
-- CI now runs `go test ./...`, `go vet ./...`, and `go build ./...` on Linux and macOS
+- Worktree patches no longer collect build cache artifacts
+- `.tmp/` added to `.gitignore` to prevent worktree cache pollution
 
-### Known Limitations
+## [v0.2.0] - 2026-03-28
 
-- Compatibility is still evolving across supported third-party CLIs and versions
-- `prompt_mode=stdin` is not supported for primary interactive launch
-- End-to-end smoke validation for all supported CLIs is still manual
-- The recommended publication path is still a fresh repository without local history
+### Theme: Skill Integration & CLI Ecosystem
+
+### Added
+
+- `/quancode` skill for Claude Desktop, Cowork, and Dispatch multi-agent delegation
+- `quancode skill install/uninstall` commands
+- Skill explicitly blocks `quancode start` usage, enforcing delegate-only mode
+
+## [v0.1.0] - 2026-03-27
+
+Rapid iteration from first alpha to feature-complete core (v0.1.0 through v0.1.9).
+
+### Added
+
+- Interactive approval system (no separate terminal needed)
+- Agent auto-fallback on timeout or rate-limit
+- Multi-rule quota system per agent
+- Session identity (terminal title, env var, startup banner)
+- Flag value auto-completion (`--primary`, `--agent`, `--format`, `--isolation`)
+- `quancode init` with Claude Code statusline and auto-detection of installed agents
+- Built-in Qoder CLI adapter configuration
+
+### Fixed
+
+- Fallback implementation issues found during codex+qoder review
+- Statusline cost display formatted to two decimal places
+
+## [v0.1.0-alpha] - 2026-03-27
+
+First public alpha. Primary-agent startup, delegation flows, file-based prompt injection, config backfills, CI, and initial test coverage.
