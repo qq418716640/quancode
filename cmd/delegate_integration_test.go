@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/qq418716640/quancode/agent"
+	"github.com/qq418716640/quancode/ledger"
 )
 
 func TestDelegateRunEAutoRoutesAndPrintsJSON(t *testing.T) {
@@ -621,5 +622,135 @@ agents:
 	}
 	if len(got.ApprovalEvents) != 1 || got.ApprovalEvents[0].Decision != "denied" {
 		t.Fatalf("unexpected approval events: %#v", got.ApprovalEvents)
+	}
+}
+
+func TestDelegateRunEFallbackChainRecordsRunTracking(t *testing.T) {
+	// First agent times out, triggers fallback to second agent which succeeds.
+	// Verify ledger entries share the same RunID with correct attempt/fallback fields.
+	dir := t.TempDir()
+	runGitCmd(t, dir, "init")
+	runGitCmd(t, dir, "config", "user.name", "QuanCode Test")
+	runGitCmd(t, dir, "config", "user.email", "test@example.com")
+	writeTestFile(t, filepath.Join(dir, "dummy.txt"), "init\n")
+	runGitCmd(t, dir, "add", "dummy.txt")
+	runGitCmd(t, dir, "commit", "-m", "init")
+
+	oldHome := os.Getenv("HOME")
+	home := t.TempDir()
+	os.Setenv("HOME", home)
+	defer os.Setenv("HOME", oldHome)
+
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+  alpha:
+    name: Alpha Agent
+    command: /bin/sh
+    enabled: true
+    timeout_secs: 1
+    delegate_args:
+      - -c
+      - sleep 5
+    priority: 10
+  beta:
+    name: Beta Agent
+    command: /bin/sh
+    enabled: true
+    delegate_args:
+      - -c
+      - printf fallback-ok
+    priority: 20
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	oldNoFallback := delegateNoFallback
+	oldNoContext := delegateNoContext
+	cfgFile = cfgPath
+	delegateAgent = "alpha"
+	delegateWorkdir = dir
+	delegateFormat = "json"
+	delegateIsolation = "inplace"
+	delegateNoFallback = false
+	delegateNoContext = true
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+		delegateNoFallback = oldNoFallback
+		delegateNoContext = oldNoContext
+	}()
+
+	out := captureStdout(t, func() {
+		if err := delegateCmd.RunE(delegateCmd, []string{"do", "something"}); err != nil {
+			t.Fatalf("delegate RunE returned error: %v", err)
+		}
+	})
+
+	var got DelegationResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("unmarshal json output: %v\noutput=%q", err, out)
+	}
+	if got.Agent != "beta" {
+		t.Fatalf("expected fallback to beta, got %q", got.Agent)
+	}
+	if got.Status != "completed" {
+		t.Fatalf("expected completed, got %q", got.Status)
+	}
+
+	// Read ledger entries and verify run tracking
+	since := time.Now().Add(-1 * time.Minute)
+	entries, err := ledger.ReadSince(since)
+	if err != nil {
+		t.Fatalf("ReadSince: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 ledger entries (failed + success), got %d", len(entries))
+	}
+
+	first := entries[0]
+	second := entries[1]
+
+	// Both share the same RunID
+	if first.RunID == "" {
+		t.Fatal("expected RunID to be set")
+	}
+	if first.RunID != second.RunID {
+		t.Fatalf("RunID mismatch: %q vs %q", first.RunID, second.RunID)
+	}
+
+	// First attempt: no fallback info
+	if first.Agent != "alpha" {
+		t.Fatalf("expected first entry agent=alpha, got %q", first.Agent)
+	}
+	if first.Attempt != 1 {
+		t.Fatalf("expected first attempt=1, got %d", first.Attempt)
+	}
+	if first.FallbackFrom != "" {
+		t.Fatalf("expected first entry FallbackFrom empty, got %q", first.FallbackFrom)
+	}
+
+	// Second attempt: records fallback chain
+	if second.Agent != "beta" {
+		t.Fatalf("expected second entry agent=beta, got %q", second.Agent)
+	}
+	if second.Attempt != 2 {
+		t.Fatalf("expected second attempt=2, got %d", second.Attempt)
+	}
+	if second.FallbackFrom != "alpha" {
+		t.Fatalf("expected FallbackFrom=alpha, got %q", second.FallbackFrom)
+	}
+	if second.FallbackReason != FallbackReasonTimedOut {
+		t.Fatalf("expected FallbackReason=%q, got %q", FallbackReasonTimedOut, second.FallbackReason)
 	}
 }

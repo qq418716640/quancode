@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Entry represents a single delegation record.
+// Entry represents a single delegation attempt record.
 type Entry struct {
 	Timestamp      string          `json:"timestamp"`
 	Agent          string          `json:"agent"`
@@ -21,6 +21,13 @@ type Entry struct {
 	Isolation      string          `json:"isolation,omitempty"`
 	WorkDir        string          `json:"work_dir"`
 	FinalStatus    string          `json:"final_status,omitempty"`
+
+	// Run/attempt tracking — links multiple attempts within a single delegate invocation.
+	RunID          string `json:"run_id,omitempty"`
+	Attempt        int    `json:"attempt,omitempty"`
+	FallbackFrom   string `json:"fallback_from,omitempty"`
+	FallbackReason string `json:"fallback_reason,omitempty"`
+
 	// VerifyRaw stores the verification result as raw JSON to avoid
 	// a circular dependency between ledger and cmd packages.
 	VerifyRaw json.RawMessage `json:"verify,omitempty"`

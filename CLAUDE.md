@@ -63,8 +63,15 @@ Verification failure does not trigger fallback.
 
 ## Design principles
 
+### Core philosophy
+
+QuanCode exists to let multiple agents collaborate on coding tasks that a single agent handles poorly or inconsistently. Every feature must serve this mission directly. Resist the urge to add features for completeness — only build what delivers clear practical value, find the optimal balance between quality and cost, and prefer depth over breadth.
+
+### Implementation guidelines
+
 - Extend `AgentConfig` fields and generic adapter logic instead of adding per-CLI code paths.
 - Config migrations are implicit — backfill defaults at load time, never require user config edits.
 - `MergeEnv` in runner/ replaces (not appends) same-name env vars. This is critical for per-agent proxy configs overriding shell defaults.
 - Stdout is machine-friendly (text or JSON). Stderr is for operator diagnostics.
 - File injection must restore original content on exit. If the file didn't exist before, delete it.
+- Minimize CLI flag proliferation — prefer YAML config with sensible defaults over new flags. Flags are for per-invocation overrides, not routine configuration.

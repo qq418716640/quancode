@@ -305,13 +305,25 @@ loop:
 	return ar
 }
 
-// logAttempt writes a ledger entry for a single attempt (used for failed attempts before fallback).
-func logAttempt(agentKey, task, workDir, isolation string, ar attemptResult) {
+// attemptMeta carries run-level tracking state across the fallback loop.
+type attemptMeta struct {
+	RunID          string
+	Attempt        int
+	FallbackFrom   string
+	FallbackReason string
+}
+
+// logAttempt writes a ledger entry for a single attempt.
+func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult) {
 	logEntry := &ledger.Entry{
-		Agent:     agentKey,
-		Task:      task,
-		WorkDir:   workDir,
-		Isolation: isolation,
+		Agent:          agentKey,
+		Task:           task,
+		WorkDir:        workDir,
+		Isolation:      isolation,
+		RunID:          meta.RunID,
+		Attempt:        meta.Attempt,
+		FallbackFrom:   meta.FallbackFrom,
+		FallbackReason: meta.FallbackReason,
 	}
 	if ar.result != nil {
 		logEntry.ExitCode = ar.result.ExitCode
@@ -338,9 +350,9 @@ func logAttempt(agentKey, task, workDir, isolation string, ar attemptResult) {
 }
 
 // finalizeDelegation handles output formatting and ledger recording for the final attempt.
-func finalizeDelegation(agentKey, task, workDir, isolation string, ar attemptResult) error {
+func finalizeDelegation(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult) error {
 	// Record to ledger
-	logAttempt(agentKey, task, workDir, isolation, ar)
+	logAttempt(agentKey, task, workDir, isolation, meta, ar)
 
 	verifyStrictFailed := ar.verify.IsStrictFailure()
 

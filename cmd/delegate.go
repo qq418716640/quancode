@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/qq418716640/quancode/agent"
+	"github.com/qq418716640/quancode/approval"
 	"github.com/qq418716640/quancode/config"
 	qcontext "github.com/qq418716640/quancode/context"
 	"github.com/qq418716640/quancode/ledger"
@@ -154,7 +155,11 @@ var delegateCmd = &cobra.Command{
 
 		// Run attempt with fallback loop
 		tried := map[string]bool{agentKey: true}
-		attemptNum := 1
+		runID, err := approval.NewRunID()
+		if err != nil {
+			return fmt.Errorf("generate run id: %w", err)
+		}
+		meta := attemptMeta{RunID: runID, Attempt: 1}
 
 		for {
 			// Build context per-agent (agent-specific Context config may differ)
@@ -172,10 +177,11 @@ var delegateCmd = &cobra.Command{
 			ar := runDelegateAttempt(a, agentKey, task, ctxPrefix, workDir, isolation, vs)
 
 			// Check if fallback is needed and allowed
+			fallbackEligible := isFallbackEligible(ar.result, ar.output, ar.stderr)
 			shouldFallback := !delegateNoFallback &&
-				attemptNum < 3 &&
+				meta.Attempt < 3 &&
 				isFallbackAllowed(ar) &&
-				isFallbackEligible(ar.result, ar.output, ar.stderr)
+				fallbackEligible
 
 			// For inplace mode, block fallback if files were changed
 			if shouldFallback && (isolation == "" || isolation == "inplace") {
@@ -190,16 +196,25 @@ var delegateCmd = &cobra.Command{
 			}
 
 			if !shouldFallback {
-				return finalizeDelegation(agentKey, task, workDir, isolation, ar)
+				return finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
 			}
 
-			// Log failure and find fallback
-			reason := "timed out"
-			if ar.result == nil || !ar.result.TimedOut {
-				reason = "rate-limited or transient error"
+			// Derive fallback reason for the next attempt's metadata
+			var fallbackReason string
+			if ar.result == nil {
+				fallbackReason = FallbackReasonLaunchFail
+			} else if ar.result.TimedOut {
+				fallbackReason = FallbackReasonTimedOut
+			} else {
+				fallbackReason = FallbackReasonTransientError
 			}
-			fmt.Fprintf(os.Stderr, "[quancode] %s %s, looking for fallback...\n", agentKey, reason)
-			logAttempt(agentKey, task, workDir, isolation, ar)
+
+			fmt.Fprintf(os.Stderr, "[quancode] %s %s, looking for fallback...\n", agentKey, fallbackReason)
+			// FallbackFrom/FallbackReason in meta describe where *this* attempt came from,
+			// so the failing attempt's entry has empty values; the next attempt records the link.
+			logAttempt(agentKey, task, workDir, isolation, meta, ar)
+
+			previousAgent := agentKey
 
 			// Find next available agent
 			found := false
@@ -226,9 +241,11 @@ var delegateCmd = &cobra.Command{
 
 			if !found {
 				fmt.Fprintf(os.Stderr, "[quancode] no fallback agents available\n")
-				return finalizeDelegation(agentKey, task, workDir, isolation, ar)
+				return finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
 			}
-			attemptNum++
+			meta.Attempt++
+			meta.FallbackFrom = previousAgent
+			meta.FallbackReason = fallbackReason
 		}
 	},
 }

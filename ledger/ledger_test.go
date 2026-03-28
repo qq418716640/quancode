@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -330,5 +331,85 @@ func TestEntryJSONRoundtrip(t *testing.T) {
 	}
 	if len(decoded.ApprovalEvents) != 1 || decoded.ApprovalEvents[0].RequestID != "r1" {
 		t.Fatalf("approval events roundtrip failed: %+v", decoded.ApprovalEvents)
+	}
+}
+
+func TestEntryRunTrackingFieldsRoundtrip(t *testing.T) {
+	entry := Entry{
+		Timestamp:      "2026-03-29T00:00:00Z",
+		Agent:          "claude",
+		Task:           "fix bug",
+		WorkDir:        "/tmp/repo",
+		RunID:          "run_abc123",
+		Attempt:        2,
+		FallbackFrom:   "codex",
+		FallbackReason: "timed_out",
+	}
+
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var decoded Entry
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if decoded.RunID != "run_abc123" {
+		t.Fatalf("expected run_id=run_abc123, got %q", decoded.RunID)
+	}
+	if decoded.Attempt != 2 {
+		t.Fatalf("expected attempt=2, got %d", decoded.Attempt)
+	}
+	if decoded.FallbackFrom != "codex" {
+		t.Fatalf("expected fallback_from=codex, got %q", decoded.FallbackFrom)
+	}
+	if decoded.FallbackReason != "timed_out" {
+		t.Fatalf("expected fallback_reason=timed_out, got %q", decoded.FallbackReason)
+	}
+
+	// Verify JSON key names are correctly spelled
+	jsonStr := string(data)
+	for _, key := range []string{`"run_id"`, `"attempt"`, `"fallback_from"`, `"fallback_reason"`} {
+		if !strings.Contains(jsonStr, key) {
+			t.Fatalf("expected JSON key %s in output, got: %s", key, jsonStr)
+		}
+	}
+}
+
+func TestEntryRunTrackingOmittedWhenEmpty(t *testing.T) {
+	entry := Entry{
+		Timestamp: "2026-03-29T00:00:00Z",
+		Agent:     "codex",
+		Task:      "write tests",
+		WorkDir:   "/tmp/repo",
+	}
+
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	jsonStr := string(data)
+	for _, field := range []string{"run_id", "attempt", "fallback_from", "fallback_reason"} {
+		if strings.Contains(jsonStr, field) {
+			t.Fatalf("expected %q to be omitted from JSON, got: %s", field, jsonStr)
+		}
+	}
+}
+
+func TestOldEntriesWithoutRunTrackingFieldsUnmarshalSafely(t *testing.T) {
+	// Simulate a legacy JSONL entry without run tracking fields
+	oldJSON := `{"timestamp":"2026-03-01T00:00:00Z","agent":"codex","task":"old task","exit_code":0,"timed_out":false,"duration_ms":100,"work_dir":"/tmp"}`
+
+	var entry Entry
+	if err := json.Unmarshal([]byte(oldJSON), &entry); err != nil {
+		t.Fatalf("Unmarshal old entry: %v", err)
+	}
+
+	if entry.RunID != "" || entry.Attempt != 0 || entry.FallbackFrom != "" || entry.FallbackReason != "" {
+		t.Fatalf("expected zero values for new fields on old data, got: RunID=%q Attempt=%d FallbackFrom=%q FallbackReason=%q",
+			entry.RunID, entry.Attempt, entry.FallbackFrom, entry.FallbackReason)
 	}
 }
