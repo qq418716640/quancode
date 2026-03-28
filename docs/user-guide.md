@@ -414,6 +414,16 @@ This should be rare. If it happens:
 - compare it with your last committed or expected content
 - rerun `quancode start` only after understanding the mismatch
 
+### Delegating to Claude fails with "Not logged in" from third-party desktop apps
+
+Claude Code stores authentication in the macOS Keychain. Third-party desktop apps (Codex Desktop, Qoder Desktop, etc.) may not have Keychain access, causing `claude auth status` to return `loggedIn: false` even though Claude Code works fine in the terminal.
+
+This is a platform limitation, not a QuanCode issue. Workarounds:
+
+- From Codex/Qoder Desktop, delegate to codex or qoder instead of claude
+- From Claude Code terminal or Claude Desktop, all agents work normally
+- Alternatively, set `ANTHROPIC_API_KEY` in the claude agent's `env` config to bypass Keychain auth (uses API billing, not subscription)
+
 ### Stats look wrong or empty
 
 `quancode stats` reads local JSONL ledger files under `~/.config/quancode/logs`.

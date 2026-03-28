@@ -416,6 +416,16 @@ quancode doctor
 - 和你预期的内容或最近提交对比
 - 在弄清差异之前，不要反复重跑 `quancode start`
 
+### 从第三方桌面端 delegate 给 Claude 报 "Not logged in"
+
+Claude Code 的认证信息存储在 macOS Keychain 中。第三方桌面端应用（Codex Desktop、Qoder Desktop 等）可能无法访问 Keychain，导致 `claude auth status` 返回 `loggedIn: false`，即使终端里的 Claude Code 登录正常。
+
+这是平台限制，不是 QuanCode 的问题。变通方案：
+
+- 从 Codex/Qoder Desktop 只 delegate 给 codex 或 qoder，不 delegate 给 claude
+- 从 Claude Code 终端或 Claude Desktop 调用所有 agent 都正常
+- 也可以在 claude agent 的 `env` 配置中设置 `ANTHROPIC_API_KEY` 绕过 Keychain 认证（走 API 计费，非订阅额度）
+
 ### `stats` 看起来不对或者为空
 
 `quancode stats` 读取的是 `~/.config/quancode/logs` 下的本地 JSONL ledger。
