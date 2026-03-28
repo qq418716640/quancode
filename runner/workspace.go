@@ -85,6 +85,24 @@ func CollectPatch(worktreeDir string) (string, []string, error) {
 	return string(patchBytes), files, nil
 }
 
+// PatchSummary runs git apply --stat to show what a patch would change
+// without actually applying it. Returns the summary text.
+func PatchSummary(targetDir, patch string) (string, error) {
+	if patch == "" {
+		return "", nil
+	}
+
+	cmd := exec.Command("git", "apply", "--stat")
+	cmd.Dir = targetDir
+	cmd.Stdin = strings.NewReader(patch)
+
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git apply --stat: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // ApplyPatch applies a git patch to the target directory.
 func ApplyPatch(targetDir, patch string) error {
 	if patch == "" {

@@ -31,12 +31,27 @@ TO LIST AVAILABLE AGENTS:
 DELEGATION GUIDELINES:
 - ALWAYS use "{{.Binary}} delegate" to invoke other agents. NEVER call their CLI commands directly (e.g., do NOT run "claude -p ..." or "codex exec ..." yourself). QuanCode manages authentication, proxy, and environment for each agent.
 - Delegate well-scoped, independent tasks (e.g., "write tests for X", "refactor file Y")
-- Provide full context in the task description: what files to look at, what the goal is, constraints
-- The delegate agent operates in the same working directory and can read/write files
+- The delegate agent works in the same repository but CANNOT see your conversation history. Your task description is its only context — make it self-contained:
+  - What to do and why
+  - Which files, functions, or symbols are involved
+  - Constraints, non-goals, and acceptance criteria
+  - Good: "Add unit tests for router/router.go SelectAgent — cover: no match returns nil, keyword match beats priority, exclude list is respected. Do not modify production code."
+  - Bad: "Write tests for the router changes we discussed."
 - After delegation completes, check changed_files in the JSON result and verify the changes
 - Do NOT delegate tasks that require multi-step conversation or clarification from the user
 - Do NOT delegate if you can do the task yourself just as efficiently
-- You are the primary agent. You own the overall plan and final quality.`
+- You are the primary agent. You own the overall plan and final quality.
+
+PARALLEL DELEGATION:
+You can run multiple delegate calls concurrently for independent tasks. Rules:
+- MUST use --isolation patch --format json for each parallel delegate to avoid conflicts.
+- The JSON result includes a "patch" field with the unified diff. Patches are NOT auto-applied.
+- To apply a patch, save it to a temp file and run:
+    {{.Binary}} apply-patch --workdir "$(pwd)" --file /tmp/patch-taskname.diff
+- Split tasks by file boundaries — avoid two delegates modifying the same file.
+- Apply patches one at a time. Review and verify after each one before applying the next.
+- If one delegate fails, you can still apply the successful patches — evaluate independently.
+- If a patch conflicts, resolve before applying the next one.`
 
 type agentInfo struct {
 	Key         string

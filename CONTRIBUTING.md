@@ -12,7 +12,7 @@ Thanks for contributing to QuanCode.
 
 Prerequisites:
 
-- Go 1.22+
+- Go 1.25+
 - git
 
 Optional, depending on what you are changing:

@@ -15,7 +15,7 @@ Use it when you want one terminal workflow that can hand off bounded tasks to th
 
 Prerequisites:
 
-- Go 1.22+
+- Go 1.25+
 - At least one supported coding CLI installed and authenticated
 
 Install from source:
