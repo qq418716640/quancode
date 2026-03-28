@@ -72,6 +72,11 @@ func (a *genericAgent) LaunchAsPrimary(workDir, systemPrompt string) error {
 	cliArgs = append(cliArgs, a.cfg.PrimaryArgs...)
 
 	env := runner.MergeEnv(os.Environ(), a.cfg.Env)
+	env = runner.MergeEnv(env, map[string]string{
+		"QUANCODE_SESSION":    "1",
+		"QUANCODE_PRIMARY":    a.key,
+		"QUANCODE_PROMPT_MODE": promptMode,
+	})
 
 	switch promptMode {
 	case "append_arg":

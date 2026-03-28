@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
@@ -58,7 +59,18 @@ var startCmd = &cobra.Command{
 
 		workDir, _ := os.Getwd()
 
-		fmt.Fprintf(os.Stderr, "[quancode] starting %s as primary agent with delegation enabled\n", primary)
+		// Set terminal title (OSC 2) — best-effort, harmless on unsupported terminals.
+		repoName := filepath.Base(workDir)
+		fmt.Fprintf(os.Stderr, "\033]2;QuanCode: %s - %s\007", primary, repoName)
+
+		// Startup banner
+		promptMode := ac.PromptMode
+		if promptMode == "" {
+			promptMode = "append_arg"
+		}
+		fmt.Fprintf(os.Stderr, "[quancode] session active\n")
+		fmt.Fprintf(os.Stderr, "[quancode] primary: %s (%s)\n", primary, ac.Name)
+		fmt.Fprintf(os.Stderr, "[quancode] prompt:  %s\n", promptMode)
 
 		// Use the agent's LaunchAsPrimary which handles prompt_mode
 		return a.LaunchAsPrimary(workDir, systemPrompt)
