@@ -9,9 +9,10 @@ allowed-tools: Bash(quancode *)
 
 Use this skill when the user wants to delegate a bounded coding task to a QuanCode-managed agent.
 
-## Core Rule
+## Core Rules
 
-Always invoke sub-agents through `quancode delegate`. Never call agent CLIs directly.
+1. Always use `quancode delegate` to run tasks. Never use `quancode start` — that is for interactive sessions only.
+2. Never call agent CLIs directly (codex, claude, qodercli). Always go through `quancode delegate`.
 
 ## Preconditions
 
