@@ -4,6 +4,7 @@ internal-docs/
 hello.py
 .quancode/
 .gocache/
+.tmp/
 .DS_Store
 dist/
 coverage.out
