@@ -15,6 +15,7 @@ import (
 )
 
 func TestDelegateRunEAutoRoutesAndPrintsJSON(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -81,6 +82,7 @@ agents:
 }
 
 func TestDelegateRunEIsolationPatchPrintsPatch(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	runGitCmd(t, dir, "init")
 	runGitCmd(t, dir, "config", "user.name", "QuanCode Test")
@@ -146,6 +148,7 @@ agents:
 }
 
 func TestDelegateRunEReturnsExitStatusErrorForJSONFailure(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -209,6 +212,7 @@ agents:
 }
 
 func TestDelegateRunERecordsApprovalEventAndDecision(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -296,6 +300,7 @@ agents:
 }
 
 func TestDelegateRunEWorktreeIsolationAppliesPatch(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	runGitCmd(t, dir, "init")
 	runGitCmd(t, dir, "config", "user.name", "QuanCode Test")
@@ -366,6 +371,7 @@ agents:
 }
 
 func TestDelegateRunEUnknownAgent(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -404,6 +410,7 @@ agents:
 }
 
 func TestDelegateRunEDisabledAgent(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -442,6 +449,7 @@ agents:
 }
 
 func TestDelegateRunEWorktreeRequiresGitRepo(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir() // not a git repo
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -489,6 +497,7 @@ agents:
 }
 
 func TestDelegateRunETextOutputNonZeroExit(t *testing.T) {
+	isolateHome(t)
 	// In text mode, non-zero exit from the sub-agent is not a Go error —
 	// runner.Run returns nil error with ExitCode set. The delegate command
 	// still prints the output and returns nil.
@@ -535,6 +544,7 @@ agents:
 }
 
 func TestDelegateRunETimeoutDeniesPendingApproval(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -626,6 +636,7 @@ agents:
 }
 
 func TestDelegateRunEDryRunShowsPrompt(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -683,6 +694,7 @@ agents:
 }
 
 func TestDelegateRunEDryRunJSON(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -754,10 +766,7 @@ func TestDelegateRunEFallbackChainRecordsRunTracking(t *testing.T) {
 	runGitCmd(t, dir, "add", "dummy.txt")
 	runGitCmd(t, dir, "commit", "-m", "init")
 
-	oldHome := os.Getenv("HOME")
-	home := t.TempDir()
-	os.Setenv("HOME", home)
-	defer os.Setenv("HOME", oldHome)
+	isolateHome(t)
 
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude

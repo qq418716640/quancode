@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -10,12 +9,7 @@ import (
 )
 
 func TestStatsIncludesFallbackAnalysis(t *testing.T) {
-	oldHome := os.Getenv("HOME")
-	home := t.TempDir()
-	if err := os.Setenv("HOME", home); err != nil {
-		t.Fatalf("Setenv HOME: %v", err)
-	}
-	defer os.Setenv("HOME", oldHome)
+	isolateHome(t)
 
 	runID := "run_test123"
 
@@ -83,12 +77,7 @@ func TestStatsIncludesFallbackAnalysis(t *testing.T) {
 }
 
 func TestStatsNoFallbackSectionWhenNoRunTracking(t *testing.T) {
-	oldHome := os.Getenv("HOME")
-	home := t.TempDir()
-	if err := os.Setenv("HOME", home); err != nil {
-		t.Fatalf("Setenv HOME: %v", err)
-	}
-	defer os.Setenv("HOME", oldHome)
+	isolateHome(t)
 
 	// Old-style entry without RunID
 	if err := ledger.Append(&ledger.Entry{
@@ -117,12 +106,7 @@ func TestStatsNoFallbackSectionWhenNoRunTracking(t *testing.T) {
 }
 
 func TestStatsIncludesApprovalSummary(t *testing.T) {
-	oldHome := os.Getenv("HOME")
-	home := t.TempDir()
-	if err := os.Setenv("HOME", home); err != nil {
-		t.Fatalf("Setenv HOME: %v", err)
-	}
-	defer os.Setenv("HOME", oldHome)
+	isolateHome(t)
 
 	if err := ledger.Append(&ledger.Entry{
 		Agent:      "codex",

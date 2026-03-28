@@ -12,6 +12,16 @@ import (
 // These helpers mutate package-level command flags and process-wide stdout/cwd.
 // Keep tests in this package serial; do not use t.Parallel().
 
+// isolateHome sets HOME to a temp directory so ledger writes don't pollute
+// the real ~/.config/quancode/logs/. Returns a cleanup function via t.Cleanup.
+func isolateHome(t *testing.T) {
+	t.Helper()
+	oldHome := os.Getenv("HOME")
+	home := t.TempDir()
+	os.Setenv("HOME", home)
+	t.Cleanup(func() { os.Setenv("HOME", oldHome) })
+}
+
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {

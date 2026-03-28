@@ -14,6 +14,7 @@ import (
 // --- Context injection tests ---
 
 func TestDelegateContextInjectsClaudeMD(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	// Create a CLAUDE.md that the agent will see in its task
 	writeTestFile(t, filepath.Join(dir, "CLAUDE.md"), "build: go test ./...")
@@ -81,6 +82,7 @@ agents:
 }
 
 func TestDelegateNoContextSkipsInjection(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "CLAUDE.md"), "should not appear")
 
@@ -141,6 +143,7 @@ agents:
 }
 
 func TestDelegateContextFilesInjection(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "main.go"), "package main")
 
@@ -206,6 +209,7 @@ agents:
 // --- Verify integration tests ---
 
 func TestDelegateVerifyPassInplace(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -275,6 +279,7 @@ agents:
 }
 
 func TestDelegateVerifyStrictFailInplace(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
@@ -345,6 +350,7 @@ agents:
 }
 
 func TestDelegateVerifyStrictFailWorktreeDoesNotApply(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	runGitCmd(t, dir, "init")
 	runGitCmd(t, dir, "config", "user.name", "Test")
@@ -424,6 +430,7 @@ agents:
 }
 
 func TestDelegateVerifyRecordFailWorktreeStillApplies(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	runGitCmd(t, dir, "init")
 	runGitCmd(t, dir, "config", "user.name", "Test")
@@ -503,6 +510,7 @@ agents:
 }
 
 func TestDelegateVerifySkippedOnAgentFailure(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
 default_primary: claude
