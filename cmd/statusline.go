@@ -24,7 +24,7 @@ fi
 [ -n "$ctx" ] && parts="$parts ctx:${ctx}%"
 [ -n "$r5h" ] && parts="$parts 5h:${r5h}%"
 [ -n "$r7d" ] && parts="$parts 7d:${r7d}%"
-[ -n "$cost" ] && [ "$cost" != "0" ] && parts="$parts \$${cost}"
+[ -n "$cost" ] && [ "$cost" != "0" ] && parts="$parts \$$(printf '%.2f' "$cost")"
 
 echo "$parts"
 `
