@@ -69,3 +69,52 @@ func SelectAgent(cfg *config.Config, task string) *Selection {
 		Reason:   reason,
 	}
 }
+
+// SelectAgentExcluding picks the best non-primary agent, skipping any in the exclude set.
+func SelectAgentExcluding(cfg *config.Config, task string, exclude map[string]bool) *Selection {
+	taskLower := strings.ToLower(task)
+
+	type candidate struct {
+		key            string
+		ac             config.AgentConfig
+		score          int
+		matchedKeyword string
+	}
+
+	var candidates []candidate
+	for key, ac := range cfg.Agents {
+		if !ac.Enabled || key == cfg.DefaultPrimary || exclude[key] {
+			continue
+		}
+		c := candidate{key: key, ac: ac}
+		for _, keyword := range ac.PreferredFor {
+			if strings.Contains(taskLower, strings.ToLower(keyword)) {
+				c.score = 100
+				c.matchedKeyword = keyword
+				break
+			}
+		}
+		candidates = append(candidates, c)
+	}
+
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if candidates[i].ac.Priority != candidates[j].ac.Priority {
+			return candidates[i].ac.Priority < candidates[j].ac.Priority
+		}
+		return candidates[i].key < candidates[j].key
+	})
+
+	best := candidates[0]
+	reason := "fallback: lowest priority number"
+	if best.score > 0 {
+		reason = "fallback: preferred_for keyword match: " + best.matchedKeyword
+	}
+	return &Selection{AgentKey: best.key, Reason: reason}
+}

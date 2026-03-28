@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,7 +9,6 @@ import (
 	"time"
 
 	"github.com/qq418716640/quancode/agent"
-	"github.com/qq418716640/quancode/approval"
 	"github.com/qq418716640/quancode/config"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/router"
@@ -25,6 +22,7 @@ var (
 	delegateFormat       string
 	delegateIsolation    string
 	delegateAutoApprove  bool
+	delegateNoFallback   bool
 	approvalPollInterval = time.Second
 	approvalTimeout      = 120 * time.Second
 	// stdinReader is the source for interactive approval prompts.
@@ -96,7 +94,14 @@ var delegateCmd = &cobra.Command{
 
 		task := strings.Join(args, " ")
 
-		// Resolve agent
+		// Resolve working directory
+		workDir := delegateWorkdir
+		if workDir == "" {
+			workDir, _ = os.Getwd()
+		}
+		isolation := delegateIsolation
+
+		// Resolve initial agent
 		agentKey := delegateAgent
 		if agentKey == "" {
 			sel := router.SelectAgent(cfg, task)
@@ -109,6 +114,7 @@ var delegateCmd = &cobra.Command{
 			return fmt.Errorf("no agent specified and no available sub-agent found")
 		}
 
+		// Validate initial agent
 		ac, ok := cfg.Agents[agentKey]
 		if !ok {
 			return fmt.Errorf("unknown agent: %s", agentKey)
@@ -116,314 +122,66 @@ var delegateCmd = &cobra.Command{
 		if !ac.Enabled {
 			return fmt.Errorf("agent %s is disabled", agentKey)
 		}
-
 		a := agent.FromConfig(agentKey, ac)
 		if ok, _ := a.IsAvailable(); !ok {
 			return fmt.Errorf("agent %s: command %q not found in PATH", agentKey, ac.Command)
 		}
 
-		// Resolve working directory
-		workDir := delegateWorkdir
-		if workDir == "" {
-			workDir, _ = os.Getwd()
-		}
+		// Run attempt with fallback loop
+		tried := map[string]bool{agentKey: true}
+		attemptNum := 1
 
-		// Handle isolation modes
-		isolation := delegateIsolation
-		execDir := workDir
-		var patch string
-		var patchFiles []string
-		var cleanupWorktree func()
-
-		if isolation == "worktree" || isolation == "patch" {
-			if !runner.IsGitRepo(workDir) {
-				return fmt.Errorf("--isolation %s requires a git repository", isolation)
-			}
-			wt, cleanup, wtErr := runner.CreateWorktree(workDir)
-			if wtErr != nil {
-				return fmt.Errorf("create worktree: %w", wtErr)
-			}
-			cleanupWorktree = cleanup
-			execDir = wt
-			fmt.Fprintf(os.Stderr, "[quancode] running in isolated worktree: %s\n", wt)
-		}
-
-		// Snapshot git state before delegation (for accurate changed_files)
-		preSnapshot := gitStatusSnapshot(execDir)
-
-		fmt.Fprintf(os.Stderr, "[quancode] delegating to %s: %s\n", agentKey, task)
-		delegationID, err := approval.NewDelegationID()
-		if err != nil {
-			return fmt.Errorf("generate delegation id: %w", err)
-		}
-		approvalDir, err := approval.CreateApprovalDir(delegationID)
-		if err != nil {
-			return fmt.Errorf("create approval dir: %w", err)
-		}
-		defer func() {
-			if cleanupErr := approval.CleanupApprovalDir(approvalDir); cleanupErr != nil {
-				fmt.Fprintf(os.Stderr, "[quancode] warning: failed to clean approval dir: %v\n", cleanupErr)
-			}
-		}()
-
-		type delegateResult struct {
-			result *runner.Result
-			err    error
-		}
-		doneCh := make(chan delegateResult, 1)
-		go func() {
-			result, err := a.Delegate(execDir, task, agent.DelegateOptions{
-				DelegationID: delegationID,
-				ApprovalDir:  approvalDir,
-			})
-			doneCh <- delegateResult{result: result, err: err}
-		}()
-
-		var (
-			result         *runner.Result
-			approvalEvents []ledger.ApprovalEvent
-			errResult      error
-		)
-		pendingSince := make(map[string]time.Time)
-		eventIndex := make(map[string]int)
-		pollTicker := time.NewTicker(approvalPollInterval)
-		defer pollTicker.Stop()
-
-		// promptQueue serialises interactive approval prompts so only one
-		// goroutine reads from stdin at a time. Buffer is generous so the
-		// poll loop never blocks when queuing requests.
-		promptQueue := make(chan *approval.Request, 16)
-		loopDone := make(chan struct{}) // closed when the main loop exits
-
-		reader := stdinReader
-		if reader == nil {
-			reader = bufio.NewReader(os.Stdin)
-		}
-
-		// readLine wraps blocking stdin read into a channel so it can be
-		// cancelled via loopDone, preventing goroutine leaks and races
-		// with the deferred approvalDir cleanup.
-		type stdinResult struct {
-			line string
-			err  error
-		}
-		readLine := func() <-chan stdinResult {
-			ch := make(chan stdinResult, 1)
-			go func() {
-				line, err := reader.ReadString('\n')
-				ch <- stdinResult{line, err}
-			}()
-			return ch
-		}
-
-		// Single goroutine drains promptQueue and reads user input serially.
-		go func() {
-			for {
-				select {
-				case <-loopDone:
-					return
-				case pr := <-promptQueue:
-					fmt.Fprintf(os.Stderr, "\n[quancode] approval requested: %s\n", pr.RequestID)
-					fmt.Fprintf(os.Stderr, "  action:      %s\n", pr.Action)
-					fmt.Fprintf(os.Stderr, "  description: %s\n", pr.Description)
-					fmt.Fprintf(os.Stderr, "  approve? [y/n]: ")
-
-					// Wait for user input or loop exit, whichever comes first.
-					var answer string
-					select {
-					case <-loopDone:
-						return
-					case res := <-readLine():
-						if res.err != nil {
-							continue
-						}
-						answer = strings.TrimSpace(strings.ToLower(res.line))
-					}
-
-					var decision, reason string
-					switch answer {
-					case "y", "yes":
-						decision, reason = "approved", "user approved interactively"
-					case "n", "no":
-						decision, reason = "denied", "user denied interactively"
-					default:
-						decision = "denied"
-						reason = fmt.Sprintf("unrecognised input %q, treated as deny", answer)
-						fmt.Fprintf(os.Stderr, "[quancode] unrecognised input %q — treating as deny\n", answer)
-					}
-					writeErr := approval.WriteResponse(approvalDir, approval.Response{
-						RequestID: pr.RequestID,
-						Decision:  decision,
-						DecidedBy: "user",
-						Reason:    reason,
-					})
-					if writeErr != nil && !errors.Is(writeErr, approval.ErrResponseExists) {
-						fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write approval response: %v\n", writeErr)
-					}
-				}
-			}
-		}()
-
-	loop:
 		for {
-			select {
-			case done := <-doneCh:
-				result = done.result
-				errResult = done.err
-				break loop
-			case <-pollTicker.C:
-				pending, pollErr := approval.PendingRequests(approvalDir)
-				if pollErr != nil {
-					fmt.Fprintf(os.Stderr, "[quancode] warning: approval poll failed: %v\n", pollErr)
-					continue
-				}
-				now := time.Now()
-				for _, req := range pending {
-					if _, ok := pendingSince[req.RequestID]; !ok {
-						pendingSince[req.RequestID] = now
-						eventIndex[req.RequestID] = len(approvalEvents)
-						approvalEvents = append(approvalEvents, ledger.ApprovalEvent{
-							RequestID:   req.RequestID,
-							Action:      req.Action,
-							Description: req.Description,
-						})
+			ar := runDelegateAttempt(a, agentKey, task, workDir, isolation, cfg)
 
-						if delegateAutoApprove {
-							// Write approval directly — no channel, no goroutine, no deadlock risk.
-							fmt.Fprintf(os.Stderr, "[quancode] auto-approved: %s %s\n", req.RequestID, req.Description)
-							writeErr := approval.WriteResponse(approvalDir, approval.Response{
-								RequestID: req.RequestID,
-								Decision:  "approved",
-								DecidedBy: "auto",
-								Reason:    "auto-approved via --auto-approve",
-							})
-							if writeErr != nil && !errors.Is(writeErr, approval.ErrResponseExists) {
-								fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write auto-approval: %v\n", writeErr)
-							}
-						} else {
-							// Queue for the single prompt goroutine.
-							promptQueue <- req
-						}
-					}
-					if now.Sub(pendingSince[req.RequestID]) >= approvalTimeout {
-						_, existsErr := approval.ReadResponse(approvalDir, req.RequestID)
-						if existsErr == nil {
-							continue
-						}
-						if !os.IsNotExist(existsErr) {
-							fmt.Fprintf(os.Stderr, "[quancode] warning: approval response check failed: %v\n", existsErr)
-							continue
-						}
-						writeErr := approval.WriteResponse(approvalDir, approval.Response{
-							RequestID: req.RequestID,
-							Decision:  "denied",
-							DecidedBy: "timeout",
-							Reason:    "approval timed out",
-						})
-						if writeErr != nil {
-							if errors.Is(writeErr, approval.ErrResponseExists) {
-								fmt.Fprintf(os.Stderr, "[quancode] approval %s was decided before timeout denial could be written\n", req.RequestID)
-							} else {
-								fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write timeout denial: %v\n", writeErr)
-							}
-						}
-					}
-				}
-			}
-		}
-		close(loopDone) // signal prompt goroutine to exit
-		err = errResult
+			// Check if fallback is needed and allowed
+			shouldFallback := !delegateNoFallback &&
+				attemptNum < 3 &&
+				ar.result != nil &&
+				isFallbackEligible(ar.result, ar.output)
 
-		for requestID, idx := range eventIndex {
-			resp, readErr := approval.ReadResponse(approvalDir, requestID)
-			if readErr == nil {
-				approvalEvents[idx].Decision = resp.Decision
-			}
-		}
-
-		// Collect patch from worktree before cleanup
-		if isolation == "worktree" || isolation == "patch" {
-			var collectErr error
-			patch, patchFiles, collectErr = runner.CollectPatch(execDir)
-			if collectErr != nil {
-				fmt.Fprintf(os.Stderr, "[quancode] warning: patch collection failed: %v\n", collectErr)
-			}
-
-			if isolation == "worktree" && patch != "" {
-				// Auto-apply patch to main workdir
-				if applyErr := runner.ApplyPatch(workDir, patch); applyErr != nil {
-					fmt.Fprintf(os.Stderr, "[quancode] warning: failed to apply patch: %v\n", applyErr)
-				} else {
-					fmt.Fprintf(os.Stderr, "[quancode] changes applied to working directory\n")
+			// For inplace mode, block fallback if files were changed
+			if shouldFallback && (isolation == "" || isolation == "inplace") {
+				if changes := detectNewChanges(workDir, ar.preSnapshot); len(changes) > 0 {
+					fmt.Fprintf(os.Stderr, "[quancode] %s failed but modified files — skipping fallback\n", agentKey)
+					shouldFallback = false
 				}
 			}
 
-			if cleanupWorktree != nil {
-				cleanupWorktree()
+			if !shouldFallback {
+				// Final result — format and return
+				return finalizeDelegation(agentKey, task, workDir, isolation, ar)
 			}
-		}
 
-		// Build output string from result
-		output := ""
-		var changedFiles []string
-		if result != nil {
-			output = result.Stdout
-			if output == "" {
-				output = result.Stderr
+			// Log failure and find fallback
+			reason := "timed out"
+			if !ar.result.TimedOut {
+				reason = "rate-limited or transient error"
 			}
-			if len(patchFiles) > 0 {
-				changedFiles = patchFiles
-			} else if isolation == "" || isolation == "inplace" {
-				changedFiles = detectNewChanges(workDir, preSnapshot)
-			}
-		}
+			fmt.Fprintf(os.Stderr, "[quancode] %s %s, looking for fallback...\n", agentKey, reason)
 
-		// Record to ledger
-		logEntry := &ledger.Entry{
-			Agent:     agentKey,
-			Task:      task,
-			WorkDir:   workDir,
-			Isolation: isolation,
-		}
-		if result != nil {
-			logEntry.ExitCode = result.ExitCode
-			logEntry.TimedOut = result.TimedOut
-			logEntry.DurationMs = result.DurationMs
-			logEntry.ChangedFiles = changedFiles
-		}
-		logEntry.ApprovalEvents = append(logEntry.ApprovalEvents, approvalEvents...)
-		if err != nil && logEntry.ExitCode == 0 {
-			logEntry.ExitCode = 1
-		}
-		if logErr := ledger.Append(logEntry); logErr != nil {
-			fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write ledger: %v\n", logErr)
-		}
+			// Log failed attempt to ledger
+			logAttempt(agentKey, task, workDir, isolation, ar)
 
-		if delegateFormat == "json" {
-			dr := buildDelegationResult(agentKey, task, isolation, output, patch, result, err, changedFiles, approvalEvents)
-			data, _ := json.MarshalIndent(dr, "", "  ")
-			fmt.Println(string(data))
-			if err != nil {
-				return &agent.ExitStatusError{Code: 1}
+			sel := router.SelectAgentExcluding(cfg, task, tried)
+			if sel == nil {
+				fmt.Fprintf(os.Stderr, "[quancode] no fallback agents available\n")
+				return finalizeDelegation(agentKey, task, workDir, isolation, ar)
 			}
-			return nil
-		}
 
-		// Text format (default)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[quancode] delegation error: %v\n", err)
-			if output != "" {
-				fmt.Print(output)
+			agentKey = sel.AgentKey
+			tried[agentKey] = true
+			attemptNum++
+
+			ac = cfg.Agents[agentKey]
+			a = agent.FromConfig(agentKey, ac)
+			if ok, _ := a.IsAvailable(); !ok {
+				fmt.Fprintf(os.Stderr, "[quancode] fallback %s not available, skipping\n", agentKey)
+				continue
 			}
-			return &agent.ExitStatusError{Code: 1}
+
+			fmt.Fprintf(os.Stderr, "[quancode] falling back to %s (%s)\n", agentKey, sel.Reason)
 		}
-		if isolation == "patch" && patch != "" {
-			fmt.Fprintf(os.Stderr, "[quancode] patch (%d files changed, not applied):\n", len(patchFiles))
-			fmt.Print(patch)
-			return nil
-		}
-		fmt.Print(output)
-		return nil
 	},
 }
 
@@ -495,5 +253,6 @@ func init() {
 		return []string{"inplace", "worktree", "patch"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	delegateCmd.Flags().BoolVar(&delegateAutoApprove, "auto-approve", false, "automatically approve all approval requests")
+	delegateCmd.Flags().BoolVar(&delegateNoFallback, "no-fallback", false, "disable automatic fallback to other agents on failure")
 	rootCmd.AddCommand(delegateCmd)
 }
