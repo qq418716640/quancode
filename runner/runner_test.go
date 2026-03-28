@@ -9,6 +9,24 @@ import (
 	"testing"
 )
 
+// testGitRun runs a git command in the given directory with deterministic
+// author/committer identity for reproducible tests.
+func testGitRun(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=test",
+		"GIT_AUTHOR_EMAIL=test@test.com",
+		"GIT_COMMITTER_NAME=test",
+		"GIT_COMMITTER_EMAIL=test@test.com",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %s: %v", args, out, err)
+	}
+}
+
 func TestMergeEnvOverridesExistingKeysCaseInsensitively(t *testing.T) {
 	base := []string{
 		"PATH=/usr/bin",
@@ -187,28 +205,13 @@ func TestIsGitRepoFalse(t *testing.T) {
 
 func TestCreateWorktreeCollectPatchApplyPatch(t *testing.T) {
 	repo := t.TempDir()
-	gitRun := func(dir string, args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=test",
-			"GIT_AUTHOR_EMAIL=test@test.com",
-			"GIT_COMMITTER_NAME=test",
-			"GIT_COMMITTER_EMAIL=test@test.com",
-		)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v failed: %s: %v", args, out, err)
-		}
-	}
 
-	gitRun(repo, "init")
+	testGitRun(t, repo, "init")
 	if err := os.WriteFile(filepath.Join(repo, "file.txt"), []byte("original\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	gitRun(repo, "add", "-A")
-	gitRun(repo, "commit", "-m", "initial")
+	testGitRun(t, repo, "add", "-A")
+	testGitRun(t, repo, "commit", "-m", "initial")
 
 	// Create worktree
 	wtDir, cleanup, err := CreateWorktree(repo)
@@ -240,12 +243,12 @@ func TestCreateWorktreeCollectPatchApplyPatch(t *testing.T) {
 
 	// Apply patch to another repo copy
 	applyDir := t.TempDir()
-	gitRun(applyDir, "init")
+	testGitRun(t, applyDir, "init")
 	if err := os.WriteFile(filepath.Join(applyDir, "file.txt"), []byte("original\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	gitRun(applyDir, "add", "-A")
-	gitRun(applyDir, "commit", "-m", "initial")
+	testGitRun(t, applyDir, "add", "-A")
+	testGitRun(t, applyDir, "commit", "-m", "initial")
 
 	if err := ApplyPatch(applyDir, patch); err != nil {
 		t.Fatalf("ApplyPatch: %v", err)
@@ -268,26 +271,11 @@ func TestApplyPatchEmptyIsNoop(t *testing.T) {
 
 func TestCollectPatchNoChanges(t *testing.T) {
 	repo := t.TempDir()
-	gitRun := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = repo
-		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=test",
-			"GIT_AUTHOR_EMAIL=test@test.com",
-			"GIT_COMMITTER_NAME=test",
-			"GIT_COMMITTER_EMAIL=test@test.com",
-		)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %s: %v", args, out, err)
-		}
-	}
 
-	gitRun("init")
+	testGitRun(t, repo, "init")
 	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x"), 0644)
-	gitRun("add", "-A")
-	gitRun("commit", "-m", "init")
+	testGitRun(t, repo, "add", "-A")
+	testGitRun(t, repo, "commit", "-m", "init")
 
 	patch, files, err := CollectPatch(repo)
 	if err != nil {
@@ -298,5 +286,55 @@ func TestCollectPatchNoChanges(t *testing.T) {
 	}
 	if len(files) != 0 {
 		t.Fatalf("expected no files, got %v", files)
+	}
+}
+
+func TestPatchSummaryEmptyPatch(t *testing.T) {
+	summary, err := PatchSummary(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("expected nil error for empty patch, got %v", err)
+	}
+	if summary != "" {
+		t.Fatalf("expected empty summary, got %q", summary)
+	}
+}
+
+func TestPatchSummaryValidPatch(t *testing.T) {
+	repo := t.TempDir()
+
+	testGitRun(t, repo, "init")
+	if err := os.WriteFile(filepath.Join(repo, "file.txt"), []byte("original\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	testGitRun(t, repo, "add", "-A")
+	testGitRun(t, repo, "commit", "-m", "initial")
+
+	wtDir, cleanup, err := CreateWorktree(repo)
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	defer cleanup()
+
+	if err := os.WriteFile(filepath.Join(wtDir, "file.txt"), []byte("modified\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	patch, files, err := CollectPatch(wtDir)
+	if err != nil {
+		t.Fatalf("CollectPatch: %v", err)
+	}
+	if patch == "" {
+		t.Fatal("expected non-empty patch")
+	}
+	if len(files) != 1 || files[0] != "file.txt" {
+		t.Fatalf("expected [file.txt], got %v", files)
+	}
+
+	summary, err := PatchSummary(repo, patch)
+	if err != nil {
+		t.Fatalf("PatchSummary: %v", err)
+	}
+	if summary == "" {
+		t.Fatal("expected non-empty summary")
 	}
 }

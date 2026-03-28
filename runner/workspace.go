@@ -8,6 +8,50 @@ import (
 	"strings"
 )
 
+// worktreeIgnoreRules contains patterns that should never appear in a
+// collected patch. These are appended to the worktree's .gitignore so
+// git add -A skips them automatically.
+var worktreeIgnoreRules = []string{
+	".tmp/",
+	".gocache/",
+	".cache/",
+	"node_modules/",
+	"__pycache__/",
+	".venv/",
+	"*.pyc",
+}
+
+// ensureWorktreeIgnore writes build artifact exclusions to the worktree's
+// .git/info/exclude file. Unlike .gitignore, this is a local-only config
+// that won't be picked up by CollectPatch (git add -A).
+func ensureWorktreeIgnore(worktreeDir string) {
+	// In a worktree, .git is a file pointing to the real gitdir.
+	// Read it to find the actual git directory.
+	gitPath := filepath.Join(worktreeDir, ".git")
+	data, err := os.ReadFile(gitPath)
+	if err != nil {
+		return
+	}
+	// Format: "gitdir: /path/to/main/.git/worktrees/wt-xxx"
+	content := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(content, "gitdir: ") {
+		return
+	}
+	gitDir := strings.TrimPrefix(content, "gitdir: ")
+
+	infoDir := filepath.Join(gitDir, "info")
+	os.MkdirAll(infoDir, 0755)
+	excludePath := filepath.Join(infoDir, "exclude")
+
+	rules := "\n# quancode worktree exclusions\n" + strings.Join(worktreeIgnoreRules, "\n") + "\n"
+	f, err := os.OpenFile(excludePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	f.WriteString(rules)
+}
+
 // IsGitRepo checks if the directory is inside a git repository.
 func IsGitRepo(dir string) bool {
 	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
@@ -38,6 +82,10 @@ func CreateWorktree(repoDir string) (string, func(), error) {
 		os.RemoveAll(tmpDir)
 		return "", nil, fmt.Errorf("git worktree add: %s: %w", string(out), err)
 	}
+
+	// Write build artifact exclusions to worktree's .git/info/exclude so
+	// CollectPatch never picks up caches regardless of user config.
+	ensureWorktreeIgnore(tmpDir)
 
 	cleanup := func() {
 		exec.Command("git", "worktree", "remove", "--force", tmpDir).Run()
