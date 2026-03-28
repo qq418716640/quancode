@@ -1,0 +1,53 @@
+default_primary: claude
+
+agents:
+  claude:
+    name: Claude Code
+    command: claude
+    description: Strong at architecture, complex reasoning, multi-file edits
+    strengths:
+      - architecture
+      - complex-reasoning
+      - debugging
+      - multi-file-edits
+    primary_args:
+      - --append-system-prompt
+    delegate_args:
+      - -p
+      - --output-format
+      - text
+    timeout_secs: 300
+    enabled: true
+    preferred_for:
+      - architecture
+      - refactor
+      - debug
+      - design
+      - plan
+    priority: 10
+
+  codex:
+    name: Codex CLI
+    command: codex
+    description: Strong at quick edits, code generation, test writing
+    strengths:
+      - quick-edits
+      - code-generation
+      - test-writing
+    prompt_mode: file
+    prompt_file: AGENTS.md
+    delegate_args:
+      - exec
+      - --full-auto
+      - --ephemeral
+    output_flag: --output-last-message
+    timeout_secs: 180
+    enabled: true
+    preferred_for:
+      - test
+      - fix
+      - generate
+      - create
+      - write
+      - quick
+    priority: 20

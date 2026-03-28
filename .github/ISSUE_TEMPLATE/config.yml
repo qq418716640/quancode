@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Read the README
+    url: https://github.com/qq418716640/quancode/blob/main/README.md
+    about: Start here for installation, usage, and configuration basics.
+  - name: Contribution guide
+    url: https://github.com/qq418716640/quancode/blob/main/CONTRIBUTING.md
+    about: Check contribution expectations before opening a PR.

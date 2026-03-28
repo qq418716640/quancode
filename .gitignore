@@ -1,0 +1,9 @@
+quancode
+hello.py
+.quancode/
+.gocache/
+.DS_Store
+dist/
+coverage.out
+.claude/
+*.jsonl

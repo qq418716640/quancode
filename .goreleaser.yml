@@ -1,0 +1,52 @@
+version: 2
+
+project_name: quancode
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: quancode
+    main: .
+    binary: quancode
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/qq418716640/quancode/version.Version={{ .Tag }}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+brews:
+  - repository:
+      owner: qq418716640
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    skip_upload: '{{ eq (index .Env "HOMEBREW_TAP_GITHUB_TOKEN") "" }}'
+    directory: Formula
+    homepage: https://github.com/qq418716640/quancode
+    description: Unified CLI orchestrator for AI coding agents
+    license: Apache-2.0
+    install: |
+      bin.install "quancode"
+      generate_completions_from_executable(bin/"quancode", "completion")
+    test: |
+      system "#{bin}/quancode", "version"

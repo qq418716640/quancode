@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible problem in QuanCode
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please provide enough detail to reproduce the issue without access to your local environment.
+
+  - type: input
+    id: quancode_version
+    attributes:
+      label: QuanCode version
+      description: Output of `quancode version`
+      placeholder: v0.1.0-alpha
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.0 / Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: input
+    id: go_version
+    attributes:
+      label: Go version
+      placeholder: go1.22.4
+    validations:
+      required: false
+
+  - type: input
+    id: cli_name_version
+    attributes:
+      label: Affected third-party CLI and version
+      description: For example Claude Code, Codex CLI, Aider, or OpenCode
+      placeholder: codex 0.117.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: config_context
+    attributes:
+      label: Config context
+      description: Describe whether you used the example config, defaults, or a custom config. Do not paste secrets.
+      placeholder: Using quancode.example.yaml with codex as primary
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Run ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context
+      description: Logs, screenshots, or notes that help debugging. Remove secrets and private data.
+    validations:
+      required: false

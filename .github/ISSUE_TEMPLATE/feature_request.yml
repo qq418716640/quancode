@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose an improvement to QuanCode
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the user problem first, then the proposed change.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      placeholder: What friction or missing capability are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      placeholder: What should QuanCode do differently?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: Workarounds or other approaches you considered
+    validations:
+      required: false
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: Mention if this affects specific CLIs, operating systems, or config semantics
+    validations:
+      required: false
