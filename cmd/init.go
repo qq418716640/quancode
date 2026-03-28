@@ -111,6 +111,7 @@ var initCmd = &cobra.Command{
 		}
 
 		fmt.Println("\nrun `quancode doctor` to verify your setup.")
+		fmt.Println("run `quancode skill install` to install the /quancode skill for Claude Desktop.")
 		return nil
 	},
 }
