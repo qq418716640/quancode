@@ -164,25 +164,14 @@ Project entry points:
 - `runner/`: execution and isolation helpers
 - `ledger/`: logs and quotas
 
-## Roadmap
-
-Near-term focus:
-
-- Expand automated coverage for startup, delegation, and isolation flows
-- Ship release binaries via Goreleaser and publish versioned install paths
-
-Later:
-
-- Document per-agent compatibility status more formally; current compatibility remains best-effort
-
 ## Documentation
 
 - User guide: [`docs/user-guide.md`](docs/user-guide.md)
-- Release notes: [`CHANGELOG.md`](CHANGELOG.md)
-- Manual smoke tests: [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md)
-- Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Privacy notes: [`docs/privacy.md`](docs/privacy.md)
-- Release process: [`docs/releasing.md`](docs/releasing.md)
+- Config reference: [`docs/agent-config-schema.md`](docs/agent-config-schema.md)
+- Compatibility: [`docs/compatibility.md`](docs/compatibility.md)
+- Privacy: [`docs/privacy.md`](docs/privacy.md)
+- Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 
 ## License
 

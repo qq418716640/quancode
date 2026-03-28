@@ -154,12 +154,12 @@ Release 构建可以通过 Go ldflags 覆盖默认版本字符串。最终以 re
 
 ## 文档
 
-- User guide: [`docs/user-guide.zh.md`](docs/user-guide.zh.md)
-- Release notes: [`CHANGELOG.md`](CHANGELOG.md)
-- Manual smoke tests: [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md)（英文）
-- Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)（英文）
-- Privacy notes: [`docs/privacy.md`](docs/privacy.md)（英文）
-- Release process: [`docs/releasing.md`](docs/releasing.md)（英文）
+- 用户指南: [`docs/user-guide.zh.md`](docs/user-guide.zh.md)
+- 配置参考: [`docs/agent-config-schema.md`](docs/agent-config-schema.md)（英文）
+- 兼容性: [`docs/compatibility.md`](docs/compatibility.md)（英文）
+- 隐私说明: [`docs/privacy.md`](docs/privacy.md)（英文）
+- 贡献指南: [`CONTRIBUTING.md`](CONTRIBUTING.md)（英文）
+- 更新日志: [`CHANGELOG.md`](CHANGELOG.md)
 
 ## License
 
