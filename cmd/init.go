@@ -102,6 +102,14 @@ var initCmd = &cobra.Command{
 		fmt.Printf("\nconfig written to %s\n", cfgPath)
 		fmt.Printf("primary agent: %s\n", primary)
 		fmt.Printf("agents: %s\n", strings.Join(found, ", "))
+
+		// Set up Claude Code statusline if claude is available
+		if _, hasClaude := cfg.Agents["claude"]; hasClaude {
+			if err := setupClaudeStatusLine(); err != nil {
+				fmt.Fprintf(os.Stderr, "[quancode] warning: failed to set up statusline: %v\n", err)
+			}
+		}
+
 		fmt.Println("\nrun `quancode doctor` to verify your setup.")
 		return nil
 	},
