@@ -9,12 +9,15 @@ import (
 )
 
 // QuotaConfig stores quota settings for all agents.
+// Each agent can have multiple quota rules (e.g. a 5-hour rolling window AND a weekly cap).
 type QuotaConfig struct {
-	Agents map[string]AgentQuota `json:"agents"`
+	Agents map[string][]AgentQuota `json:"agents"`
 }
 
-// AgentQuota stores quota limits and reset info for one agent.
+// AgentQuota stores quota limits and reset info for one quota rule.
 type AgentQuota struct {
+	// Name identifies this rule when an agent has multiple quotas (e.g. "5h-window", "weekly-cap").
+	Name string `json:"name,omitempty"`
 	// Unit: "calls" (default), "minutes", "hours"
 	Unit string `json:"unit"`
 	// Limit per period (0 = unlimited)
@@ -115,23 +118,38 @@ func quotaFilePath() string {
 }
 
 // LoadQuota loads the quota config from disk.
+// Handles both the current format (agents: map[string][]AgentQuota)
+// and the legacy format (agents: map[string]AgentQuota) transparently.
 func LoadQuota() (*QuotaConfig, error) {
 	data, err := os.ReadFile(quotaFilePath())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &QuotaConfig{Agents: make(map[string]AgentQuota)}, nil
+			return &QuotaConfig{Agents: make(map[string][]AgentQuota)}, nil
 		}
 		return nil, fmt.Errorf("read quota file: %w", err)
 	}
 
+	// Try current format first.
 	var qc QuotaConfig
-	if err := json.Unmarshal(data, &qc); err != nil {
+	if err := json.Unmarshal(data, &qc); err == nil && qc.Agents != nil {
+		return &qc, nil
+	}
+
+	// Fall back to legacy format (single AgentQuota per agent).
+	var legacy struct {
+		Agents map[string]AgentQuota `json:"agents"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
 		return nil, fmt.Errorf("parse quota file: %w", err)
 	}
-	if qc.Agents == nil {
-		qc.Agents = make(map[string]AgentQuota)
+	migrated := &QuotaConfig{Agents: make(map[string][]AgentQuota, len(legacy.Agents))}
+	for key, aq := range legacy.Agents {
+		if aq.Name == "" {
+			aq.Name = "default"
+		}
+		migrated.Agents[key] = []AgentQuota{aq}
 	}
-	return &qc, nil
+	return migrated, nil
 }
 
 // SaveQuota writes the quota config to disk atomically (temp file + rename).

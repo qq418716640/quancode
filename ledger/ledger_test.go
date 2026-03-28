@@ -238,13 +238,24 @@ func TestSaveAndLoadQuotaRoundtrip(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	qc := &QuotaConfig{
-		Agents: map[string]AgentQuota{
+		Agents: map[string][]AgentQuota{
 			"claude": {
-				Unit:      "calls",
-				Limit:     100,
-				ResetMode: "monthly",
-				ResetDay:  1,
-				Notes:     "test quota",
+				{
+					Name:      "5h-window",
+					Unit:      "hours",
+					Limit:     5,
+					ResetMode: "rolling_hours",
+					RollingHours: 5,
+					Notes:     "5h rolling",
+				},
+				{
+					Name:      "weekly-cap",
+					Unit:      "calls",
+					Limit:     100,
+					ResetMode: "weekly",
+					ResetDay:  1,
+					Notes:     "test quota",
+				},
 			},
 		},
 	}
@@ -261,12 +272,15 @@ func TestSaveAndLoadQuotaRoundtrip(t *testing.T) {
 	if len(loaded.Agents) != 1 {
 		t.Fatalf("expected 1 agent, got %d", len(loaded.Agents))
 	}
-	claude := loaded.Agents["claude"]
-	if claude.Limit != 100 {
-		t.Fatalf("expected limit=100, got %d", claude.Limit)
+	rules := loaded.Agents["claude"]
+	if len(rules) != 2 {
+		t.Fatalf("expected 2 rules, got %d", len(rules))
 	}
-	if claude.Notes != "test quota" {
-		t.Fatalf("expected notes=%q, got %q", "test quota", claude.Notes)
+	if rules[1].Limit != 100 {
+		t.Fatalf("expected limit=100, got %d", rules[1].Limit)
+	}
+	if rules[1].Notes != "test quota" {
+		t.Fatalf("expected notes=%q, got %q", "test quota", rules[1].Notes)
 	}
 }
 

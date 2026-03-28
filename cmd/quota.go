@@ -12,6 +12,7 @@ import (
 
 var (
 	quotaSetAgent string
+	quotaSetRule  string
 	quotaSetLimit int
 	quotaSetUnit  string
 	quotaSetMode  string
@@ -23,17 +24,16 @@ var (
 var quotaCmd = &cobra.Command{
 	Use:   "quota",
 	Short: "View or set agent quota limits and current usage",
-	Long: `View or set quota limits per agent.
+	Long: `View or set quota limits per agent. Each agent can have multiple quota rules.
 
 Examples:
-  # Claude Max: 5-hour rolling window
-  quancode quota --set-agent claude --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5 --notes "Claude Max"
+  # Claude Max: 5-hour rolling window + weekly cap
+  quancode quota --set-agent claude --rule 5h-window --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5 --notes "Claude Max 5h window"
+  quancode quota --set-agent claude --rule weekly-cap --unit calls --limit 200 --reset-mode weekly --reset-day 1 --notes "Claude Max weekly"
 
-  # Codex Pro: weekly reset
-  quancode quota --set-agent codex --unit calls --limit 200 --reset-mode weekly --reset-day 1 --notes "Codex Pro"
-
-  # Monthly call limit
-  quancode quota --set-agent aider --unit calls --limit 500 --reset-mode monthly --reset-day 1`,
+  # Codex Pro: 5-hour rolling window + weekly cap
+  quancode quota --set-agent codex --rule 5h-window --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5 --notes "Codex Pro 5h window"
+  quancode quota --set-agent codex --rule weekly-cap --unit calls --limit 200 --reset-mode weekly --reset-day 1 --notes "Codex Pro weekly"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if quotaSetAgent != "" {
 			return setQuota(cmd)
@@ -59,7 +59,26 @@ func setQuota(cmd *cobra.Command) error {
 		return fmt.Errorf("specify at least one setting flag")
 	}
 
-	aq := qc.Agents[quotaSetAgent]
+	ruleName := quotaSetRule
+	if ruleName == "" {
+		ruleName = "default"
+	}
+
+	// Find existing rule or create new one
+	rules := qc.Agents[quotaSetAgent]
+	idx := -1
+	for i, r := range rules {
+		if r.Name == ruleName {
+			idx = i
+			break
+		}
+	}
+
+	var aq ledger.AgentQuota
+	if idx >= 0 {
+		aq = rules[idx]
+	}
+	aq.Name = ruleName
 
 	if unitSet {
 		switch quotaSetUnit {
@@ -109,13 +128,19 @@ func setQuota(cmd *cobra.Command) error {
 		aq.Notes = quotaSetNotes
 	}
 
-	qc.Agents[quotaSetAgent] = aq
+	if idx >= 0 {
+		rules[idx] = aq
+	} else {
+		rules = append(rules, aq)
+	}
+	qc.Agents[quotaSetAgent] = rules
+
 	if err := ledger.SaveQuota(qc); err != nil {
 		return err
 	}
 
-	fmt.Printf("quota updated for %s: %d %s per %s\n",
-		quotaSetAgent, aq.Limit, aq.Unit, aq.ResetMode)
+	fmt.Printf("quota updated for %s/%s: %d %s per %s\n",
+		quotaSetAgent, ruleName, aq.Limit, aq.Unit, aq.ResetMode)
 	return nil
 }
 
@@ -127,8 +152,8 @@ func showQuota() error {
 
 	if len(qc.Agents) == 0 {
 		fmt.Println("no quotas configured. examples:")
-		fmt.Println("  quancode quota --set-agent claude --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5 --notes \"Claude Max\"")
-		fmt.Println("  quancode quota --set-agent codex --unit calls --limit 200 --reset-mode weekly --reset-day 1 --notes \"Codex Pro\"")
+		fmt.Println("  quancode quota --set-agent claude --rule 5h-window --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5")
+		fmt.Println("  quancode quota --set-agent claude --rule weekly-cap --unit calls --limit 200 --reset-mode weekly --reset-day 1")
 		return nil
 	}
 
@@ -139,39 +164,49 @@ func showQuota() error {
 	sort.Strings(agents)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "AGENT\tLIMIT\tUNIT\tUSED\tREMAINING\tPERIOD\tNOTES")
+	fmt.Fprintln(w, "AGENT\tRULE\tLIMIT\tUNIT\tUSED\tREMAINING\tPERIOD\tNOTES")
 
 	for _, a := range agents {
-		aq := qc.Agents[a]
-		used, since := aq.Usage(a)
+		for _, aq := range qc.Agents[a] {
+			used, since := aq.Usage(a)
 
-		unit := aq.Unit
-		if unit == "" {
-			unit = "calls"
-		}
-
-		limitStr := "unlimited"
-		remainStr := "-"
-		if aq.Limit > 0 {
-			limitStr = fmt.Sprintf("%d", aq.Limit)
-			remain := float64(aq.Limit) - used
-			if remain < 0 {
-				remain = 0
+			unit := aq.Unit
+			if unit == "" {
+				unit = "calls"
 			}
-			remainStr = formatUsage(remain, unit)
-		}
 
-		period := aq.ResetMode
-		if period == "" {
-			period = "monthly"
-		}
-		if period == "rolling_hours" {
-			period = fmt.Sprintf("rolling %dh", aq.RollingHours)
-		}
-		periodInfo := fmt.Sprintf("%s (since %s)", period, since.Format("01-02 15:04"))
+			limitStr := "unlimited"
+			remainStr := "-"
+			if aq.Limit > 0 {
+				limitStr = fmt.Sprintf("%d", aq.Limit)
+				remain := float64(aq.Limit) - used
+				if remain < 0 {
+					remain = 0
+				}
+				remainStr = formatUsage(remain, unit)
+			}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			a, limitStr, unit, formatUsage(used, unit), remainStr, periodInfo, aq.Notes)
+			period := aq.ResetMode
+			if period == "" {
+				period = "monthly"
+			}
+			if period == "rolling_hours" {
+				hours := aq.RollingHours
+				if hours <= 0 {
+					hours = 5
+				}
+				period = fmt.Sprintf("rolling %dh", hours)
+			}
+			periodInfo := fmt.Sprintf("%s (since %s)", period, since.Format("01-02 15:04"))
+
+			ruleName := aq.Name
+			if ruleName == "" {
+				ruleName = "default"
+			}
+
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				a, ruleName, limitStr, unit, formatUsage(used, unit), remainStr, periodInfo, aq.Notes)
+		}
 	}
 	w.Flush()
 	return nil
@@ -193,6 +228,7 @@ func formatUsage(val float64, unit string) string {
 
 func init() {
 	quotaCmd.Flags().StringVar(&quotaSetAgent, "set-agent", "", "agent to set quota for")
+	quotaCmd.Flags().StringVar(&quotaSetRule, "rule", "", "rule name (e.g. '5h-window', 'weekly-cap'; default: 'default')")
 	quotaCmd.Flags().IntVar(&quotaSetLimit, "limit", 0, "quota limit per period")
 	quotaCmd.Flags().StringVar(&quotaSetUnit, "unit", "", "quota unit: calls, minutes, or hours")
 	quotaCmd.Flags().StringVar(&quotaSetMode, "reset-mode", "", "reset mode: monthly, weekly, or rolling_hours")
