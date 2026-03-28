@@ -34,6 +34,9 @@ type attemptResult struct {
 	approvalEvents []ledger.ApprovalEvent
 	preSnapshot    map[string]bool
 	verify         *VerifyResult
+	// Patch apply failure details (worktree mode only)
+	patchApplyErr   error
+	conflictFiles   []string
 }
 
 // runDelegateAttempt executes one delegation attempt against a single agent,
@@ -276,8 +279,13 @@ loop:
 		if ar.verify.IsStrictFailure() {
 			fmt.Fprintf(os.Stderr, "[quancode] patch NOT applied (verify-strict failed)\n")
 		} else {
-			if applyErr := runner.ApplyPatch(workDir, ar.patch); applyErr != nil {
-				ar.err = fmt.Errorf("apply patch: %w", applyErr)
+			// Pre-check for conflicts before applying to avoid polluting the work tree
+			conflicts := runner.CheckPatchConflicts(workDir, ar.patch)
+			if len(conflicts) > 0 {
+				ar.patchApplyErr = fmt.Errorf("patch conflicts with %d files", len(conflicts))
+				ar.conflictFiles = conflicts
+			} else if applyErr := runner.ApplyPatch(workDir, ar.patch); applyErr != nil {
+				ar.patchApplyErr = applyErr
 			} else {
 				fmt.Fprintf(os.Stderr, "[quancode] changes applied to working directory\n")
 			}
@@ -332,7 +340,11 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 		logEntry.ChangedFiles = ar.changedFiles
 	}
 	logEntry.ApprovalEvents = append(logEntry.ApprovalEvents, ar.approvalEvents...)
-	if ar.err != nil && logEntry.ExitCode == 0 {
+	logEntry.ConflictFiles = ar.conflictFiles
+	if ar.patchApplyErr != nil {
+		logEntry.ChangedFiles = nil // patch was not applied to the main tree
+	}
+	if (ar.err != nil || ar.patchApplyErr != nil) && logEntry.ExitCode == 0 {
 		logEntry.ExitCode = 1
 	}
 
@@ -356,11 +368,13 @@ func finalizeDelegation(agentKey, task, workDir, isolation string, meta attemptM
 
 	verifyStrictFailed := ar.verify.IsStrictFailure()
 
+	hasPatchApplyErr := ar.patchApplyErr != nil
+
 	if delegateFormat == "json" {
 		dr := buildDelegationResult(agentKey, task, isolation, ar)
 		data, _ := json.MarshalIndent(dr, "", "  ")
 		fmt.Println(string(data))
-		if ar.err != nil || verifyStrictFailed {
+		if ar.err != nil || verifyStrictFailed || hasPatchApplyErr {
 			return &agent.ExitStatusError{Code: 1}
 		}
 		return nil
@@ -372,6 +386,21 @@ func finalizeDelegation(agentKey, task, workDir, isolation string, meta attemptM
 		if ar.output != "" {
 			fmt.Print(ar.output)
 		}
+		return &agent.ExitStatusError{Code: 1}
+	}
+	if hasPatchApplyErr {
+		fmt.Fprintf(os.Stderr, "[quancode] patch apply failed: %v\n", ar.patchApplyErr)
+		if len(ar.conflictFiles) > 0 {
+			fmt.Fprintf(os.Stderr, "[quancode] conflicts:\n")
+			for _, f := range ar.conflictFiles {
+				fmt.Fprintf(os.Stderr, "[quancode]   - %s\n", f)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "[quancode] to apply manually: save the patch below and run: git apply --3way <file>\n")
+		if ar.output != "" {
+			fmt.Print(ar.output)
+		}
+		fmt.Print(ar.patch)
 		return &agent.ExitStatusError{Code: 1}
 	}
 	if verifyStrictFailed {

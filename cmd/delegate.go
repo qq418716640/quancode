@@ -63,6 +63,7 @@ type DelegationResult struct {
 	Isolation      string                 `json:"isolation,omitempty"`
 	Patch          string                 `json:"patch,omitempty"`
 	Verify         *VerifyResult          `json:"verify,omitempty"`
+	ConflictFiles  []string               `json:"conflict_files,omitempty"`
 }
 
 func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) DelegationResult {
@@ -83,6 +84,14 @@ func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) D
 	}
 	if isolation == "patch" && ar.patch != "" {
 		dr.Patch = ar.patch
+	}
+	// Include patch content and conflict details when apply failed
+	if ar.patchApplyErr != nil {
+		dr.Patch = ar.patch
+		dr.ConflictFiles = ar.conflictFiles
+		if dr.ExitCode == 0 {
+			dr.ExitCode = 1
+		}
 	}
 	if ar.err != nil {
 		dr.Output = ar.output

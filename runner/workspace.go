@@ -151,6 +151,62 @@ func PatchSummary(targetDir, patch string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// CheckPatchConflicts runs git apply --check to identify which files
+// would conflict when applying a patch. Returns the list of conflicting
+// file paths extracted from git's error output.
+func CheckPatchConflicts(targetDir, patch string) []string {
+	if patch == "" {
+		return nil
+	}
+	cmd := exec.Command("git", "apply", "--check", "--3way")
+	cmd.Dir = targetDir
+	cmd.Stdin = strings.NewReader(patch)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	return parseConflictFiles(string(out))
+}
+
+// parseConflictFiles extracts file paths from git apply error output.
+// Matches patterns like "error: patch failed: path/file.go:123" and
+// "error: path/file.go: patch does not apply".
+func parseConflictFiles(output string) []string {
+	seen := make(map[string]bool)
+	var files []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "error:") {
+			continue
+		}
+		rest := strings.TrimPrefix(line, "error:")
+		rest = strings.TrimSpace(rest)
+
+		// "patch failed: path/file.go:123"
+		if strings.HasPrefix(rest, "patch failed: ") {
+			path := strings.TrimPrefix(rest, "patch failed: ")
+			if idx := strings.LastIndex(path, ":"); idx > 0 {
+				path = path[:idx]
+			}
+			if !seen[path] {
+				seen[path] = true
+				files = append(files, path)
+			}
+			continue
+		}
+
+		// "path/file.go: patch does not apply"
+		if strings.HasSuffix(rest, ": patch does not apply") {
+			path := strings.TrimSuffix(rest, ": patch does not apply")
+			if !seen[path] {
+				seen[path] = true
+				files = append(files, path)
+			}
+		}
+	}
+	return files
+}
+
 // ApplyPatch applies a git patch to the target directory.
 func ApplyPatch(targetDir, patch string) error {
 	if patch == "" {

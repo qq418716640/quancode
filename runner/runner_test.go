@@ -338,3 +338,45 @@ func TestPatchSummaryValidPatch(t *testing.T) {
 		t.Fatal("expected non-empty summary")
 	}
 }
+
+func TestParseConflictFiles(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   []string
+	}{
+		{
+			name:   "patch failed with line number",
+			output: "error: patch failed: src/foo.go:42\nerror: src/foo.go: patch does not apply\n",
+			want:   []string{"src/foo.go"},
+		},
+		{
+			name:   "multiple files",
+			output: "error: patch failed: a.go:1\nerror: patch failed: b.go:10\n",
+			want:   []string{"a.go", "b.go"},
+		},
+		{
+			name:   "no errors",
+			output: "Checking patch src/foo.go...\n",
+			want:   nil,
+		},
+		{
+			name:   "empty",
+			output: "",
+			want:   nil,
+		},
+		{
+			name:   "deduplication",
+			output: "error: patch failed: x.go:1\nerror: x.go: patch does not apply\n",
+			want:   []string{"x.go"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseConflictFiles(tt.output)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("parseConflictFiles() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
