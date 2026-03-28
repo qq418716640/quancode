@@ -134,11 +134,42 @@ var statsCmd = &cobra.Command{
 		}
 		w.Flush()
 
+		// Failure class breakdown — only shown when data exists
+		printFailureBreakdown(entries)
+
 		// Fallback analysis — only shown when run tracking data exists
 		printFallbackStats(entries)
 
 		return nil
 	},
+}
+
+// printFailureBreakdown outputs failure class distribution when failures exist.
+func printFailureBreakdown(entries []ledger.Entry) {
+	counts := make(map[string]int)
+	for _, e := range entries {
+		if e.FailureClass != "" {
+			counts[e.FailureClass]++
+		}
+	}
+	if len(counts) == 0 {
+		return
+	}
+
+	var classes []string
+	for c := range counts {
+		classes = append(classes, c)
+	}
+	sort.Strings(classes)
+
+	fmt.Print("\nfailure breakdown: ")
+	for i, c := range classes {
+		if i > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Printf("%s=%d", c, counts[c])
+	}
+	fmt.Println()
 }
 
 // printFallbackStats outputs fallback chain analysis when run tracking data exists.

@@ -868,7 +868,7 @@ agents:
 	if second.FallbackFrom != "alpha" {
 		t.Fatalf("expected FallbackFrom=alpha, got %q", second.FallbackFrom)
 	}
-	if second.FallbackReason != FallbackReasonTimedOut {
-		t.Fatalf("expected FallbackReason=%q, got %q", FallbackReasonTimedOut, second.FallbackReason)
+	if second.FallbackReason != FailureClassTimedOut {
+		t.Fatalf("expected FallbackReason=%q, got %q", FailureClassTimedOut, second.FallbackReason)
 	}
 }

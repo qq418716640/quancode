@@ -37,13 +37,16 @@ type attemptResult struct {
 	// Patch apply failure details (worktree mode only)
 	patchApplyErr   error
 	conflictFiles   []string
+	failureClass    string
 }
 
 // runDelegateAttempt executes one delegation attempt against a single agent,
 // including worktree setup, approval polling, verification, and result collection.
 // ctxPrefix is the formatted context to prepend to the task (may be empty).
-func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isolation string, vs *verifySpec) attemptResult {
-	var ar attemptResult
+func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isolation string, vs *verifySpec) (ar attemptResult) {
+	defer func() {
+		ar.failureClass = classifyFailure(ar)
+	}()
 
 	execDir := workDir
 	var cleanupWorktree func()
@@ -340,6 +343,7 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 		logEntry.ChangedFiles = ar.changedFiles
 	}
 	logEntry.ApprovalEvents = append(logEntry.ApprovalEvents, ar.approvalEvents...)
+	logEntry.FailureClass = ar.failureClass
 	logEntry.ConflictFiles = ar.conflictFiles
 	if ar.patchApplyErr != nil {
 		logEntry.ChangedFiles = nil // patch was not applied to the main tree

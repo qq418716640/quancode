@@ -6,13 +6,6 @@ import (
 	"github.com/qq418716640/quancode/runner"
 )
 
-// Fallback reason values recorded in ledger entries.
-const (
-	FallbackReasonLaunchFail      = "launch_failure"
-	FallbackReasonTimedOut        = "timed_out"
-	FallbackReasonTransientError  = "transient_error"
-)
-
 // rateLimitPatterns are stderr/stdout substrings that indicate a transient
 // rate-limit or capacity error, where retrying with a different agent may succeed.
 var rateLimitPatterns = []string{
@@ -24,15 +17,6 @@ var rateLimitPatterns = []string{
 	"overloaded",
 	"service unavailable",
 	"throttled",
-}
-
-// isFallbackAllowed checks high-level conditions that override transient error detection.
-// Verification failures are never transient — fallback would not help.
-func isFallbackAllowed(ar attemptResult) bool {
-	if ar.verify != nil && ar.verify.Status != VerifyPassed && ar.verify.Status != VerifySkipped {
-		return false
-	}
-	return true
 }
 
 // isFallbackEligible returns true if the delegation failure looks transient

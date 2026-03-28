@@ -235,16 +235,13 @@ var delegateCmd = &cobra.Command{
 			ar := runDelegateAttempt(a, agentKey, task, ctxPrefix, workDir, isolation, vs)
 
 			// Check if fallback is needed and allowed
-			fallbackEligible := isFallbackEligible(ar.result, ar.output, ar.stderr)
 			shouldFallback := !delegateNoFallback &&
 				meta.Attempt < 3 &&
-				isFallbackAllowed(ar) &&
-				fallbackEligible
+				isTransientFailure(ar.failureClass)
 
 			// For inplace mode, block fallback if files were changed
 			if shouldFallback && (isolation == "" || isolation == "inplace") {
 				if !runner.IsGitRepo(workDir) {
-					// Non-git directory: can't detect changes, block fallback to be safe.
 					fmt.Fprintf(os.Stderr, "[quancode] %s failed in non-git directory — skipping fallback\n", agentKey)
 					shouldFallback = false
 				} else if changes := detectNewChanges(workDir, ar.preSnapshot); len(changes) > 0 {
@@ -257,17 +254,7 @@ var delegateCmd = &cobra.Command{
 				return finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
 			}
 
-			// Derive fallback reason for the next attempt's metadata
-			var fallbackReason string
-			if ar.result == nil {
-				fallbackReason = FallbackReasonLaunchFail
-			} else if ar.result.TimedOut {
-				fallbackReason = FallbackReasonTimedOut
-			} else {
-				fallbackReason = FallbackReasonTransientError
-			}
-
-			fmt.Fprintf(os.Stderr, "[quancode] %s %s, looking for fallback...\n", agentKey, fallbackReason)
+			fmt.Fprintf(os.Stderr, "[quancode] %s %s, looking for fallback...\n", agentKey, ar.failureClass)
 			// FallbackFrom/FallbackReason in meta describe where *this* attempt came from,
 			// so the failing attempt's entry has empty values; the next attempt records the link.
 			logAttempt(agentKey, task, workDir, isolation, meta, ar)
@@ -303,7 +290,7 @@ var delegateCmd = &cobra.Command{
 			}
 			meta.Attempt++
 			meta.FallbackFrom = previousAgent
-			meta.FallbackReason = fallbackReason
+			meta.FallbackReason = ar.failureClass
 		}
 	},
 }
