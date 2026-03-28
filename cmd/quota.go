@@ -228,10 +228,17 @@ func formatUsage(val float64, unit string) string {
 
 func init() {
 	quotaCmd.Flags().StringVar(&quotaSetAgent, "set-agent", "", "agent to set quota for")
+	_ = quotaCmd.RegisterFlagCompletionFunc("set-agent", completeAgentKeys)
 	quotaCmd.Flags().StringVar(&quotaSetRule, "rule", "", "rule name (e.g. '5h-window', 'weekly-cap'; default: 'default')")
 	quotaCmd.Flags().IntVar(&quotaSetLimit, "limit", 0, "quota limit per period")
 	quotaCmd.Flags().StringVar(&quotaSetUnit, "unit", "", "quota unit: calls, minutes, or hours")
+	_ = quotaCmd.RegisterFlagCompletionFunc("unit", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"calls", "minutes", "hours"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	quotaCmd.Flags().StringVar(&quotaSetMode, "reset-mode", "", "reset mode: monthly, weekly, or rolling_hours")
+	_ = quotaCmd.RegisterFlagCompletionFunc("reset-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"monthly", "weekly", "rolling_hours"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	quotaCmd.Flags().IntVar(&quotaSetDay, "reset-day", 0, "reset day (1-28 for monthly, 1-7 for weekly)")
 	quotaCmd.Flags().IntVar(&quotaSetHours, "rolling-hours", 0, "window size for rolling_hours mode")
 	quotaCmd.Flags().StringVar(&quotaSetNotes, "notes", "", "description (e.g. 'Claude Max plan')")

@@ -484,9 +484,16 @@ func dedupe(items []string) []string {
 
 func init() {
 	delegateCmd.Flags().StringVar(&delegateAgent, "agent", "", "target agent (e.g., codex, claude)")
+	_ = delegateCmd.RegisterFlagCompletionFunc("agent", completeAgentKeys)
 	delegateCmd.Flags().StringVar(&delegateWorkdir, "workdir", "", "working directory (default: current)")
 	delegateCmd.Flags().StringVar(&delegateFormat, "format", "text", "output format: text or json")
+	_ = delegateCmd.RegisterFlagCompletionFunc("format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"text", "json"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	delegateCmd.Flags().StringVar(&delegateIsolation, "isolation", "inplace", "isolation mode: inplace, worktree, or patch")
+	_ = delegateCmd.RegisterFlagCompletionFunc("isolation", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"inplace", "worktree", "patch"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	delegateCmd.Flags().BoolVar(&delegateAutoApprove, "auto-approve", false, "automatically approve all approval requests")
 	rootCmd.AddCommand(delegateCmd)
 }

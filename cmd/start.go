@@ -77,7 +77,23 @@ var startCmd = &cobra.Command{
 	},
 }
 
+// completeAgentKeys returns enabled agent keys from config for shell completion.
+func completeAgentKeys(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := config.Load(cfgFile)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	var keys []string
+	for key, ac := range cfg.Agents {
+		if ac.Enabled {
+			keys = append(keys, key)
+		}
+	}
+	return keys, cobra.ShellCompDirectiveNoFileComp
+}
+
 func init() {
 	startCmd.Flags().StringVar(&primaryAgent, "primary", "", "primary CLI agent (default from config)")
+	_ = startCmd.RegisterFlagCompletionFunc("primary", completeAgentKeys)
 	rootCmd.AddCommand(startCmd)
 }
