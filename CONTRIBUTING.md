@@ -2,12 +2,10 @@
 
 Thanks for contributing to QuanCode.
 
-This document describes the minimum expectations for contributions. It intentionally avoids requiring any specific AI CLI, proxy setup, shell customization, or personal workflow.
-
 ## Before You Start
 
 - Read [`README.md`](README.md) for the project overview and setup flow
-- Read [`docs/compatibility.md`](docs/compatibility.md) if your change affects supported CLIs or compatibility claims
+- Read [`docs/compatibility.md`](docs/compatibility.md) if your change affects supported CLIs
 - Prefer small, reviewable pull requests over large mixed changes
 
 ## Development Setup
@@ -49,15 +47,11 @@ Recommended:
 
 ### Config and agent changes
 
-If you change agent configuration behavior:
-
 - keep adapter logic data-driven where possible
 - update [`quancode.example.yaml`](quancode.example.yaml) if the user-facing config shape changes
 - update [`docs/agent-config-schema.md`](docs/agent-config-schema.md) when config fields or semantics change
 
 ### Delegation and startup changes
-
-If you change startup, delegation, or isolation behavior:
 
 - update tests when possible
 - avoid undocumented changes to machine-readable JSON output
@@ -78,7 +72,72 @@ go test ./...
 go vet ./...
 ```
 
-If your change affects primary startup or delegation behavior, also run the relevant steps from [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md) when practical.
+### Manual Smoke Tests
+
+If your change affects primary startup or delegation behavior, run the relevant smoke tests:
+
+**Preconditions:**
+
+```bash
+cp quancode.example.yaml /tmp/quancode-smoke.yaml
+go install .
+quancode --config /tmp/quancode-smoke.yaml doctor
+```
+
+**Config and agent listing:**
+
+```bash
+quancode --config /tmp/quancode-smoke.yaml doctor
+quancode --config /tmp/quancode-smoke.yaml agents
+```
+
+**Claude Code:**
+
+```bash
+quancode --config /tmp/quancode-smoke.yaml start --primary claude
+quancode --config /tmp/quancode-smoke.yaml delegate --agent claude --format text "summarize the router package"
+```
+
+**Codex CLI:**
+
+```bash
+quancode --config /tmp/quancode-smoke.yaml start --primary codex
+quancode --config /tmp/quancode-smoke.yaml delegate --agent codex --format json "list the main packages in this repo"
+```
+
+**Qoder CLI:**
+
+```bash
+quancode --config /tmp/quancode-smoke.yaml delegate --agent qoder "explain what this project does"
+```
+
+**Patch isolation (in a git repo):**
+
+```bash
+quancode --config /tmp/quancode-smoke.yaml delegate --agent codex --isolation patch "make a tiny comment-only change"
+```
+
+## Releasing
+
+Release flow:
+
+1. Ensure working tree is clean and tests pass
+2. Create and push a version tag:
+
+```bash
+git tag v0.2.1
+git push origin v0.2.1
+```
+
+3. The `release` GitHub Actions workflow runs GoReleaser automatically
+4. GoReleaser builds binaries, publishes GitHub release, and updates the Homebrew tap
+
+Details:
+
+- Version is injected into the binary via ldflags from the git tag
+- Homebrew formula is auto-published to `qq418716640/homebrew-tap`
+- Shell completions are installed automatically for Homebrew users
+- Required GitHub secret: `HOMEBREW_TAP_GITHUB_TOKEN`
 
 ## Reporting Bugs
 
@@ -88,7 +147,4 @@ When filing a bug, include:
 - Go version
 - QuanCode version from `quancode version`
 - affected third-party CLI name and version
-- whether you used a custom config or `quancode.example.yaml`
 - exact reproduction steps
-
-Use the issue templates in GitHub when possible.

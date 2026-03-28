@@ -1,51 +1,56 @@
-# Compatibility Notes
+# Compatibility
 
 QuanCode is an orchestration layer around third-party coding CLIs. Compatibility depends on both QuanCode behavior and the behavior of each upstream CLI.
 
-When reading compatibility notes, distinguish between built-in adapter presence, CI coverage of the QuanCode repository itself, and manual smoke testing of specific paths. These are different evidence levels and should not be treated as equivalent guarantees.
+## Supported Agents
 
-## Scope of Current Compatibility
-
-QuanCode currently ships built-in defaults for:
+QuanCode ships built-in defaults for:
 
 - Claude Code
 - Codex CLI
+- Qoder CLI
 - Aider
 - OpenCode
-- Qoder CLI
 
-This means QuanCode knows how to route to them and has default adapter settings for startup or delegation. It does not mean every version of every CLI is fully validated.
+"Supported" means the agent has a built-in adapter in `config/defaults.go`, its command can be detected in `PATH`, and core delegation flows are expected to work with recent CLI versions. It does not mean every version is fully validated.
 
-## What Is Considered Supported Today
+## Compatibility Matrix
 
-At the current alpha stage, "supported" means:
+Evidence levels:
 
-- the agent has a built-in adapter definition in `config/defaults.go`
-- the command can be detected in `PATH`
-- core startup or delegation flows are expected to work with recent CLI versions
+- **built-in adapter**: QuanCode ships a default config for the CLI
+- **manual smoke tested**: validated with explicit manual steps
+- **not yet validated**: present in code but not covered by smoke guidance
 
-## What Is Not Guaranteed Yet
+| CLI | Built-in adapter | Primary start | Delegate | Notes |
+|---|---|---|---|---|
+| Claude Code | Yes | Expected to work | Expected to work | Smoke tested |
+| Codex CLI | Yes | Expected to work | Expected to work | Smoke tested |
+| Qoder CLI | Yes | Not yet validated | Expected to work | Smoke tested |
+| Aider | Yes | Not yet validated | Expected to work | No smoke checklist yet |
+| OpenCode | Yes | Not yet validated | Expected to work | No smoke checklist yet |
 
-- a full version-by-version compatibility matrix
-- identical behavior across macOS and Linux for every third-party CLI version
-- zero prompt-injection differences between CLIs
-- production-stable guarantees for every isolation path
+### Host Environment
+
+| Dimension | Status |
+|---|---|
+| Minimum Go | 1.22.4 (from go.mod) |
+| CI-tested OS | Linux (ubuntu-latest), macOS (macos-latest) |
+
+## What Is Not Guaranteed
+
+- Version-by-version compatibility matrix
+- Identical behavior across macOS and Linux for every CLI
+- Zero prompt-injection differences between CLIs
+- Production-stable guarantees for every isolation path
 
 ## Known Behavioral Differences
 
-- Different CLIs use different prompt injection modes such as command args or a managed prompt file
-- `prompt_mode=stdin` is not currently supported for primary interactive launch
-- File-based prompt injection is managed by QuanCode and should restore the original file on primary exit
-- Delegation output may depend on the upstream CLI's own output conventions
+- Different CLIs use different prompt injection modes (CLI args, env, managed file)
+- `prompt_mode=stdin` is not supported for primary interactive launch
+- File-based prompt injection restores original content on primary exit
+- Delegation output depends on the upstream CLI's output conventions
 
-## Recommended Validation Before Release
+## Reporting Issues
 
-- Run the checks in [`docs/manual-smoke-tests.md`](manual-smoke-tests.md)
-- Record the tested OS, Go version, QuanCode version, and third-party CLI versions
-- Treat failures as possibly CLI-version-specific until reproduced across environments
-
-## Publishing Guidance
-
-- Do not describe third-party compatibility as guaranteed unless it has been manually or automatically verified
-- Prefer wording such as "validated with" or "tested against" over "fully supported"
-- Keep the authoritative versioned release history in [`CHANGELOG.md`](../CHANGELOG.md)
+When filing a compatibility issue, include: CLI name, CLI version, OS, `quancode version`, and exact reproduction steps.
