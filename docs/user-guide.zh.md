@@ -152,6 +152,32 @@ quancode delegate --isolation patch "rewrite the README opening paragraph"
 
 `worktree` 和 `patch` 要求目标目录是一个 git 仓库。
 
+### 并行委派
+
+使用 `--isolation patch` 模式可以同时运行多个 delegate。每个 delegate 在独立的 git worktree 中工作，patch 不会自动应用。
+
+```bash
+# 并行运行两个 delegate（从脚本或支持并发调用的 agent 中发起）
+quancode delegate --agent codex --isolation patch --format json "实现 pkg/foo 中的功能 X"
+quancode delegate --agent codex --isolation patch --format json "给 pkg/bar 写测试"
+```
+
+JSON 结果中包含 `patch` 字段（unified diff 格式）。使用 `apply-patch` 命令应用：
+
+```bash
+quancode apply-patch --workdir /path/to/repo --file /tmp/patch-feature.diff
+```
+
+或通过 stdin 传入：
+
+```bash
+echo "$PATCH" | quancode apply-patch --workdir /path/to/repo
+```
+
+`apply-patch` 在应用前会打印受影响文件的摘要，方便你审核。逐个应用 patch，每个应用后都确认一下。
+
+并行任务尽量按文件边界切分，避免 patch 冲突。
+
 ### 一个端到端示例
 
 ```bash

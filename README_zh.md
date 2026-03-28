@@ -138,6 +138,7 @@ Release 构建可以通过 Go ldflags 覆盖默认版本字符串。最终以 re
 
 - `cmd/start.go`: primary 启动
 - `cmd/delegate.go`: sub-agent 执行入口
+- `cmd/apply_patch.go`: patch 应用（并行委派场景）
 - `cmd/delegate_attempt.go`: 单次委派执行与审批轮询
 - `cmd/fallback.go`: 自动降级判定
 - `agent/agent.go`: 通用 agent 适配器

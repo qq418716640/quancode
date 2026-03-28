@@ -158,6 +158,7 @@ Project entry points:
 
 - `cmd/start.go`: primary startup
 - `cmd/delegate.go`: sub-agent execution
+- `cmd/apply_patch.go`: patch application for parallel delegation
 - `agent/agent.go`: generic agent adapter
 - `prompt/injection.go`: primary prompt construction
 - `router/router.go`: agent selection

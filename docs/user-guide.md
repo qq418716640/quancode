@@ -150,6 +150,32 @@ Use this rule of thumb:
 
 `worktree` and `patch` require the target directory to be a git repository.
 
+### Parallel Delegation
+
+You can run multiple delegates concurrently using `--isolation patch` mode. Each delegate works in its own isolated worktree, and patches are not auto-applied.
+
+```bash
+# Run two delegates in parallel (from a script or an agent that supports concurrent calls)
+quancode delegate --agent codex --isolation patch --format json "implement feature X in pkg/foo"
+quancode delegate --agent codex --isolation patch --format json "write tests for pkg/bar"
+```
+
+The JSON result includes a `patch` field with the unified diff. To apply a patch:
+
+```bash
+quancode apply-patch --workdir /path/to/repo --file /tmp/patch-feature.diff
+```
+
+Or pipe from stdin:
+
+```bash
+echo "$PATCH" | quancode apply-patch --workdir /path/to/repo
+```
+
+`apply-patch` prints a summary of affected files before applying, so you can review what will change. Apply patches one at a time and verify after each one.
+
+Split parallel tasks by file boundaries to avoid patch conflicts.
+
 ### End-to-End Delegation Example
 
 ```bash

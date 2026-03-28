@@ -34,7 +34,7 @@ Evidence levels:
 
 | Dimension | Status |
 |---|---|
-| Minimum Go | 1.22.4 (from go.mod) |
+| Minimum Go | 1.25+ (from go.mod) |
 | CI-tested OS | Linux (ubuntu-latest), macOS (macos-latest) |
 
 ## What Is Not Guaranteed
