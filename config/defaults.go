@@ -30,6 +30,17 @@ var KnownAgents = map[string]AgentConfig{
 		PreferredFor: []string{"test", "fix", "generate", "create", "write", "quick"},
 		Priority:     20,
 	},
+	"qoder": {
+		Name:         "Qoder CLI",
+		Command:      "qodercli",
+		Description:  "Strong at code analysis, debugging, MCP integration",
+		Strengths:    []string{"code-analysis", "debugging", "explanation", "mcp-integration"},
+		DelegateArgs: []string{"-p"},
+		TimeoutSecs:  300,
+		Enabled:      true,
+		PreferredFor: []string{"analyze", "explain", "review"},
+		Priority:     25,
+	},
 	"aider": {
 		Name:         "Aider",
 		Command:      "aider",
