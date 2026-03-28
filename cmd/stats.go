@@ -133,8 +133,123 @@ var statsCmd = &cobra.Command{
 			)
 		}
 		w.Flush()
+
+		// Fallback analysis — only shown when run tracking data exists
+		printFallbackStats(entries)
+
 		return nil
 	},
+}
+
+// printFallbackStats outputs fallback chain analysis when run tracking data exists.
+func printFallbackStats(entries []ledger.Entry) {
+	// Group entries by RunID
+	runs := make(map[string][]ledger.Entry)
+	for _, e := range entries {
+		if e.RunID == "" {
+			continue
+		}
+		runs[e.RunID] = append(runs[e.RunID], e)
+	}
+
+	if len(runs) == 0 {
+		return
+	}
+
+	// Analyze runs with fallback (>1 attempt)
+	var totalRuns, fallbackRuns, fallbackSuccesses int
+	reasonCounts := make(map[string]int)
+	chainCounts := make(map[string]int)
+
+	for _, attempts := range runs {
+		totalRuns++
+
+		// Ensure attempts are ordered by Attempt number
+		sort.Slice(attempts, func(i, j int) bool {
+			return attempts[i].Attempt < attempts[j].Attempt
+		})
+
+		if len(attempts) < 2 {
+			continue
+		}
+		fallbackRuns++
+
+		// Check if the final attempt succeeded
+		last := attempts[len(attempts)-1]
+		if last.ExitCode == 0 && !last.TimedOut {
+			fallbackSuccesses++
+		}
+
+		// Count fallback reasons and agent chains
+		for _, a := range attempts {
+			if a.FallbackReason != "" {
+				reasonCounts[a.FallbackReason]++
+			}
+		}
+
+		// Build chain string: alpha → beta → ...
+		chain := attempts[0].Agent
+		for i := 1; i < len(attempts); i++ {
+			chain += " → " + attempts[i].Agent
+		}
+		chainCounts[chain]++
+	}
+
+	if fallbackRuns == 0 {
+		return
+	}
+
+	fmt.Printf("\nfallback analysis: %d/%d runs triggered fallback, %d%% recovered\n",
+		fallbackRuns, totalRuns, fallbackSuccesses*100/fallbackRuns)
+
+	// Reason breakdown
+	if len(reasonCounts) > 0 {
+		var reasons []string
+		for r := range reasonCounts {
+			reasons = append(reasons, r)
+		}
+		sort.Strings(reasons)
+
+		fmt.Print("  reasons: ")
+		for i, r := range reasons {
+			if i > 0 {
+				fmt.Print(", ")
+			}
+			fmt.Printf("%s=%d", r, reasonCounts[r])
+		}
+		fmt.Println()
+	}
+
+	// Top chains
+	if len(chainCounts) > 0 {
+		// Sort chains by frequency
+		type chainFreq struct {
+			chain string
+			count int
+		}
+		var chains []chainFreq
+		for c, n := range chainCounts {
+			chains = append(chains, chainFreq{c, n})
+		}
+		sort.Slice(chains, func(i, j int) bool {
+			if chains[i].count != chains[j].count {
+				return chains[i].count > chains[j].count
+			}
+			return chains[i].chain < chains[j].chain
+		})
+
+		fmt.Print("  chains: ")
+		for i, cf := range chains {
+			if i > 0 {
+				fmt.Print(", ")
+			}
+			fmt.Printf("%s (%d)", cf.chain, cf.count)
+			if i >= 4 {
+				break
+			}
+		}
+		fmt.Println()
+	}
 }
 
 func formatDuration(ms int64) string {
