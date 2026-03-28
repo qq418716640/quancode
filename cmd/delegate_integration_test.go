@@ -307,6 +307,239 @@ agents:
 	}
 }
 
+func TestDelegateRunEWorktreeIsolationAppliesPatch(t *testing.T) {
+	dir := t.TempDir()
+	runGitCmd(t, dir, "init")
+	runGitCmd(t, dir, "config", "user.name", "QuanCode Test")
+	runGitCmd(t, dir, "config", "user.email", "test@example.com")
+	writeTestFile(t, filepath.Join(dir, "tracked.txt"), "base\n")
+	runGitCmd(t, dir, "add", "tracked.txt")
+	runGitCmd(t, dir, "commit", "-m", "init")
+
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+  codex:
+    name: Codex CLI
+    command: /bin/sh
+    enabled: true
+    delegate_args:
+      - -c
+      - printf "changed\n" >> tracked.txt
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	cfgFile = cfgPath
+	delegateAgent = "codex"
+	delegateWorkdir = dir
+	delegateFormat = "json"
+	delegateIsolation = "worktree"
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+	}()
+
+	out := captureStdout(t, func() {
+		if err := delegateCmd.RunE(delegateCmd, []string{"append", "line"}); err != nil {
+			t.Fatalf("delegate RunE returned error: %v", err)
+		}
+	})
+
+	var got DelegationResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("unmarshal json output: %v\noutput=%q", err, out)
+	}
+	if got.Status != "completed" {
+		t.Fatalf("expected completed status, got %q", got.Status)
+	}
+	if len(got.ChangedFiles) != 1 || got.ChangedFiles[0] != "tracked.txt" {
+		t.Fatalf("expected [tracked.txt] in changed_files, got %v", got.ChangedFiles)
+	}
+
+	// worktree isolation should auto-apply patch to main dir
+	data, err := os.ReadFile(filepath.Join(dir, "tracked.txt"))
+	if err != nil {
+		t.Fatalf("read tracked.txt: %v", err)
+	}
+	if string(data) != "base\nchanged\n" {
+		t.Fatalf("expected patch applied to main dir, got %q", string(data))
+	}
+}
+
+func TestDelegateRunEUnknownAgent(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	cfgFile = cfgPath
+	delegateAgent = "nonexistent"
+	delegateWorkdir = dir
+	delegateFormat = "text"
+	delegateIsolation = "inplace"
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+	}()
+
+	err := delegateCmd.RunE(delegateCmd, []string{"task"})
+	if err == nil {
+		t.Fatal("expected error for unknown agent")
+	}
+	if !strings.Contains(err.Error(), "unknown agent") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDelegateRunEDisabledAgent(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: false
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	cfgFile = cfgPath
+	delegateAgent = "claude"
+	delegateWorkdir = dir
+	delegateFormat = "text"
+	delegateIsolation = "inplace"
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+	}()
+
+	err := delegateCmd.RunE(delegateCmd, []string{"task"})
+	if err == nil {
+		t.Fatal("expected error for disabled agent")
+	}
+	if !strings.Contains(err.Error(), "is disabled") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDelegateRunEWorktreeRequiresGitRepo(t *testing.T) {
+	dir := t.TempDir() // not a git repo
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+    delegate_args:
+      - -c
+      - echo ok
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	cfgFile = cfgPath
+	delegateAgent = "claude"
+	delegateWorkdir = dir
+	delegateFormat = "text"
+	delegateIsolation = "worktree"
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+	}()
+
+	err := delegateCmd.RunE(delegateCmd, []string{"task"})
+	if err == nil {
+		t.Fatal("expected error for worktree in non-git dir")
+	}
+	if !strings.Contains(err.Error(), "requires a git repository") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDelegateRunETextOutputNonZeroExit(t *testing.T) {
+	// In text mode, non-zero exit from the sub-agent is not a Go error —
+	// runner.Run returns nil error with ExitCode set. The delegate command
+	// still prints the output and returns nil.
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+    delegate_args:
+      - -c
+      - printf "error output" && exit 3
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	cfgFile = cfgPath
+	delegateAgent = "claude"
+	delegateWorkdir = dir
+	delegateFormat = "text"
+	delegateIsolation = "inplace"
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+	}()
+
+	out := captureStdout(t, func() {
+		if err := delegateCmd.RunE(delegateCmd, []string{"task"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "error output") {
+		t.Fatalf("expected error output in stdout, got %q", out)
+	}
+}
+
 func TestDelegateRunETimeoutDeniesPendingApproval(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := writeConfig(t, dir, `
