@@ -6,8 +6,8 @@
 
 ## P0：公开前必须完成（安全/法律）
 
-- [ ] 审计 git 历史，清除个人信息（代理地址、.claude/ session 数据）
-  - 建议发布时用干净的 fresh repo，不推当前历史
+- [x] 审计 git 历史，清除个人信息（代理地址、.claude/ session 数据）
+  - 已使用 orphan branch 创建 fresh repo，历史中无真名/公司邮箱/敏感数据
 - [x] 加强 .gitignore（已覆盖 `.DS_Store`、二进制、`.gocache/`、`.claude/`、`*.jsonl`）
 - [x] 添加 LICENSE
   - 当前仓库已切为 Apache-2.0，与原路线图对齐
@@ -67,7 +67,7 @@
 
 ## 当前缺口汇总
 
-- 安全与发布清理：fresh repo、历史脱敏
+- ~~安全与发布清理：fresh repo、历史脱敏~~ ✅ 已完成
 - 配置与文档：兼容性矩阵细化
 - 测试：更多 start/delegate 集成路径
 - 发布管理：fresh repo 之外的发布流程收口、tap 仓库接线与 Homebrew 首轮验证
