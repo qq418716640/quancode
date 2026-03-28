@@ -51,3 +51,10 @@ agents:
       - write
       - quick
     priority: 20
+
+# context_defaults:
+#   auto_files:
+#     - CLAUDE.md
+#     - AGENTS.md
+#   max_total_bytes: 32768
+#   max_file_bytes: 16384

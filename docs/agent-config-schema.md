@@ -23,6 +23,12 @@ Config lookup order:
 - Required: yes
 - Meaning: declares all known agent adapters for the current installation
 
+### `context_defaults`
+
+- Type: `ContextSpec`
+- Required: no
+- Meaning: default context injection settings applied to delegations unless overridden per agent
+
 ## AgentConfig Fields
 
 ### `name`
@@ -83,6 +89,12 @@ Config lookup order:
 
 `quancode` merges these over the parent environment by key. Matching is case-insensitive.
 
+### `context`
+
+- Type: `ContextSpec`
+- Required: no
+- Meaning: per-agent context injection settings that override `context_defaults` for that agent
+
 ### `preferred_for`
 
 - Type: list of strings
@@ -92,6 +104,23 @@ Config lookup order:
 
 - Type: integer
 - Meaning: lower numbers win when no routing keyword matches
+
+## ContextSpec Fields
+
+### `auto_files`
+
+- Type: list of strings
+- Meaning: project files to inject automatically when present, such as `CLAUDE.md` and `AGENTS.md`
+
+### `max_total_bytes`
+
+- Type: integer
+- Meaning: total byte budget for the full context bundle
+
+### `max_file_bytes`
+
+- Type: integer
+- Meaning: per-file byte budget for any individual injected file
 
 ## Adapter Fields
 

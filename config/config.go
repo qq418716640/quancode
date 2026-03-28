@@ -6,11 +6,14 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+
+	qcontext "github.com/qq418716640/quancode/context"
 )
 
 type Config struct {
-	DefaultPrimary string                 `yaml:"default_primary"`
-	Agents         map[string]AgentConfig `yaml:"agents"`
+	DefaultPrimary  string                 `yaml:"default_primary"`
+	Agents          map[string]AgentConfig `yaml:"agents"`
+	ContextDefaults *qcontext.ContextSpec  `yaml:"context_defaults,omitempty"`
 }
 
 type AgentConfig struct {
@@ -31,6 +34,8 @@ type AgentConfig struct {
 	PromptFile string `yaml:"prompt_file"` // file name for prompt_mode=file (default: AGENTS.md)
 	TaskMode   string `yaml:"task_mode"`   // "arg" (default), "stdin"
 	OutputMode string `yaml:"output_mode"` // "stdout" (default), "file"
+	// Context injection config (overrides global ContextDefaults)
+	Context *qcontext.ContextSpec `yaml:"context,omitempty"`
 }
 
 // Load loads config from the first available source:

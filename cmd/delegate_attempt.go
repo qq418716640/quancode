@@ -15,6 +15,13 @@ import (
 	"github.com/qq418716640/quancode/runner"
 )
 
+// verifySpec holds the parsed verification configuration for a delegation.
+type verifySpec struct {
+	Commands   []string
+	Strict     bool
+	TimeoutSec int
+}
+
 // attemptResult holds everything produced by a single delegation attempt.
 type attemptResult struct {
 	result         *runner.Result
@@ -26,11 +33,13 @@ type attemptResult struct {
 	changedFiles   []string
 	approvalEvents []ledger.ApprovalEvent
 	preSnapshot    map[string]bool
+	verify         *VerifyResult
 }
 
 // runDelegateAttempt executes one delegation attempt against a single agent,
-// including worktree setup, approval polling, and result collection.
-func runDelegateAttempt(a agent.Agent, agentKey, task, workDir, isolation string) attemptResult {
+// including worktree setup, approval polling, verification, and result collection.
+// ctxPrefix is the formatted context to prepend to the task (may be empty).
+func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isolation string, vs *verifySpec) attemptResult {
 	var ar attemptResult
 
 	execDir := workDir
@@ -76,6 +85,12 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, workDir, isolation string
 		}
 	}()
 
+	// Assemble full task with context prefix
+	fullTask := task
+	if ctxPrefix != "" {
+		fullTask = ctxPrefix + "\n\n=== TASK ===\n\n" + task
+	}
+
 	// Run agent in background
 	type delegateResult struct {
 		result *runner.Result
@@ -83,7 +98,7 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, workDir, isolation string
 	}
 	doneCh := make(chan delegateResult, 1)
 	go func() {
-		result, err := a.Delegate(execDir, task, agent.DelegateOptions{
+		result, err := a.Delegate(execDir, fullTask, agent.DelegateOptions{
 			DelegationID: delegationID,
 			ApprovalDir:  approvalDir,
 		})
@@ -248,16 +263,28 @@ loop:
 		if collectErr != nil {
 			fmt.Fprintf(os.Stderr, "[quancode] warning: patch collection failed: %v\n", collectErr)
 		}
+	}
 
-		if isolation == "worktree" && ar.patch != "" {
+	// Run verification only when agent succeeded — skip on timeout/failure
+	// to avoid blocking fallback due to unrelated baseline test failures.
+	if result != nil && !result.TimedOut && result.ExitCode == 0 {
+		ar.verify = runAndLogVerification(execDir, vs)
+	}
+
+	// Apply patch to main tree (worktree mode only)
+	if isolation == "worktree" && ar.patch != "" {
+		if ar.verify.IsStrictFailure() {
+			fmt.Fprintf(os.Stderr, "[quancode] patch NOT applied (verify-strict failed)\n")
+		} else {
 			if applyErr := runner.ApplyPatch(workDir, ar.patch); applyErr != nil {
-				fmt.Fprintf(os.Stderr, "[quancode] warning: failed to apply patch: %v\n", applyErr)
+				ar.err = fmt.Errorf("apply patch: %w", applyErr)
 			} else {
 				fmt.Fprintf(os.Stderr, "[quancode] changes applied to working directory\n")
 			}
 		}
+	}
 
-		// cleanupWorktree is handled by defer above
+	if isolation == "worktree" || isolation == "patch" {
 		cleanupWorktree = nil // prevent double cleanup
 	}
 
@@ -296,6 +323,15 @@ func logAttempt(agentKey, task, workDir, isolation string, ar attemptResult) {
 	if ar.err != nil && logEntry.ExitCode == 0 {
 		logEntry.ExitCode = 1
 	}
+
+	// Write verification result and final status
+	if ar.verify != nil && ar.verify.Enabled {
+		if data, err := json.Marshal(ar.verify); err == nil {
+			logEntry.VerifyRaw = data
+		}
+	}
+	logEntry.FinalStatus = determineFinalStatus(logEntry.ExitCode, logEntry.TimedOut, ar.verify)
+
 	if logErr := ledger.Append(logEntry); logErr != nil {
 		fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write ledger: %v\n", logErr)
 	}
@@ -306,11 +342,13 @@ func finalizeDelegation(agentKey, task, workDir, isolation string, ar attemptRes
 	// Record to ledger
 	logAttempt(agentKey, task, workDir, isolation, ar)
 
+	verifyStrictFailed := ar.verify.IsStrictFailure()
+
 	if delegateFormat == "json" {
-		dr := buildDelegationResult(agentKey, task, isolation, ar.output, ar.patch, ar.result, ar.err, ar.changedFiles, ar.approvalEvents)
+		dr := buildDelegationResult(agentKey, task, isolation, ar)
 		data, _ := json.MarshalIndent(dr, "", "  ")
 		fmt.Println(string(data))
-		if ar.err != nil {
+		if ar.err != nil || verifyStrictFailed {
 			return &agent.ExitStatusError{Code: 1}
 		}
 		return nil
@@ -319,6 +357,13 @@ func finalizeDelegation(agentKey, task, workDir, isolation string, ar attemptRes
 	// Text format
 	if ar.err != nil {
 		fmt.Fprintf(os.Stderr, "[quancode] delegation error: %v\n", ar.err)
+		if ar.output != "" {
+			fmt.Print(ar.output)
+		}
+		return &agent.ExitStatusError{Code: 1}
+	}
+	if verifyStrictFailed {
+		fmt.Fprintf(os.Stderr, "[quancode] delegation failed: verify-strict failed (%d/%d commands)\n", ar.verify.FailedCount, len(ar.verify.Commands))
 		if ar.output != "" {
 			fmt.Print(ar.output)
 		}

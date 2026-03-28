@@ -89,24 +89,19 @@ func TestDetectNewChangesReturnsNilOutsideGitRepo(t *testing.T) {
 }
 
 func TestBuildDelegationResultJSONFields(t *testing.T) {
-	result := &runner.Result{
-		ExitCode:   0,
-		TimedOut:   false,
-		DurationMs: 42,
+	ar := attemptResult{
+		result: &runner.Result{
+			ExitCode:   0,
+			TimedOut:   false,
+			DurationMs: 42,
+		},
+		output:         "done",
+		patch:          "diff --git a/file b/file",
+		changedFiles:   []string{"file.go"},
+		approvalEvents: []ledger.ApprovalEvent{{RequestID: "req_1", Action: "git_push_force", Description: "Force-push branch"}},
 	}
-	events := []ledger.ApprovalEvent{{RequestID: "req_1", Action: "git_push_force", Description: "Force-push branch"}}
 
-	got := buildDelegationResult(
-		"codex",
-		"write tests",
-		"patch",
-		"done",
-		"diff --git a/file b/file",
-		result,
-		nil,
-		[]string{"file.go"},
-		events,
-	)
+	got := buildDelegationResult("codex", "write tests", "patch", ar)
 
 	if got.Agent != "codex" || got.Task != "write tests" {
 		t.Fatalf("unexpected identity fields: %#v", got)
@@ -138,17 +133,12 @@ func TestBuildDelegationResultJSONFields(t *testing.T) {
 }
 
 func TestBuildDelegationResultErrorForcesExitCodeOneWhenUnset(t *testing.T) {
-	got := buildDelegationResult(
-		"codex",
-		"write tests",
-		"inplace",
-		"partial output",
-		"",
-		nil,
-		errors.New("boom"),
-		nil,
-		nil,
-	)
+	ar := attemptResult{
+		output: "partial output",
+		err:    errors.New("boom"),
+	}
+
+	got := buildDelegationResult("codex", "write tests", "inplace", ar)
 
 	if got.ExitCode != 1 {
 		t.Fatalf("expected exit code 1 on error without result, got %d", got.ExitCode)

@@ -126,6 +126,80 @@ quancode delegate --format json "review this change"
 
 Text mode is easier for direct use in the terminal. JSON mode is better for scripts and automation.
 
+### Context Injection
+
+QuanCode can attach project context automatically when it delegates a task.
+
+By default, it injects `CLAUDE.md` and `AGENTS.md` if those files exist in the target working tree.
+
+You can add more context files explicitly:
+
+```bash
+quancode delegate --context-files docs/architecture.md "explain the runner package"
+quancode delegate --context-files docs/architecture.md --context-files README.md "update the config docs"
+```
+
+You can also attach a git diff snapshot:
+
+```bash
+quancode delegate --context-diff staged "review the staged changes"
+quancode delegate --context-diff working "summarize the current uncommitted edits"
+```
+
+Override the context size budget when needed:
+
+```bash
+quancode delegate --context-max-size 65536 "analyze the current project instructions"
+```
+
+Disable automatic context injection entirely:
+
+```bash
+quancode delegate --no-context "review this patch for regressions"
+```
+
+Context rules:
+
+- automatic files are `CLAUDE.md` and `AGENTS.md` when present
+- `--context-files` may be passed multiple times
+- `--context-diff` accepts `staged` or `working`
+- `--context-max-size` overrides the total context budget
+- `--no-context` disables automatic injection
+- default total budget is 32 KB
+- default per-file limit is 16 KB
+
+### Post-Delegation Verification
+
+QuanCode can run verification commands after a successful delegation.
+
+Use `--verify` to record verification results without changing the delegation outcome:
+
+```bash
+quancode delegate --verify "go test ./..." "add tests for config loading"
+```
+
+Use `--verify-strict` when verification must pass:
+
+```bash
+quancode delegate --isolation worktree --verify-strict "go test ./..." "implement the helper and update tests"
+```
+
+Set a per-command timeout when verification may take longer or should fail faster:
+
+```bash
+quancode delegate --verify "go test ./..." --verify-timeout 300 "refactor the router package"
+```
+
+Verification rules:
+
+- `--verify` records verification results but does not block a successful delegation
+- `--verify-strict` fails the delegation when verification fails
+- `--verify-timeout` sets the timeout for each verification command and defaults to 120 seconds
+- `--verify` and `--verify-strict` are mutually exclusive
+- verification only runs when the agent task itself succeeds
+- in `worktree` mode, verification runs before the patch is applied back to the main tree
+- verification failure does not trigger fallback
+
 ### Isolation Modes
 
 QuanCode supports three delegation modes:
@@ -347,6 +421,7 @@ Key behaviors:
 
 - Fallback **triggers** on timeout or rate-limit errors only.
 - Fallback does **not** trigger on normal task failures (e.g., the agent ran but produced incorrect output or exited with an error).
+- Fallback does **not** trigger on verification failures.
 - The next agent is selected by the router using the same priority rules as normal routing.
 - QuanCode attempts a maximum of **3 attempts** (the original plus up to 2 fallbacks).
 - In `inplace` isolation mode, fallback is **blocked** if the failed agent already changed files in the working tree. This prevents a second agent from building on top of a partial or broken edit.

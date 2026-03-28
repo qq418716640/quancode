@@ -31,7 +31,12 @@ TO LIST AVAILABLE AGENTS:
 DELEGATION GUIDELINES:
 - ALWAYS use "{{.Binary}} delegate" to invoke other agents. NEVER call their CLI commands directly (e.g., do NOT run "claude -p ..." or "codex exec ..." yourself). QuanCode manages authentication, proxy, and environment for each agent.
 - Delegate well-scoped, independent tasks (e.g., "write tests for X", "refactor file Y")
-- The delegate agent works in the same repository but CANNOT see your conversation history. Your task description is its only context — make it self-contained:
+- QuanCode automatically injects project context (CLAUDE.md, AGENTS.md) into every delegation. You do NOT need to copy these files into the task description. Focus on WHAT to do and WHY.
+- If the sub-agent needs specific source files for context, use --context-files:
+    {{.Binary}} delegate --agent codex --context-files "router/router.go" --context-files "router/router_test.go" "add tests for SelectAgentExcluding"
+- Use --context-diff staged or --context-diff working to include uncommitted changes when relevant.
+- Use --no-context to disable automatic context injection if the task is self-contained.
+- The sub-agent CANNOT see your conversation history. Your task description + injected context is all it gets. Be specific about:
   - What to do and why
   - Which files, functions, or symbols are involved
   - Constraints, non-goals, and acceptance criteria

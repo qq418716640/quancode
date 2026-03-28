@@ -20,6 +20,10 @@ type Entry struct {
 	ApprovalEvents []ApprovalEvent `json:"approval_events,omitempty"`
 	Isolation      string          `json:"isolation,omitempty"`
 	WorkDir        string          `json:"work_dir"`
+	FinalStatus    string          `json:"final_status,omitempty"`
+	// VerifyRaw stores the verification result as raw JSON to avoid
+	// a circular dependency between ledger and cmd packages.
+	VerifyRaw json.RawMessage `json:"verify,omitempty"`
 }
 
 type ApprovalEvent struct {

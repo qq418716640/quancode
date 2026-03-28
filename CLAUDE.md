@@ -29,6 +29,7 @@ cmd/delegate.go → cmd/delegate_attempt.go → router/router.go → agent/agent
 
 - **agent/** — Single `genericAgent` struct implements the `Agent` interface for any CLI. Behavior is driven by config fields (`PromptMode`, `TaskMode`, `OutputMode`, `DelegateArgs`, `OutputFlag`, `Env`). Adding a new CLI means adding config, not Go code.
 - **config/** — YAML config with search order: `--config` flag (must exist) > `./quancode.yaml` > `~/.config/quancode/quancode.yaml` > built-in defaults. `applyKnownAgentDefaults()` backfills newer fields into older config files for backward compatibility.
+- **context/** — Builds delegation context bundles by auto-injecting project instruction files such as `CLAUDE.md` and `AGENTS.md`, with support for explicit files, git diff injection, size budgets, and path safety checks.
 - **prompt/** — Builds the system prompt injected into the primary CLI. Uses `text/template`. Excludes the actual primary from the listed agents.
 - **router/** — `SelectAgent()` picks the best sub-agent: preferred_for keyword match > priority number > alphabetical.
 - **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection.
@@ -47,6 +48,14 @@ The primary CLI receives delegation instructions via one of:
 `--isolation inplace` (default): run in working directory, detect changes via git status snapshot diff.
 `--isolation worktree`: git worktree, collect patch, auto-apply to main directory.
 `--isolation patch`: like worktree but returns patch without applying.
+
+### Delegation verification
+
+`--verify` records post-delegation verification results without changing a successful delegation outcome.
+`--verify-strict` makes verification failure fail the delegation.
+Verification only runs after the delegated agent succeeds.
+In `worktree` mode, verification runs before patch apply.
+Verification failure does not trigger fallback.
 
 ### Statusline
 

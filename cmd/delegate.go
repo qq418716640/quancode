@@ -10,6 +10,7 @@ import (
 
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
+	qcontext "github.com/qq418716640/quancode/context"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/router"
 	"github.com/qq418716640/quancode/runner"
@@ -17,14 +18,21 @@ import (
 )
 
 var (
-	delegateAgent        string
-	delegateWorkdir      string
-	delegateFormat       string
-	delegateIsolation    string
-	delegateAutoApprove  bool
-	delegateNoFallback   bool
-	approvalPollInterval = time.Second
-	approvalTimeout      = 120 * time.Second
+	delegateAgent          string
+	delegateWorkdir        string
+	delegateFormat         string
+	delegateIsolation      string
+	delegateAutoApprove    bool
+	delegateNoFallback     bool
+	delegateContextFiles   []string
+	delegateContextDiff    string
+	delegateContextMaxSize int
+	delegateNoContext      bool
+	delegateVerify         []string
+	delegateVerifyStrict   []string
+	delegateVerifyTimeout  int
+	approvalPollInterval   = time.Second
+	approvalTimeout        = 120 * time.Second
 	// stdinReader is the source for interactive approval prompts.
 	// Tests can replace this to avoid blocking on os.Stdin.
 	stdinReader *bufio.Reader
@@ -43,41 +51,35 @@ type DelegationResult struct {
 	ApprovalEvents []ledger.ApprovalEvent `json:"approval_events,omitempty"`
 	Isolation      string                 `json:"isolation,omitempty"`
 	Patch          string                 `json:"patch,omitempty"`
+	Verify         *VerifyResult          `json:"verify,omitempty"`
 }
 
-func buildDelegationResult(agentKey, task, isolation, output, patch string, result *runner.Result, err error, changedFiles []string, approvalEvents []ledger.ApprovalEvent) DelegationResult {
+func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) DelegationResult {
 	dr := DelegationResult{
 		Agent:          agentKey,
 		Task:           task,
 		Isolation:      isolation,
-		ApprovalEvents: approvalEvents,
+		ApprovalEvents: ar.approvalEvents,
+		Verify:         ar.verify,
 	}
-	if result != nil {
-		dr.DelegationID = result.DelegationID
-		dr.ExitCode = result.ExitCode
-		dr.TimedOut = result.TimedOut
-		dr.DurationMs = result.DurationMs
-		dr.Output = output
-		dr.ChangedFiles = changedFiles
-		dr.Status = "completed"
-		if result.TimedOut {
-			dr.Status = "timed_out"
-		} else if result.ExitCode != 0 {
-			dr.Status = "failed"
-		}
+	if ar.result != nil {
+		dr.DelegationID = ar.result.DelegationID
+		dr.ExitCode = ar.result.ExitCode
+		dr.TimedOut = ar.result.TimedOut
+		dr.DurationMs = ar.result.DurationMs
+		dr.Output = ar.output
+		dr.ChangedFiles = ar.changedFiles
 	}
-	if isolation == "patch" && patch != "" {
-		dr.Patch = patch
+	if isolation == "patch" && ar.patch != "" {
+		dr.Patch = ar.patch
 	}
-	if err != nil {
-		dr.Output = output
+	if ar.err != nil {
+		dr.Output = ar.output
 		if dr.ExitCode == 0 {
 			dr.ExitCode = 1
 		}
-		if dr.Status == "" {
-			dr.Status = "failed"
-		}
 	}
+	dr.Status = determineFinalStatus(dr.ExitCode, dr.TimedOut, ar.verify)
 	return dr
 }
 
@@ -127,16 +129,52 @@ var delegateCmd = &cobra.Command{
 			return fmt.Errorf("agent %s: command %q not found in PATH", agentKey, ac.Command)
 		}
 
+		// Validate verify flags (mutually exclusive)
+		if len(delegateVerify) > 0 && len(delegateVerifyStrict) > 0 {
+			return fmt.Errorf("--verify and --verify-strict are mutually exclusive")
+		}
+		var verifyCmds []string
+		var verifyStrict bool
+		if len(delegateVerifyStrict) > 0 {
+			verifyCmds = delegateVerifyStrict
+			verifyStrict = true
+		} else if len(delegateVerify) > 0 {
+			verifyCmds = delegateVerify
+		}
+
+		// Build verify spec
+		var vs *verifySpec
+		if len(verifyCmds) > 0 {
+			vs = &verifySpec{
+				Commands:   verifyCmds,
+				Strict:     verifyStrict,
+				TimeoutSec: delegateVerifyTimeout,
+			}
+		}
+
 		// Run attempt with fallback loop
 		tried := map[string]bool{agentKey: true}
 		attemptNum := 1
 
 		for {
-			ar := runDelegateAttempt(a, agentKey, task, workDir, isolation)
+			// Build context per-agent (agent-specific Context config may differ)
+			var ctxPrefix string
+			if !delegateNoContext {
+				currentAc := cfg.Agents[agentKey]
+				builder := qcontext.NewBuilder(cfg.ContextDefaults, currentAc.Context)
+				bundle := builder.Build(workDir, delegateContextFiles, delegateContextDiff, delegateContextMaxSize)
+				ctxPrefix = qcontext.Format(bundle)
+				for _, w := range bundle.Warnings {
+					fmt.Fprintf(os.Stderr, "[quancode] context: %s\n", w)
+				}
+			}
+
+			ar := runDelegateAttempt(a, agentKey, task, ctxPrefix, workDir, isolation, vs)
 
 			// Check if fallback is needed and allowed
 			shouldFallback := !delegateNoFallback &&
 				attemptNum < 3 &&
+				isFallbackAllowed(ar) &&
 				isFallbackEligible(ar.result, ar.output, ar.stderr)
 
 			// For inplace mode, block fallback if files were changed
@@ -264,5 +302,12 @@ func init() {
 	})
 	delegateCmd.Flags().BoolVar(&delegateAutoApprove, "auto-approve", false, "automatically approve all approval requests")
 	delegateCmd.Flags().BoolVar(&delegateNoFallback, "no-fallback", false, "disable automatic fallback to other agents on failure")
+	delegateCmd.Flags().StringArrayVar(&delegateContextFiles, "context-files", nil, "additional context files to include (can be specified multiple times)")
+	delegateCmd.Flags().StringVar(&delegateContextDiff, "context-diff", "", "include git diff: staged, working, or empty for off")
+	delegateCmd.Flags().IntVar(&delegateContextMaxSize, "context-max-size", 0, "override max context size in bytes (0 = use config default)")
+	delegateCmd.Flags().BoolVar(&delegateNoContext, "no-context", false, "disable automatic context injection")
+	delegateCmd.Flags().StringArrayVar(&delegateVerify, "verify", nil, "verification command to run after delegation (record only, can be specified multiple times)")
+	delegateCmd.Flags().StringArrayVar(&delegateVerifyStrict, "verify-strict", nil, "verification command — fail delegation if verification fails (can be specified multiple times)")
+	delegateCmd.Flags().IntVar(&delegateVerifyTimeout, "verify-timeout", 120, "timeout in seconds for each verification command")
 	rootCmd.AddCommand(delegateCmd)
 }

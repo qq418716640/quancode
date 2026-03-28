@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [Unreleased]
+
+### Added
+
+- Automatic project context injection for delegations (`CLAUDE.md`, `AGENTS.md`)
+- `--context-files`, `--context-diff`, `--context-max-size`, and `--no-context` flags
+- Post-delegation verification with `--verify` and `--verify-strict`
+- `--verify-timeout` flag for verification command timeout
+- `context_defaults` and per-agent `context` configuration in YAML config
+- `FinalStatus` and verification results in ledger entries
+
+### Changed
+
+- `buildDelegationResult` now accepts an `attemptResult` struct instead of 11 parameters
+- `applyPatch` failure in `worktree` mode is now an error instead of a warning
+- Fallback rebuilding now regenerates the context bundle per agent so agent-specific `context` config is respected
+
 ## [v0.1.0-alpha] - 2026-03-27
 
 First public alpha focused on making QuanCode publishable and usable by external developers.
