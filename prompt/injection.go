@@ -47,6 +47,16 @@ DELEGATION GUIDELINES:
 - Do NOT delegate if you can do the task yourself just as efficiently
 - You are the primary agent. You own the overall plan and final quality.
 
+ISOLATION MODES:
+- Single task: use --isolation worktree for safe isolated execution with automatic patch application.
+- Multiple parallel tasks: use --isolation patch --format json to collect patches without auto-applying.
+- Default (inplace): runs directly in the working directory. Use only when isolation is unnecessary.
+
+VERIFICATION:
+- For code modification tasks, add --verify to run a check after the sub-agent finishes:
+    {{.Binary}} delegate --agent codex --isolation worktree --verify "go test ./affected/package" "fix the bug in parser"
+- The verify command runs in the worktree before applying changes. If it fails, you'll see the failure in the result but changes are still applied (use --verify-strict to block application on failure).
+
 PARALLEL DELEGATION:
 You can run multiple delegate calls concurrently for independent tasks. Rules:
 - MUST use --isolation patch --format json for each parallel delegate to avoid conflicts.
