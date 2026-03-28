@@ -1,6 +1,6 @@
 # RFC: Delegation Approval Handshake
 
-Status: draft
+Status: implemented (interactive approval added in v0.1.1)
 
 ## Summary
 

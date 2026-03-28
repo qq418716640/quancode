@@ -251,31 +251,46 @@ quancode version
 
 Some delegated tasks may request approval before continuing.
 
-When that happens, QuanCode prints a request id and an approval command such as:
+### Interactive Approval (default)
+
+When an approval request arrives, QuanCode prompts you directly in the current terminal:
+
+```
+[quancode] approval requested: req_123456
+  action:      git_push_force
+  description: Force-push branch
+  approve? [y/n]: y
+```
+
+Type `y` to approve or `n` to deny. No need to open another terminal.
+
+If multiple requests arrive, they are prompted one at a time in order.
+
+### Auto-approve Mode
+
+For scripting or trusted environments, skip interactive prompts entirely:
+
+```bash
+quancode delegate --auto-approve "push to main"
+```
+
+All approval requests will be approved automatically. The ledger records `decided_by: auto` for audit purposes.
+
+### Manual Approval via CLI
+
+You can also approve from a separate terminal or script using the `approve` command:
 
 ```bash
 quancode approve req_123456 --allow --approval-dir /path/to/approval-dir
-```
-
-Approve a request:
-
-```bash
-quancode approve req_123456 --allow --approval-dir /path/to/approval-dir
-```
-
-Deny a request:
-
-```bash
 quancode approve req_123456 --deny --approval-dir /path/to/approval-dir --reason "do not push from this machine"
 ```
 
 If `--approval-dir` is omitted, `approve` falls back to the `QUANCODE_APPROVAL_DIR` environment variable.
 
-Important:
+### Timeout
 
-- approval requests currently time out after 120 seconds
-- when that timeout is reached without a response, QuanCode records an automatic deny decision
-- if you see an approval prompt, handle it promptly in another terminal
+- Approval requests time out after 120 seconds
+- When that timeout is reached without a response, QuanCode records an automatic deny decision
 
 ## 7. Configuration Recipes
 

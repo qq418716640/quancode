@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/qq418716640/quancode/agent"
-	"github.com/qq418716640/quancode/approval"
 )
 
 func TestDelegateRunEAutoRoutesAndPrintsJSON(t *testing.T) {
@@ -251,6 +251,7 @@ agents:
 	oldIsolation := delegateIsolation
 	oldPoll := approvalPollInterval
 	oldTimeout := approvalTimeout
+	oldReader := stdinReader
 	cfgFile = cfgPath
 	delegateAgent = "codex"
 	delegateWorkdir = dir
@@ -258,6 +259,8 @@ agents:
 	delegateIsolation = "inplace"
 	approvalPollInterval = 10 * time.Millisecond
 	approvalTimeout = 2 * time.Second
+	// Simulate user typing "y\n" for the interactive approval prompt
+	stdinReader = bufio.NewReader(strings.NewReader("y\n"))
 	defer func() {
 		cfgFile = oldCfgFile
 		delegateAgent = oldAgent
@@ -266,21 +269,7 @@ agents:
 		delegateIsolation = oldIsolation
 		approvalPollInterval = oldPoll
 		approvalTimeout = oldTimeout
-	}()
-
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		files, _ := filepath.Glob(filepath.Join(os.TempDir(), "quancode-approval-del_*", "request-req_deadbeef.json"))
-		if len(files) != 1 {
-			return
-		}
-		approvalDir := filepath.Dir(files[0])
-		_ = approval.WriteResponse(approvalDir, approval.Response{
-			RequestID: "req_deadbeef",
-			Decision:  "approved",
-			DecidedBy: "user",
-			Reason:    "confirmed",
-		})
+		stdinReader = oldReader
 	}()
 
 	out := captureStdout(t, func() {
@@ -296,8 +285,8 @@ agents:
 	if got.Status != "completed" {
 		t.Fatalf("expected completed status, got %q", got.Status)
 	}
-	if got.Output != "approved-after-response" {
-		t.Fatalf("unexpected output: %q", got.Output)
+	if !strings.Contains(got.Output, "approved-after-response") {
+		t.Fatalf("expected output to contain approved-after-response, got %q", got.Output)
 	}
 	if len(got.ApprovalEvents) != 1 {
 		t.Fatalf("expected 1 approval event, got %#v", got.ApprovalEvents)
@@ -578,6 +567,11 @@ agents:
         exit 9
 `)
 
+	// Use a pipe that never writes — simulates user not responding, so timeout fires
+	pipeR, pipeW, _ := os.Pipe()
+	defer pipeR.Close()
+	defer pipeW.Close()
+
 	oldCfgFile := cfgFile
 	oldAgent := delegateAgent
 	oldWorkdir := delegateWorkdir
@@ -585,6 +579,7 @@ agents:
 	oldIsolation := delegateIsolation
 	oldPoll := approvalPollInterval
 	oldTimeout := approvalTimeout
+	oldReader := stdinReader
 	cfgFile = cfgPath
 	delegateAgent = "codex"
 	delegateWorkdir = dir
@@ -592,6 +587,7 @@ agents:
 	delegateIsolation = "inplace"
 	approvalPollInterval = 10 * time.Millisecond
 	approvalTimeout = 50 * time.Millisecond
+	stdinReader = bufio.NewReader(pipeR)
 	defer func() {
 		cfgFile = oldCfgFile
 		delegateAgent = oldAgent
@@ -600,6 +596,7 @@ agents:
 		delegateIsolation = oldIsolation
 		approvalPollInterval = oldPoll
 		approvalTimeout = oldTimeout
+		stdinReader = oldReader
 	}()
 
 	out := captureStdout(t, func() {

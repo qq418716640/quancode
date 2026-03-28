@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,8 +24,12 @@ var (
 	delegateWorkdir      string
 	delegateFormat       string
 	delegateIsolation    string
+	delegateAutoApprove  bool
 	approvalPollInterval = time.Second
 	approvalTimeout      = 120 * time.Second
+	// stdinReader is the source for interactive approval prompts.
+	// Tests can replace this to avoid blocking on os.Stdin.
+	stdinReader *bufio.Reader
 )
 
 type DelegationResult struct {
@@ -183,6 +189,81 @@ var delegateCmd = &cobra.Command{
 		pollTicker := time.NewTicker(approvalPollInterval)
 		defer pollTicker.Stop()
 
+		// promptQueue serialises interactive approval prompts so only one
+		// goroutine reads from stdin at a time. Buffer is generous so the
+		// poll loop never blocks when queuing requests.
+		promptQueue := make(chan *approval.Request, 16)
+		loopDone := make(chan struct{}) // closed when the main loop exits
+
+		reader := stdinReader
+		if reader == nil {
+			reader = bufio.NewReader(os.Stdin)
+		}
+
+		// readLine wraps blocking stdin read into a channel so it can be
+		// cancelled via loopDone, preventing goroutine leaks and races
+		// with the deferred approvalDir cleanup.
+		type stdinResult struct {
+			line string
+			err  error
+		}
+		readLine := func() <-chan stdinResult {
+			ch := make(chan stdinResult, 1)
+			go func() {
+				line, err := reader.ReadString('\n')
+				ch <- stdinResult{line, err}
+			}()
+			return ch
+		}
+
+		// Single goroutine drains promptQueue and reads user input serially.
+		go func() {
+			for {
+				select {
+				case <-loopDone:
+					return
+				case pr := <-promptQueue:
+					fmt.Fprintf(os.Stderr, "\n[quancode] approval requested: %s\n", pr.RequestID)
+					fmt.Fprintf(os.Stderr, "  action:      %s\n", pr.Action)
+					fmt.Fprintf(os.Stderr, "  description: %s\n", pr.Description)
+					fmt.Fprintf(os.Stderr, "  approve? [y/n]: ")
+
+					// Wait for user input or loop exit, whichever comes first.
+					var answer string
+					select {
+					case <-loopDone:
+						return
+					case res := <-readLine():
+						if res.err != nil {
+							continue
+						}
+						answer = strings.TrimSpace(strings.ToLower(res.line))
+					}
+
+					var decision, reason string
+					switch answer {
+					case "y", "yes":
+						decision, reason = "approved", "user approved interactively"
+					case "n", "no":
+						decision, reason = "denied", "user denied interactively"
+					default:
+						decision = "denied"
+						reason = fmt.Sprintf("unrecognised input %q, treated as deny", answer)
+						fmt.Fprintf(os.Stderr, "[quancode] unrecognised input %q — treating as deny\n", answer)
+					}
+					writeErr := approval.WriteResponse(approvalDir, approval.Response{
+						RequestID: pr.RequestID,
+						Decision:  decision,
+						DecidedBy: "user",
+						Reason:    reason,
+					})
+					if writeErr != nil && !errors.Is(writeErr, approval.ErrResponseExists) {
+						fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write approval response: %v\n", writeErr)
+					}
+				}
+			}
+		}()
+
 	loop:
 		for {
 			select {
@@ -206,8 +287,23 @@ var delegateCmd = &cobra.Command{
 							Action:      req.Action,
 							Description: req.Description,
 						})
-						fmt.Fprintf(os.Stderr, "[quancode] approval requested: %s %s\n", req.RequestID, req.Description)
-						fmt.Fprintf(os.Stderr, "[quancode] approve with: quancode approve %s --allow --approval-dir %s\n", req.RequestID, approvalDir)
+
+						if delegateAutoApprove {
+							// Write approval directly — no channel, no goroutine, no deadlock risk.
+							fmt.Fprintf(os.Stderr, "[quancode] auto-approved: %s %s\n", req.RequestID, req.Description)
+							writeErr := approval.WriteResponse(approvalDir, approval.Response{
+								RequestID: req.RequestID,
+								Decision:  "approved",
+								DecidedBy: "auto",
+								Reason:    "auto-approved via --auto-approve",
+							})
+							if writeErr != nil && !errors.Is(writeErr, approval.ErrResponseExists) {
+								fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write auto-approval: %v\n", writeErr)
+							}
+						} else {
+							// Queue for the single prompt goroutine.
+							promptQueue <- req
+						}
 					}
 					if now.Sub(pendingSince[req.RequestID]) >= approvalTimeout {
 						_, existsErr := approval.ReadResponse(approvalDir, req.RequestID)
@@ -225,7 +321,7 @@ var delegateCmd = &cobra.Command{
 							Reason:    "approval timed out",
 						})
 						if writeErr != nil {
-							if strings.Contains(writeErr.Error(), "response already exists") {
+							if errors.Is(writeErr, approval.ErrResponseExists) {
 								fmt.Fprintf(os.Stderr, "[quancode] approval %s was decided before timeout denial could be written\n", req.RequestID)
 							} else {
 								fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write timeout denial: %v\n", writeErr)
@@ -235,6 +331,7 @@ var delegateCmd = &cobra.Command{
 				}
 			}
 		}
+		close(loopDone) // signal prompt goroutine to exit
 		err = errResult
 
 		for requestID, idx := range eventIndex {
@@ -390,5 +487,6 @@ func init() {
 	delegateCmd.Flags().StringVar(&delegateWorkdir, "workdir", "", "working directory (default: current)")
 	delegateCmd.Flags().StringVar(&delegateFormat, "format", "text", "output format: text or json")
 	delegateCmd.Flags().StringVar(&delegateIsolation, "isolation", "inplace", "isolation mode: inplace, worktree, or patch")
+	delegateCmd.Flags().BoolVar(&delegateAutoApprove, "auto-approve", false, "automatically approve all approval requests")
 	rootCmd.AddCommand(delegateCmd)
 }

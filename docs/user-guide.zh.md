@@ -253,31 +253,46 @@ quancode version
 
 有些 delegated task 在继续执行前会请求 approval。
 
-这时 QuanCode 会打印 request id 和类似下面的命令：
+### 交互式审批（默认）
+
+当审批请求到来时，QuanCode 直接在当前终端提示你：
+
+```
+[quancode] approval requested: req_123456
+  action:      git_push_force
+  description: Force-push branch
+  approve? [y/n]: y
+```
+
+输入 `y` 批准或 `n` 拒绝，无需打开另一个终端。
+
+如果有多个审批请求，会按顺序逐个提示。
+
+### 自动批准模式
+
+在脚本或受信任环境中，可以跳过交互提示：
+
+```bash
+quancode delegate --auto-approve "push to main"
+```
+
+所有审批请求会被自动批准。Ledger 中会记录 `decided_by: auto` 用于审计。
+
+### 通过 CLI 手动审批
+
+你也可以在另一个终端或脚本中使用 `approve` 命令：
 
 ```bash
 quancode approve req_123456 --allow --approval-dir /path/to/approval-dir
-```
-
-批准：
-
-```bash
-quancode approve req_123456 --allow --approval-dir /path/to/approval-dir
-```
-
-拒绝：
-
-```bash
 quancode approve req_123456 --deny --approval-dir /path/to/approval-dir --reason "do not push from this machine"
 ```
 
 如果不传 `--approval-dir`，`approve` 会回退到环境变量 `QUANCODE_APPROVAL_DIR`。
 
-注意：
+### 超时
 
-- 当前 approval request 的超时时间是 120 秒
-- 如果在这个时间内没有响应，QuanCode 会自动写入一条 deny 决策
-- 所以看到 approval 提示后，最好尽快在另一个终端里处理
+- 审批请求的超时时间为 120 秒
+- 超时未响应时，QuanCode 会自动记录一条 deny 决策
 
 ## 7. 配置 Recipes
 

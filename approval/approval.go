@@ -4,15 +4,19 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 )
 
 const schemaVersion = 1
+
+// ErrResponseExists is returned by WriteResponse when a response file
+// already exists for the given request ID.
+var ErrResponseExists = errors.New("response already exists")
 
 var requestIDPattern = regexp.MustCompile(`^req_[0-9a-f]+$`)
 
@@ -176,7 +180,7 @@ func writeJSONExclusive(path string, v interface{}) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		if os.IsExist(err) {
-			return fmt.Errorf("response already exists for request %s", strings.TrimSuffix(strings.TrimPrefix(filepath.Base(path), "response-"), ".json"))
+			return ErrResponseExists
 		}
 		return err
 	}
