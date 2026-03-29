@@ -24,7 +24,7 @@ Depending on the command you run, QuanCode may locally process:
 
 ## Third-Party CLI Behavior
 
-QuanCode can launch or delegate to third-party coding CLIs such as Claude Code, Codex CLI, Aider, or OpenCode.
+QuanCode can launch or delegate to third-party coding CLIs such as Claude Code, Codex CLI, or Qoder CLI.
 
 Those tools may:
 

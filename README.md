@@ -106,12 +106,8 @@ Built-in defaults currently cover:
 - Claude Code
 - Codex CLI
 - Qoder CLI (code-analysis, debugging, explanation, MCP integration)
-- Aider
-- OpenCode
 
-Support is adapter-based rather than hardcoded per command path. Different CLIs may use different prompt injection modes such as CLI args, env vars, or a managed file like `AGENTS.md`.
-
-Coverage is not uniform across adapters. Claude Code currently has the most validation; other built-in adapters have less test and smoke coverage.
+Support is adapter-based rather than hardcoded per command path. Different CLIs may use different prompt injection modes such as CLI args, env vars, or a managed file like `AGENTS.md`. Adding a new CLI requires only configuration, not Go code.
 
 A `/quancode` skill is available for Claude Desktop, Cowork, and Dispatch, enabling multi-agent delegation from those environments.
 

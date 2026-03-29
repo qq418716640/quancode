@@ -16,7 +16,7 @@ quancode init
 
 What it does:
 
-- scans `PATH` for known coding CLIs such as `claude`, `codex`, `aider`, and `opencode`
+- scans `PATH` for known coding CLIs such as `claude`, `codex`, and `qodercli`
 - asks which detected CLI should be the default primary agent
 - writes a config file to `~/.config/quancode/quancode.yaml`
 

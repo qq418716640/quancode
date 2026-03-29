@@ -18,7 +18,7 @@ quancode init
 
 它会做这些事：
 
-- 扫描 `PATH` 中已安装的已知 coding CLI，例如 `claude`、`codex`、`aider`、`opencode`
+- 扫描 `PATH` 中已安装的已知 coding CLI，例如 `claude`、`codex`、`qodercli`
 - 让你选择哪个 CLI 作为默认 primary agent
 - 把配置写入 `~/.config/quancode/quancode.yaml`
 

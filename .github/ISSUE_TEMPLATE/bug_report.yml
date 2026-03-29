@@ -38,7 +38,7 @@ body:
     id: cli_name_version
     attributes:
       label: Affected third-party CLI and version
-      description: For example Claude Code, Codex CLI, Aider, or OpenCode
+      description: For example Claude Code, Codex CLI, or Qoder CLI
       placeholder: codex 0.117.0
     validations:
       required: true

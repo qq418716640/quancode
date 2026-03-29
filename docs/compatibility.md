@@ -9,26 +9,18 @@ QuanCode ships built-in defaults for:
 - Claude Code
 - Codex CLI
 - Qoder CLI
-- Aider
-- OpenCode
 
-"Supported" means the agent has a built-in adapter in `config/defaults.go`, its command can be detected in `PATH`, and core delegation flows are expected to work with recent CLI versions. It does not mean every version is fully validated.
+"Supported" means the agent has a built-in adapter in `config/defaults.go`, its command can be detected in `PATH`, and core delegation flows have been smoke tested with recent CLI versions.
+
+Additional CLIs (Aider, OpenCode, etc.) have built-in adapter defaults but have not been validated. They may work but are not listed as supported.
 
 ## Compatibility Matrix
 
-Evidence levels:
-
-- **built-in adapter**: QuanCode ships a default config for the CLI
-- **manual smoke tested**: validated with explicit manual steps
-- **not yet validated**: present in code but not covered by smoke guidance
-
 | CLI | Built-in adapter | Primary start | Delegate | Notes |
 |---|---|---|---|---|
-| Claude Code | Yes | Expected to work | Expected to work | Smoke tested |
-| Codex CLI | Yes | Expected to work | Expected to work | Smoke tested |
-| Qoder CLI | Yes | Not yet validated | Expected to work | Smoke tested |
-| Aider | Yes | Not yet validated | Expected to work | No smoke checklist yet |
-| OpenCode | Yes | Not yet validated | Expected to work | No smoke checklist yet |
+| Claude Code | Yes | Smoke tested | Smoke tested | |
+| Codex CLI | Yes | Smoke tested | Smoke tested | |
+| Qoder CLI | Yes | Not yet validated | Smoke tested | |
 
 ### Host Environment
 

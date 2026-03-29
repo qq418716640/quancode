@@ -38,7 +38,7 @@ var initCmd = &cobra.Command{
 
 		if len(found) == 0 {
 			fmt.Println("\n  no known AI coding CLIs found in PATH.")
-			fmt.Println("  supported: claude, codex, aider, opencode")
+			fmt.Println("  supported: claude, codex, qodercli")
 			return nil
 		}
 

@@ -98,12 +98,8 @@ agents:
 - Claude Code
 - Codex CLI
 - Qoder CLI
-- Aider
-- OpenCode
 
-QuanCode 的适配方式是配置驱动的，而不是把每个命令路径硬编码在代码里。不同 CLI 可能使用不同的 prompt 注入模式，例如 CLI 参数、环境变量或 `AGENTS.md` 这样的托管文件。添加新 CLI 只需配置，不需要写 Go 代码。
-
-当前 Claude Code、Codex CLI 和 Qoder CLI 验证最充分，其他内置 adapter 的测试覆盖较少。Tab 补全支持 `--primary` 和 `--agent` 等 flag 的值自动补全。
+适配方式是配置驱动的，不同 CLI 可能使用不同的 prompt 注入模式（CLI 参数、环境变量或 `AGENTS.md` 托管文件）。添加新 CLI 只需配置，不需要写 Go 代码。Tab 补全支持 `--primary` 和 `--agent` 等 flag 的值自动补全。
 
 兼容性预期和非目标见 [`docs/compatibility.md`](docs/compatibility.md)（英文）。
 
