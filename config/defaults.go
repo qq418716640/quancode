@@ -65,6 +65,12 @@ var KnownAgents = map[string]AgentConfig{
 	},
 }
 
+// defaultPreferences is the single source of truth for preference defaults.
+var defaultPreferences = Preferences{
+	DefaultIsolation: "inplace",
+	FallbackMode:     "auto",
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		DefaultPrimary: "claude",
@@ -72,5 +78,16 @@ func DefaultConfig() *Config {
 			"claude": KnownAgents["claude"],
 			"codex":  KnownAgents["codex"],
 		},
+		Preferences: defaultPreferences,
+	}
+}
+
+// applyPreferencesDefaults fills in zero-value preferences with defaults.
+func applyPreferencesDefaults(p *Preferences) {
+	if p.DefaultIsolation == "" {
+		p.DefaultIsolation = defaultPreferences.DefaultIsolation
+	}
+	if p.FallbackMode == "" {
+		p.FallbackMode = defaultPreferences.FallbackMode
 	}
 }

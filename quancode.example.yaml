@@ -52,6 +52,12 @@ agents:
       - quick
     priority: 20
 
+# User preferences for delegation behavior.
+# CLI flags always override these. Omitted fields use defaults.
+# preferences:
+#   default_isolation: inplace  # "inplace", "worktree", or "patch"
+#   fallback_mode: auto         # "auto" or "off"
+
 # context_defaults:
 #   auto_files:
 #     - CLAUDE.md

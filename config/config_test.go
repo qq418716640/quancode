@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -323,5 +324,188 @@ func TestApplyKnownAgentDefaultsUnknownAgent(t *testing.T) {
 	}
 	if ac.OutputMode != "" {
 		t.Fatalf("expected empty output_mode for unknown agent, got %q", ac.OutputMode)
+	}
+}
+
+// --- Enum validation tests ---
+
+func TestValidateInvalidPromptMode(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "a",
+		Agents: map[string]AgentConfig{
+			"a": {Command: "a", Enabled: true, PromptMode: "bad"},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if strings.Contains(p, "invalid prompt_mode") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected invalid prompt_mode problem, got %v", problems)
+	}
+}
+
+func TestValidateInvalidTaskMode(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "a",
+		Agents: map[string]AgentConfig{
+			"a": {Command: "a", Enabled: true, TaskMode: "bad"},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if strings.Contains(p, "invalid task_mode") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected invalid task_mode problem, got %v", problems)
+	}
+}
+
+func TestValidateInvalidOutputMode(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "a",
+		Agents: map[string]AgentConfig{
+			"a": {Command: "a", Enabled: true, OutputMode: "bad"},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if strings.Contains(p, "invalid output_mode") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected invalid output_mode problem, got %v", problems)
+	}
+}
+
+func TestValidateValidEnumValues(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "a",
+		Agents: map[string]AgentConfig{
+			"a": {Command: "a", Enabled: true, PromptMode: "file", TaskMode: "stdin", OutputMode: "file"},
+		},
+	}
+	problems := cfg.Validate()
+	for _, p := range problems {
+		if strings.Contains(p, "invalid") {
+			t.Fatalf("unexpected validation problem: %s", p)
+		}
+	}
+}
+
+func TestValidateEmptyEnumValuesAreValid(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "a",
+		Agents: map[string]AgentConfig{
+			"a": {Command: "a", Enabled: true},
+		},
+	}
+	problems := cfg.Validate()
+	for _, p := range problems {
+		if strings.Contains(p, "invalid") {
+			t.Fatalf("empty enum values should be valid, got: %s", p)
+		}
+	}
+}
+
+// --- Preferences tests ---
+
+func TestPreferencesDefaults(t *testing.T) {
+	p := Preferences{}
+	applyPreferencesDefaults(&p)
+	if p.DefaultIsolation != "inplace" {
+		t.Fatalf("expected default_isolation=inplace, got %q", p.DefaultIsolation)
+	}
+	if p.FallbackMode != "auto" {
+		t.Fatalf("expected fallback_mode=auto, got %q", p.FallbackMode)
+	}
+}
+
+func TestPreferencesPreservesExplicitValues(t *testing.T) {
+	p := Preferences{DefaultIsolation: "worktree", FallbackMode: "off"}
+	applyPreferencesDefaults(&p)
+	if p.DefaultIsolation != "worktree" {
+		t.Fatalf("expected worktree preserved, got %q", p.DefaultIsolation)
+	}
+	if p.FallbackMode != "off" {
+		t.Fatalf("expected off preserved, got %q", p.FallbackMode)
+	}
+}
+
+func TestLoadAppliesPreferencesDefaults(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "quancode.yaml")
+	content := []byte("default_primary: claude\nagents:\n  claude:\n    command: claude\n    enabled: true\n")
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Preferences.DefaultIsolation != "inplace" {
+		t.Fatalf("expected preferences backfilled to inplace, got %q", cfg.Preferences.DefaultIsolation)
+	}
+	if cfg.Preferences.FallbackMode != "auto" {
+		t.Fatalf("expected preferences backfilled to auto, got %q", cfg.Preferences.FallbackMode)
+	}
+}
+
+func TestLoadPreservesExplicitPreferences(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "quancode.yaml")
+	content := []byte("default_primary: claude\nagents:\n  claude:\n    command: claude\n    enabled: true\npreferences:\n  default_isolation: patch\n  fallback_mode: \"off\"\n")
+	if err := os.WriteFile(cfgPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Preferences.DefaultIsolation != "patch" {
+		t.Fatalf("expected patch, got %q", cfg.Preferences.DefaultIsolation)
+	}
+	if cfg.Preferences.FallbackMode != "off" {
+		t.Fatalf("expected off, got %q", cfg.Preferences.FallbackMode)
+	}
+}
+
+func TestValidateInvalidPreferences(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Preferences.DefaultIsolation = "bad"
+	cfg.Preferences.FallbackMode = "bad"
+	problems := cfg.Validate()
+	foundIso, foundFb := false, false
+	for _, p := range problems {
+		if strings.Contains(p, "invalid default_isolation") {
+			foundIso = true
+		}
+		if strings.Contains(p, "invalid fallback_mode") {
+			foundFb = true
+		}
+	}
+	if !foundIso {
+		t.Fatalf("expected invalid default_isolation problem, got %v", problems)
+	}
+	if !foundFb {
+		t.Fatalf("expected invalid fallback_mode problem, got %v", problems)
+	}
+}
+
+func TestDefaultConfigHasPreferences(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Preferences.DefaultIsolation != "inplace" {
+		t.Fatalf("expected inplace, got %q", cfg.Preferences.DefaultIsolation)
+	}
+	if cfg.Preferences.FallbackMode != "auto" {
+		t.Fatalf("expected auto, got %q", cfg.Preferences.FallbackMode)
 	}
 }

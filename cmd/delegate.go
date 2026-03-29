@@ -121,7 +121,12 @@ var delegateCmd = &cobra.Command{
 		if workDir == "" {
 			workDir, _ = os.Getwd()
 		}
+
+		// Resolve isolation: CLI flag > preferences > "inplace"
 		isolation := delegateIsolation
+		if isolation == "" {
+			isolation = cfg.Preferences.DefaultIsolation
+		}
 
 		// Resolve initial agent
 		agentKey := delegateAgent
@@ -211,6 +216,12 @@ var delegateCmd = &cobra.Command{
 			return nil
 		}
 
+		// Resolve fallback: CLI flag > preferences > auto
+		noFallback := delegateNoFallback
+		if !cmd.Flags().Changed("no-fallback") {
+			noFallback = cfg.Preferences.FallbackMode == "off"
+		}
+
 		// Run attempt with fallback loop
 		tried := map[string]bool{agentKey: true}
 		runID, err := approval.NewRunID()
@@ -235,7 +246,7 @@ var delegateCmd = &cobra.Command{
 			ar := runDelegateAttempt(a, agentKey, task, ctxPrefix, workDir, isolation, vs)
 
 			// Check if fallback is needed and allowed
-			shouldFallback := !delegateNoFallback &&
+			shouldFallback := !noFallback &&
 				meta.Attempt < 3 &&
 				isTransientFailure(ar.failureClass)
 
@@ -358,7 +369,7 @@ func init() {
 	_ = delegateCmd.RegisterFlagCompletionFunc("format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"text", "json"}, cobra.ShellCompDirectiveNoFileComp
 	})
-	delegateCmd.Flags().StringVar(&delegateIsolation, "isolation", "inplace", "isolation mode: inplace, worktree, or patch")
+	delegateCmd.Flags().StringVar(&delegateIsolation, "isolation", "", "isolation mode: inplace, worktree, or patch (default from preferences)")
 	_ = delegateCmd.RegisterFlagCompletionFunc("isolation", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"inplace", "worktree", "patch"}, cobra.ShellCompDirectiveNoFileComp
 	})

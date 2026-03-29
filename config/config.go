@@ -14,6 +14,14 @@ type Config struct {
 	DefaultPrimary  string                 `yaml:"default_primary"`
 	Agents          map[string]AgentConfig `yaml:"agents"`
 	ContextDefaults *qcontext.ContextSpec  `yaml:"context_defaults,omitempty"`
+	Preferences     Preferences            `yaml:"preferences,omitempty"`
+}
+
+// Preferences contains user-level defaults for delegation behavior.
+// CLI flags override these when explicitly set.
+type Preferences struct {
+	DefaultIsolation string `yaml:"default_isolation"` // "inplace" (default), "worktree", "patch"
+	FallbackMode     string `yaml:"fallback_mode"`     // "auto" (default), "off"
 }
 
 type AgentConfig struct {
@@ -38,6 +46,15 @@ type AgentConfig struct {
 	Context *qcontext.ContextSpec `yaml:"context,omitempty"`
 }
 
+// Valid enum values for configuration fields.
+var (
+	validPromptModes   = map[string]bool{"": true, "append_arg": true, "stdin": true, "env": true, "file": true}
+	validTaskModes     = map[string]bool{"": true, "arg": true, "stdin": true}
+	validOutputModes   = map[string]bool{"": true, "stdout": true, "file": true}
+	validIsolationModes = map[string]bool{"": true, "inplace": true, "worktree": true, "patch": true}
+	validFallbackModes  = map[string]bool{"": true, "auto": true, "off": true}
+)
+
 // Load loads config from the first available source:
 // 1. explicit path (--config flag)
 // 2. ./quancode.yaml
@@ -55,6 +72,7 @@ func Load(explicit string) (*Config, error) {
 			return nil, fmt.Errorf("parse config %s: %w", explicit, err)
 		}
 		applyKnownAgentDefaults(&cfg)
+		applyPreferencesDefaults(&cfg.Preferences)
 		return &cfg, nil
 	}
 
@@ -74,6 +92,7 @@ func Load(explicit string) (*Config, error) {
 			return nil, fmt.Errorf("parse config %s: %w", p, err)
 		}
 		applyKnownAgentDefaults(&cfg)
+		applyPreferencesDefaults(&cfg.Preferences)
 		return &cfg, nil
 	}
 
@@ -137,6 +156,23 @@ func (c *Config) Validate() []string {
 		if ac.TimeoutSecs < 0 {
 			problems = append(problems, fmt.Sprintf("agent %q: timeout_secs is negative", key))
 		}
+		if !validPromptModes[ac.PromptMode] {
+			problems = append(problems, fmt.Sprintf("agent %q: invalid prompt_mode %q", key, ac.PromptMode))
+		}
+		if !validTaskModes[ac.TaskMode] {
+			problems = append(problems, fmt.Sprintf("agent %q: invalid task_mode %q", key, ac.TaskMode))
+		}
+		if !validOutputModes[ac.OutputMode] {
+			problems = append(problems, fmt.Sprintf("agent %q: invalid output_mode %q", key, ac.OutputMode))
+		}
+	}
+
+	// Validate preferences
+	if !validIsolationModes[c.Preferences.DefaultIsolation] {
+		problems = append(problems, fmt.Sprintf("preferences: invalid default_isolation %q", c.Preferences.DefaultIsolation))
+	}
+	if !validFallbackModes[c.Preferences.FallbackMode] {
+		problems = append(problems, fmt.Sprintf("preferences: invalid fallback_mode %q", c.Preferences.FallbackMode))
 	}
 
 	return problems

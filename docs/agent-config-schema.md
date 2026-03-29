@@ -29,6 +29,26 @@ Config lookup order:
 - Required: no
 - Meaning: default context injection settings applied to delegations unless overridden per agent
 
+### `preferences`
+
+- Type: `Preferences`
+- Required: no
+- Meaning: user-level defaults for delegation behavior; CLI flags always override these
+
+#### `preferences.default_isolation`
+
+- Type: string
+- Supported values: `inplace`, `worktree`, `patch`
+- Default: `inplace`
+- Meaning: isolation mode used by `quancode delegate` when `--isolation` is not passed
+
+#### `preferences.fallback_mode`
+
+- Type: string
+- Supported values: `auto`, `off`
+- Default: `auto`
+- Meaning: whether automatic fallback to another agent is enabled when `--no-fallback` is not passed
+
 ## AgentConfig Fields
 
 ### `name`
