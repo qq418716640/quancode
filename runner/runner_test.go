@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // testGitRun runs a git command in the given directory with deterministic
@@ -366,6 +367,9 @@ func TestPruneOrphanWorktreesRemovesOrphans(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(orphan, "junk.txt"), []byte("leftover"), 0644)
+	// Set modtime to 2 hours ago so it passes the age cutoff
+	old := time.Now().Add(-2 * time.Hour)
+	os.Chtimes(orphan, old, old)
 
 	pruned := PruneOrphanWorktrees(repo)
 	if pruned != 1 {
@@ -375,6 +379,31 @@ func TestPruneOrphanWorktreesRemovesOrphans(t *testing.T) {
 	// Verify orphan directory is gone
 	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
 		t.Fatal("expected orphan directory to be removed")
+	}
+}
+
+func TestPruneOrphanWorktreesSkipsRecent(t *testing.T) {
+	repo := t.TempDir()
+	testGitRun(t, repo, "init")
+	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x"), 0644)
+	testGitRun(t, repo, "add", "-A")
+	testGitRun(t, repo, "commit", "-m", "init")
+
+	// Create a fake orphan that was just created (modtime = now)
+	base := filepath.Join(repo, ".quancode", "worktrees")
+	orphan := filepath.Join(base, "wt-recent456")
+	if err := os.MkdirAll(orphan, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	pruned := PruneOrphanWorktrees(repo)
+	if pruned != 0 {
+		t.Fatalf("expected 0 pruned (too recent), got %d", pruned)
+	}
+
+	// Directory should still exist
+	if _, err := os.Stat(orphan); err != nil {
+		t.Fatal("expected recent orphan to be kept")
 	}
 }
 

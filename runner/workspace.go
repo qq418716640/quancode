@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // worktreeIgnoreRules contains patterns that should never appear in a
@@ -90,6 +91,7 @@ func PruneOrphanWorktrees(repoDir string) int {
 	}
 
 	pruned := 0
+	cutoff := time.Now().Add(-time.Hour)
 	for _, e := range entries {
 		if !e.IsDir() || !strings.HasPrefix(e.Name(), "wt-") {
 			continue
@@ -97,8 +99,14 @@ func PruneOrphanWorktrees(repoDir string) int {
 		if activeNames[e.Name()] {
 			continue
 		}
+		// Skip recently created directories to avoid racing with
+		// concurrent CreateWorktree calls.
+		info, err := e.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue
+		}
 		wtPath := filepath.Join(base, e.Name())
-		// Orphan: not in git worktree list, safe to remove
+		// Orphan: not in git worktree list and older than 1 hour
 		exec.Command("git", "worktree", "remove", "--force", wtPath).Run()
 		os.RemoveAll(wtPath)
 		pruned++

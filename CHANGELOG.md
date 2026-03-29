@@ -11,6 +11,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Fixed
 
 - Delegate 前自动清理孤儿 worktree，防止 SIGKILL 后磁盘泄漏
+- 孤儿清理跳过 1 小时内创建的目录，避免并发委派时误删
 
 ## [v0.4.11] - 2026-03-29
 
