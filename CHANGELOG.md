@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.13] - 2026-03-29
+
+### Added
+
+- 后台静默自动更新：每 2 小时检测 GitHub 最新版本，有新版本自动下载替换
+- 支持 brew 和直接二进制两种更新路径
+- `QUANCODE_SKIP_UPDATE_CHECK=1` 环境变量可禁用
+
 ## [v0.4.12] - 2026-03-29
 
 ### Fixed
