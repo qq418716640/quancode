@@ -274,6 +274,12 @@ loop:
 		if collectErr != nil {
 			fmt.Fprintf(os.Stderr, "[quancode] warning: patch collection failed: %v\n", collectErr)
 		}
+		// Cache patch for later apply-patch --id
+		if isolation == "patch" && ar.patch != "" {
+			if _, cacheErr := runner.CachePatch(delegationID, ar.patch); cacheErr != nil {
+				debugf("patch cache failed: %v", cacheErr)
+			}
+		}
 	}
 
 	// Run verification only when agent succeeded — skip on timeout/failure

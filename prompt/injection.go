@@ -65,7 +65,8 @@ VERIFICATION:
 PARALLEL DELEGATION:
 You can run multiple delegate calls concurrently for independent tasks.
 - MUST use --isolation patch --format json for each parallel delegate to avoid conflicts.
-- To apply a patch: {{.Binary}} apply-patch --workdir "$(pwd)" --file /tmp/patch-taskname.diff
+- Patches are automatically cached. To apply, use the delegation_id from the JSON result:
+    {{.Binary}} apply-patch --id <delegation_id>
 - Split tasks by file boundaries — avoid two delegates modifying the same file.
 - Apply patches one at a time. If a patch conflicts, resolve before applying the next one.`
 

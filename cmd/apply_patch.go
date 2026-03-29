@@ -14,6 +14,7 @@ import (
 var (
 	applyPatchWorkdir string
 	applyPatchFile    string
+	applyPatchID      string
 )
 
 var applyPatchCmd = &cobra.Command{
@@ -35,14 +36,21 @@ var applyPatchCmd = &cobra.Command{
 		var patch []byte
 		var err error
 
-		if applyPatchFile != "" {
+		if applyPatchID != "" {
+			// Load from patch cache by delegation ID
+			cached, loadErr := runner.LoadCachedPatch(applyPatchID)
+			if loadErr != nil {
+				return loadErr
+			}
+			patch = []byte(cached)
+		} else if applyPatchFile != "" {
 			patch, err = os.ReadFile(applyPatchFile)
 			if err != nil {
 				return fmt.Errorf("read patch file: %w", err)
 			}
 		} else {
 			if term.IsTerminal(int(os.Stdin.Fd())) {
-				return fmt.Errorf("no input: use --file <patch-file> or pipe patch content via stdin")
+				return fmt.Errorf("no input: use --id <delegation-id>, --file <patch-file>, or pipe via stdin")
 			}
 			patch, err = io.ReadAll(os.Stdin)
 			if err != nil {
@@ -75,5 +83,6 @@ var applyPatchCmd = &cobra.Command{
 func init() {
 	applyPatchCmd.Flags().StringVar(&applyPatchWorkdir, "workdir", "", "working directory (default: current)")
 	applyPatchCmd.Flags().StringVar(&applyPatchFile, "file", "", "patch file to apply (default: read from stdin)")
+	applyPatchCmd.Flags().StringVar(&applyPatchID, "id", "", "apply cached patch by delegation ID")
 	rootCmd.AddCommand(applyPatchCmd)
 }
