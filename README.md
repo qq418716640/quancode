@@ -8,17 +8,21 @@ It is an orchestration layer, not an agent itself.
 
 Use it when you want one terminal workflow that can hand off bounded tasks to the most suitable coding CLI without constant manual switching.
 
-> **Status: early alpha**  
-> Core flows work on tested configurations, but the agent matrix and prompt-injection behavior are still changing. Expect rough edges.
+> **Status: beta**
+> Core delegation, isolation, fallback, and verification flows are stable. Agent adapter coverage varies by CLI.
 
 ## Install
 
-Prerequisites:
+Prerequisites: at least one supported coding CLI installed and authenticated.
 
-- Go 1.25+
-- At least one supported coding CLI installed and authenticated
+Via Homebrew (recommended):
 
-Install from source:
+```bash
+brew tap qq418716640/tap
+brew install quancode
+```
+
+Or install from source (requires Go 1.25+):
 
 ```bash
 go install github.com/qq418716640/quancode@latest
@@ -29,18 +33,6 @@ Check the installed version:
 ```bash
 quancode version
 ```
-
-Alternative install paths:
-
-- Coming soon:
-
-  ```bash
-  brew tap qq418716640/tap
-  brew install quancode
-  ```
-
-  Tapping only adds the QuanCode formula source. It does not replace other Homebrew sources.
-- Local build: `git clone https://github.com/qq418716640/quancode.git && cd quancode && go build -o quancode .`
 
 ## Quick Start
 
