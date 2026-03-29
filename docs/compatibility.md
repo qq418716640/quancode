@@ -16,11 +16,11 @@ Additional CLIs (Aider, OpenCode, etc.) have built-in adapter defaults but have 
 
 ## Compatibility Matrix
 
-| CLI | Built-in adapter | Primary start | Delegate | Notes |
-|---|---|---|---|---|
-| Claude Code | Yes | Smoke tested | Smoke tested | |
-| Codex CLI | Yes | Smoke tested | Smoke tested | |
-| Qoder CLI | Yes | Not yet validated | Smoke tested | |
+| CLI | Built-in adapter | Primary start | Delegate | Isolation modes | Notes |
+|---|---|---|---|---|---|
+| Claude Code | Yes | Smoke tested | Smoke tested | inplace, worktree, patch | |
+| Codex CLI | Yes | Smoke tested | Smoke tested | inplace, worktree, patch | |
+| Qoder CLI | Yes | Not yet validated | Smoke tested | inplace only | worktree/patch mode: files not written to disk |
 
 ### Host Environment
 

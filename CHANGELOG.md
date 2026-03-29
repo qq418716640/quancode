@@ -10,35 +10,35 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Added
 
-- Prompt 新增 TASK TYPES 指引，区分代码修改/研究分析/代码审查任务
-- KnownAgents 新增 Gemini CLI、Copilot CLI、Amp、Goose、Cline CLI、Kiro CLI、aichat 自动检测
-- 并行委派简化：patch 自动缓存 + `apply-patch --id` 按 delegation_id 直接应用
-- `QUANCODE_DEBUG=1` 调试模式，输出自动更新等后台操作的诊断信息
+- Prompt TASK TYPES guidance: differentiate code modification, research/analysis, and code review tasks
+- KnownAgents: added Gemini CLI, Copilot CLI, Amp, Goose, Cline CLI, Kiro CLI, aichat auto-detection
+- Parallel delegation: patch auto-caching + `apply-patch --id` to apply by delegation ID
+- `QUANCODE_DEBUG=1` debug mode for background operation diagnostics
 
 ### Fixed
 
-- stderr 消息统一英文
-- OpenCode 的 DelegateArgs 修正为 `["-p"]`
-- `init` 支持列表改为从 KnownAgents 动态生成
+- Unified all stderr messages to English
+- OpenCode DelegateArgs corrected to `["-p"]`
+- `init` supported commands list now generated dynamically from KnownAgents
 
 ### Removed
 
-- 文档中移除未经验证的 Aider 和 OpenCode 引用（代码层保留自动检测）
+- Removed unvalidated Aider and OpenCode references from docs (code-level auto-detection retained)
 
 ## [v0.4.13] - 2026-03-29
 
 ### Added
 
-- 后台静默自动更新：每 2 小时检测 GitHub 最新版本，有新版本自动下载替换
-- 支持 brew 和直接二进制两种更新路径
-- `QUANCODE_SKIP_UPDATE_CHECK=1` 环境变量可禁用
+- Background silent auto-update: checks GitHub latest release every 2 hours, downloads and replaces binary
+- Supports both brew and direct binary update paths
+- `QUANCODE_SKIP_UPDATE_CHECK=1` environment variable to disable
 
 ## [v0.4.12] - 2026-03-29
 
 ### Fixed
 
-- Delegate 前自动清理孤儿 worktree，防止 SIGKILL 后磁盘泄漏
-- 孤儿清理跳过 1 小时内创建的目录，避免并发委派时误删
+- Auto-prune orphan worktrees before each delegation to prevent disk leaks from SIGKILL
+- Orphan cleanup skips directories less than 1 hour old to avoid concurrent delegation conflicts
 
 ## [v0.4.11] - 2026-03-29
 

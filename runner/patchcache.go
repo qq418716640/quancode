@@ -16,6 +16,7 @@ func PatchCacheDir() string {
 
 // CachePatch saves a patch to the cache directory keyed by delegation ID.
 // Returns the file path on success.
+// test: parallel delegation cache
 func CachePatch(delegationID, patch string) (string, error) {
 	dir := PatchCacheDir()
 	if dir == "" {
