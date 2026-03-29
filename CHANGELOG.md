@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.16] - 2026-03-29
+
+### Fixed
+
+- Statusline percentage display: round floats to avoid precision noise (e.g. `14.000000000000002%` → `14%`)
+
 ## [v0.4.15] - 2026-03-29
 
 ### Removed
