@@ -21,9 +21,9 @@ if [ "$QUANCODE_SESSION" = "1" ]; then
     [ -n "$QUANCODE_PRIMARY" ] && parts="$parts:$QUANCODE_PRIMARY"
 fi
 [ -n "$model" ] && parts="$parts${parts:+ | }$model"
-[ -n "$ctx" ] && parts="$parts ctx:${ctx}%"
-[ -n "$r5h" ] && parts="$parts 5h:${r5h}%"
-[ -n "$r7d" ] && parts="$parts 7d:${r7d}%"
+[ -n "$ctx" ] && parts="$parts ctx:$(printf '%.0f' "$ctx")%"
+[ -n "$r5h" ] && parts="$parts 5h:$(printf '%.0f' "$r5h")%"
+[ -n "$r7d" ] && parts="$parts 7d:$(printf '%.0f' "$r7d")%"
 [ -n "$cost" ] && [ "$cost" != "0" ] && parts="$parts \$$(printf '%.2f' "$cost")"
 
 echo "$parts"
