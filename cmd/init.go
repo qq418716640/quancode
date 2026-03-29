@@ -38,7 +38,11 @@ var initCmd = &cobra.Command{
 
 		if len(found) == 0 {
 			fmt.Println("\n  no known AI coding CLIs found in PATH.")
-			fmt.Println("  supported: claude, codex, qodercli")
+			var cmds []string
+			for _, key := range knownKeys {
+				cmds = append(cmds, config.KnownAgents[key].Command)
+			}
+			fmt.Printf("  supported commands: %s\n", strings.Join(cmds, ", "))
 			return nil
 		}
 
