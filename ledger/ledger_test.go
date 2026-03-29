@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestAppendAndReadAllPreservesApprovalEvents(t *testing.T) {
+func TestAppendAndReadAll(t *testing.T) {
 	oldHome := os.Getenv("HOME")
 	home := t.TempDir()
 	if err := os.Setenv("HOME", home); err != nil {
@@ -23,14 +23,6 @@ func TestAppendAndReadAllPreservesApprovalEvents(t *testing.T) {
 		WorkDir:    "/tmp/repo",
 		ExitCode:   0,
 		DurationMs: 42,
-		ApprovalEvents: []ApprovalEvent{
-			{
-				RequestID:   "req_deadbeef",
-				Action:      "git_push_force",
-				Description: "Force-push branch",
-				Decision:    "approved",
-			},
-		},
 	}
 	if err := Append(entry); err != nil {
 		t.Fatalf("Append: %v", err)
@@ -43,12 +35,8 @@ func TestAppendAndReadAllPreservesApprovalEvents(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-	if len(entries[0].ApprovalEvents) != 1 {
-		t.Fatalf("expected approval events to be preserved, got %#v", entries[0].ApprovalEvents)
-	}
-	got := entries[0].ApprovalEvents[0]
-	if got.RequestID != "req_deadbeef" || got.Decision != "approved" {
-		t.Fatalf("unexpected approval event: %#v", got)
+	if entries[0].Agent != "codex" || entries[0].Task != "push" {
+		t.Fatalf("unexpected entry: %+v", entries[0])
 	}
 
 	logs, err := filepath.Glob(filepath.Join(home, ".config", "quancode", "logs", "*.jsonl"))
@@ -155,11 +143,8 @@ func TestEntryJSONRoundtrip(t *testing.T) {
 		ExitCode:     0,
 		DurationMs:   1500,
 		ChangedFiles: []string{"main.go"},
-		ApprovalEvents: []ApprovalEvent{
-			{RequestID: "r1", Action: "write", Description: "write file", Decision: "approved"},
-		},
-		Isolation: "inplace",
-		WorkDir:   "/tmp/repo",
+		Isolation:    "inplace",
+		WorkDir:      "/tmp/repo",
 	}
 
 	data, err := json.Marshal(entry)
@@ -174,9 +159,6 @@ func TestEntryJSONRoundtrip(t *testing.T) {
 
 	if decoded.Agent != entry.Agent || decoded.Task != entry.Task {
 		t.Fatalf("roundtrip mismatch: %+v vs %+v", entry, decoded)
-	}
-	if len(decoded.ApprovalEvents) != 1 || decoded.ApprovalEvents[0].RequestID != "r1" {
-		t.Fatalf("approval events roundtrip failed: %+v", decoded.ApprovalEvents)
 	}
 }
 

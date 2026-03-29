@@ -55,7 +55,7 @@ The skill infers the right agent and isolation mode from context.
 1. You invoke `/quancode` with a task description
 2. Claude parses your intent (agent, isolation mode, task)
 3. Claude runs `quancode delegate --format json ...`
-4. QuanCode routes to the best agent, handles approval, fallback, and isolation
+4. QuanCode routes to the best agent, handles fallback and isolation
 5. Claude summarizes the result back to you
 
 All sub-agent execution goes through `quancode delegate` — never directly calling CLI tools. This ensures proper auth, proxy, logging, and fallback.

@@ -119,7 +119,6 @@ For a conservative status table of current adapter confidence, see [`docs/compat
 
 ## Safety Notes
 
-- Use `--auto-approve` to skip confirmation prompts during delegation.
 - Delegated agents run in your working directory unless you use an isolation mode.
 - `--isolation worktree` and `--isolation patch` require a git repository.
 - File-based prompt injection is managed by QuanCode and should restore original content after the primary exits.

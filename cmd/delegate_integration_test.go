@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"os"
@@ -209,94 +208,6 @@ agents:
 		t.Fatalf("expected timed_out status, got %q", got.Status)
 	}
 	_ = gotErr // may or may not be ExitStatusError depending on format handling
-}
-
-func TestDelegateRunERecordsApprovalEventAndDecision(t *testing.T) {
-	isolateHome(t)
-	dir := t.TempDir()
-	cfgPath := writeConfig(t, dir, `
-default_primary: claude
-agents:
-  claude:
-    name: Claude Code
-    command: /bin/sh
-    enabled: true
-  codex:
-    name: Codex CLI
-    command: /bin/sh
-    enabled: true
-    timeout_secs: 5
-    delegate_args:
-      - -c
-      - |
-        req="$QUANCODE_APPROVAL_DIR/request-req_deadbeef.json"
-        cat > "$req.tmp" <<EOF
-        {
-          "schema_version": 1,
-          "request_id": "req_deadbeef",
-          "delegation_id": "$QUANCODE_DELEGATION_ID",
-          "timestamp": "2026-03-27T12:00:00Z",
-          "action": "git_push_force",
-          "description": "Force-push branch"
-        }
-        EOF
-        mv "$req.tmp" "$req"
-        while [ ! -f "$QUANCODE_APPROVAL_DIR/response-req_deadbeef.json" ]; do
-          sleep 0.05
-        done
-        printf approved-after-response
-`)
-
-	oldCfgFile := cfgFile
-	oldAgent := delegateAgent
-	oldWorkdir := delegateWorkdir
-	oldFormat := delegateFormat
-	oldIsolation := delegateIsolation
-	oldPoll := approvalPollInterval
-	oldTimeout := approvalTimeout
-	oldReader := stdinReader
-	cfgFile = cfgPath
-	delegateAgent = "codex"
-	delegateWorkdir = dir
-	delegateFormat = "json"
-	delegateIsolation = "inplace"
-	approvalPollInterval = 10 * time.Millisecond
-	approvalTimeout = 2 * time.Second
-	// Simulate user typing "y\n" for the interactive approval prompt
-	stdinReader = bufio.NewReader(strings.NewReader("y\n"))
-	defer func() {
-		cfgFile = oldCfgFile
-		delegateAgent = oldAgent
-		delegateWorkdir = oldWorkdir
-		delegateFormat = oldFormat
-		delegateIsolation = oldIsolation
-		approvalPollInterval = oldPoll
-		approvalTimeout = oldTimeout
-		stdinReader = oldReader
-	}()
-
-	out := captureStdout(t, func() {
-		if err := delegateCmd.RunE(delegateCmd, []string{"push"}); err != nil {
-			t.Fatalf("delegate RunE returned error: %v", err)
-		}
-	})
-
-	var got DelegationResult
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
-		t.Fatalf("unmarshal json output: %v\noutput=%q", err, out)
-	}
-	if got.Status != "completed" {
-		t.Fatalf("expected completed status, got %q", got.Status)
-	}
-	if !strings.Contains(got.Output, "approved-after-response") {
-		t.Fatalf("expected output to contain approved-after-response, got %q", got.Output)
-	}
-	if len(got.ApprovalEvents) != 1 {
-		t.Fatalf("expected 1 approval event, got %#v", got.ApprovalEvents)
-	}
-	if got.ApprovalEvents[0].RequestID != "req_deadbeef" || got.ApprovalEvents[0].Decision != "approved" {
-		t.Fatalf("unexpected approval event: %#v", got.ApprovalEvents[0])
-	}
 }
 
 func TestDelegateRunEWorktreeIsolationAppliesPatch(t *testing.T) {
@@ -540,98 +451,6 @@ agents:
 
 	if !strings.Contains(out, "error output") {
 		t.Fatalf("expected error output in stdout, got %q", out)
-	}
-}
-
-func TestDelegateRunETimeoutDeniesPendingApproval(t *testing.T) {
-	isolateHome(t)
-	dir := t.TempDir()
-	cfgPath := writeConfig(t, dir, `
-default_primary: claude
-agents:
-  claude:
-    name: Claude Code
-    command: /bin/sh
-    enabled: true
-  codex:
-    name: Codex CLI
-    command: /bin/sh
-    enabled: true
-    timeout_secs: 2
-    delegate_args:
-      - -c
-      - |
-        req="$QUANCODE_APPROVAL_DIR/request-req_deadbeef.json"
-        cat > "$req.tmp" <<EOF
-        {
-          "schema_version": 1,
-          "request_id": "req_deadbeef",
-          "delegation_id": "$QUANCODE_DELEGATION_ID",
-          "timestamp": "2026-03-27T12:00:00Z",
-          "action": "delete_file",
-          "description": "Delete file"
-        }
-        EOF
-        mv "$req.tmp" "$req"
-        while [ ! -f "$QUANCODE_APPROVAL_DIR/response-req_deadbeef.json" ]; do
-          sleep 0.05
-        done
-        if grep -q 'denied' "$QUANCODE_APPROVAL_DIR/response-req_deadbeef.json"; then
-          exit 7
-        fi
-        exit 9
-`)
-
-	// Use a pipe that never writes — simulates user not responding, so timeout fires
-	pipeR, pipeW, _ := os.Pipe()
-	defer pipeR.Close()
-	defer pipeW.Close()
-
-	oldCfgFile := cfgFile
-	oldAgent := delegateAgent
-	oldWorkdir := delegateWorkdir
-	oldFormat := delegateFormat
-	oldIsolation := delegateIsolation
-	oldPoll := approvalPollInterval
-	oldTimeout := approvalTimeout
-	oldReader := stdinReader
-	cfgFile = cfgPath
-	delegateAgent = "codex"
-	delegateWorkdir = dir
-	delegateFormat = "json"
-	delegateIsolation = "inplace"
-	approvalPollInterval = 10 * time.Millisecond
-	approvalTimeout = 50 * time.Millisecond
-	stdinReader = bufio.NewReader(pipeR)
-	defer func() {
-		cfgFile = oldCfgFile
-		delegateAgent = oldAgent
-		delegateWorkdir = oldWorkdir
-		delegateFormat = oldFormat
-		delegateIsolation = oldIsolation
-		approvalPollInterval = oldPoll
-		approvalTimeout = oldTimeout
-		stdinReader = oldReader
-	}()
-
-	out := captureStdout(t, func() {
-		if err := delegateCmd.RunE(delegateCmd, []string{"delete"}); err != nil {
-			t.Fatalf("delegate RunE returned error: %v", err)
-		}
-	})
-
-	var got DelegationResult
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
-		t.Fatalf("unmarshal json output: %v\noutput=%q", err, out)
-	}
-	if got.Status != "failed" {
-		t.Fatalf("expected failed status, got %q", got.Status)
-	}
-	if got.ExitCode != 7 {
-		t.Fatalf("expected delegated exit code 7 after timeout deny, got %d", got.ExitCode)
-	}
-	if len(got.ApprovalEvents) != 1 || got.ApprovalEvents[0].Decision != "denied" {
-		t.Fatalf("unexpected approval events: %#v", got.ApprovalEvents)
 	}
 }
 

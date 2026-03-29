@@ -47,8 +47,7 @@ quancode start --primary codex
 - 按关键词匹配和静态优先级做路由，不做基于 LLM 的自动路由
 - 超时或限速时自动降级到下一个可用 agent（`--no-fallback` 可禁用）
 - 支持原地执行、git worktree 隔离和 patch-only 三种委派模式
-- 交互式审批：当前终端提示 `[y/n]`，或 `--auto-approve` 自动批准
-- 以 JSONL 记录 delegation 调用，支持按 agent 多条配额规则
+- 以 JSONL 记录每次 delegation，用于统计和审计
 - 自动配置 Claude Code statusline，显示会话标识、配额和费用
 - 提供 `/quancode` skill，支持从 Claude Desktop 和手机 Dispatch 编排任务
 
@@ -110,7 +109,6 @@ agents:
 - 如果不使用隔离模式，被委派的 agent 会直接在你的工作目录里运行
 - `--isolation worktree` 和 `--isolation patch` 需要当前目录是一个 git 仓库
 - 基于文件的 prompt 注入由 QuanCode 托管，primary 退出后应恢复原始文件内容
-- `--auto-approve` 会自动批准所有审批请求，仅在受信任环境中使用
 - 提交前请检查 sub-agent 产生的修改
 
 ## 开发
@@ -134,7 +132,6 @@ Release 构建可以通过 Go ldflags 覆盖默认版本字符串。最终以 re
 - `agent/agent.go`: 通用 agent 适配器
 - `prompt/injection.go`: primary prompt 构造
 - `router/router.go`: agent 选择
-- `approval/`: 审批请求与响应
 - `runner/`: 执行与隔离辅助
 - `ledger/`: 日志与配额
 

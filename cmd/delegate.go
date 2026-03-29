@@ -1,16 +1,13 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/qq418716640/quancode/agent"
-	"github.com/qq418716640/quancode/approval"
 	"github.com/qq418716640/quancode/config"
 	qcontext "github.com/qq418716640/quancode/context"
 	"github.com/qq418716640/quancode/ledger"
@@ -24,7 +21,6 @@ var (
 	delegateWorkdir        string
 	delegateFormat         string
 	delegateIsolation      string
-	delegateAutoApprove    bool
 	delegateNoFallback     bool
 	delegateContextFiles   []string
 	delegateContextDiff    string
@@ -34,11 +30,6 @@ var (
 	delegateVerify         []string
 	delegateVerifyStrict   []string
 	delegateVerifyTimeout  int
-	approvalPollInterval   = time.Second
-	approvalTimeout        = 120 * time.Second
-	// stdinReader is the source for interactive approval prompts.
-	// Tests can replace this to avoid blocking on os.Stdin.
-	stdinReader *bufio.Reader
 )
 
 type dryRunResult struct {
@@ -50,29 +41,27 @@ type dryRunResult struct {
 }
 
 type DelegationResult struct {
-	Agent          string                 `json:"agent"`
-	Task           string                 `json:"task"`
-	DelegationID   string                 `json:"delegation_id,omitempty"`
-	Status         string                 `json:"status,omitempty"`
-	ExitCode       int                    `json:"exit_code"`
-	TimedOut       bool                   `json:"timed_out"`
-	DurationMs     int64                  `json:"duration_ms"`
-	Output         string                 `json:"output"`
-	ChangedFiles   []string               `json:"changed_files"`
-	ApprovalEvents []ledger.ApprovalEvent `json:"approval_events,omitempty"`
-	Isolation      string                 `json:"isolation,omitempty"`
-	Patch          string                 `json:"patch,omitempty"`
-	Verify         *VerifyResult          `json:"verify,omitempty"`
-	ConflictFiles  []string               `json:"conflict_files,omitempty"`
+	Agent         string        `json:"agent"`
+	Task          string        `json:"task"`
+	DelegationID  string        `json:"delegation_id,omitempty"`
+	Status        string        `json:"status,omitempty"`
+	ExitCode      int           `json:"exit_code"`
+	TimedOut      bool          `json:"timed_out"`
+	DurationMs    int64         `json:"duration_ms"`
+	Output        string        `json:"output"`
+	ChangedFiles  []string      `json:"changed_files"`
+	Isolation     string        `json:"isolation,omitempty"`
+	Patch         string        `json:"patch,omitempty"`
+	Verify        *VerifyResult `json:"verify,omitempty"`
+	ConflictFiles []string      `json:"conflict_files,omitempty"`
 }
 
 func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) DelegationResult {
 	dr := DelegationResult{
-		Agent:          agentKey,
-		Task:           task,
-		Isolation:      isolation,
-		ApprovalEvents: ar.approvalEvents,
-		Verify:         ar.verify,
+		Agent:     agentKey,
+		Task:      task,
+		Isolation: isolation,
+		Verify:    ar.verify,
 	}
 	if ar.result != nil {
 		dr.DelegationID = ar.result.DelegationID
@@ -224,7 +213,7 @@ var delegateCmd = &cobra.Command{
 
 		// Run attempt with fallback loop
 		tried := map[string]bool{agentKey: true}
-		runID, err := approval.NewRunID()
+		runID, err := ledger.NewRunID()
 		if err != nil {
 			return fmt.Errorf("generate run id: %w", err)
 		}
@@ -373,7 +362,6 @@ func init() {
 	_ = delegateCmd.RegisterFlagCompletionFunc("isolation", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"inplace", "worktree", "patch"}, cobra.ShellCompDirectiveNoFileComp
 	})
-	delegateCmd.Flags().BoolVar(&delegateAutoApprove, "auto-approve", false, "automatically approve all approval requests")
 	delegateCmd.Flags().BoolVar(&delegateNoFallback, "no-fallback", false, "disable automatic fallback to other agents on failure")
 	delegateCmd.Flags().StringArrayVar(&delegateContextFiles, "context-files", nil, "additional context files to include (can be specified multiple times)")
 	delegateCmd.Flags().StringVar(&delegateContextDiff, "context-diff", "", "include git diff: staged, working, or empty for off")

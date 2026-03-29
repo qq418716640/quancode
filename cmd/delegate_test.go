@@ -8,7 +8,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/runner"
 )
 
@@ -98,7 +97,6 @@ func TestBuildDelegationResultJSONFields(t *testing.T) {
 		output:         "done",
 		patch:          "diff --git a/file b/file",
 		changedFiles:   []string{"file.go"},
-		approvalEvents: []ledger.ApprovalEvent{{RequestID: "req_1", Action: "git_push_force", Description: "Force-push branch"}},
 	}
 
 	got := buildDelegationResult("codex", "write tests", "patch", ar)
@@ -111,9 +109,6 @@ func TestBuildDelegationResultJSONFields(t *testing.T) {
 	}
 	if len(got.ChangedFiles) != 1 || got.ChangedFiles[0] != "file.go" {
 		t.Fatalf("unexpected changed files: %#v", got.ChangedFiles)
-	}
-	if len(got.ApprovalEvents) != 1 || got.ApprovalEvents[0].RequestID != "req_1" {
-		t.Fatalf("unexpected approval events: %#v", got.ApprovalEvents)
 	}
 	if got.Status != "completed" {
 		t.Fatalf("expected completed status, got %q", got.Status)

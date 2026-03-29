@@ -33,7 +33,6 @@ cmd/delegate.go → cmd/delegate_attempt.go → router/router.go → agent/agent
 - **prompt/** — Builds the system prompt injected into the primary CLI. Uses `text/template`. Excludes the actual primary from the listed agents.
 - **router/** — `SelectAgent()` picks the best sub-agent: preferred_for keyword match > priority number > alphabetical.
 - **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection.
-- **approval/** — Handles `--auto-approve` and interactive confirmation for delegation commands.
 - **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Records each delegation with agent, task, duration, exit code, changed files, and fallback chain.
 
 ### Prompt injection modes

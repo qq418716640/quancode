@@ -10,8 +10,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/qq418716640/quancode/approval"
 	"github.com/qq418716640/quancode/config"
+	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/runner"
 )
 
@@ -29,7 +29,6 @@ type Agent interface {
 
 type DelegateOptions struct {
 	DelegationID string
-	ApprovalDir  string
 }
 
 type ExitStatusError struct {
@@ -128,27 +127,13 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*ru
 	delegationID := opts.DelegationID
 	if delegationID == "" {
 		var err error
-		delegationID, err = approval.NewDelegationID()
+		delegationID, err = ledger.NewDelegationID()
 		if err != nil {
 			return nil, fmt.Errorf("generate delegation id: %w", err)
 		}
 	}
-	approvalDir := opts.ApprovalDir
-	if approvalDir == "" {
-		var err error
-		approvalDir, err = approval.CreateApprovalDir(delegationID)
-		if err != nil {
-			return nil, fmt.Errorf("create approval dir: %w", err)
-		}
-		defer func() {
-			if cleanupErr := approval.CleanupApprovalDir(approvalDir); cleanupErr != nil {
-				fmt.Fprintf(os.Stderr, "[quancode] warning: failed to clean approval dir: %v\n", cleanupErr)
-			}
-		}()
-	}
 	env = runner.MergeEnv(env, map[string]string{
 		"QUANCODE_DELEGATION_ID": delegationID,
-		"QUANCODE_APPROVAL_DIR":  approvalDir,
 	})
 
 	taskMode := a.cfg.TaskMode

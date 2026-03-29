@@ -306,8 +306,7 @@ quancode stats --days 7
 The stats view includes:
 
 - total calls in the selected window
-- per-agent success rate, failures, timeouts, average time, total time, changed file counts, and approval counts
-- an approval summary when approval requests occurred during that period
+- per-agent success rate, failures, timeouts, average time, total time, and changed file counts
 
 If no ledger data exists yet, `stats` tells you to run `quancode delegate` first.
 
@@ -330,52 +329,7 @@ Print the currently installed version:
 quancode version
 ```
 
-## 6. Approval Flow
-
-Some delegated tasks may request approval before continuing.
-
-### Interactive Approval (default)
-
-When an approval request arrives, QuanCode prompts you directly in the current terminal:
-
-```
-[quancode] approval requested: req_123456
-  action:      git_push_force
-  description: Force-push branch
-  approve? [y/n]: y
-```
-
-Type `y` to approve or `n` to deny. No need to open another terminal.
-
-If multiple requests arrive, they are prompted one at a time in order.
-
-### Auto-approve Mode
-
-For scripting or trusted environments, skip interactive prompts entirely:
-
-```bash
-quancode delegate --auto-approve "push to main"
-```
-
-All approval requests will be approved automatically. The ledger records `decided_by: auto` for audit purposes.
-
-### Manual Approval via CLI
-
-You can also approve from a separate terminal or script using the `approve` command:
-
-```bash
-quancode approve req_123456 --allow --approval-dir /path/to/approval-dir
-quancode approve req_123456 --deny --approval-dir /path/to/approval-dir --reason "do not push from this machine"
-```
-
-If `--approval-dir` is omitted, `approve` falls back to the `QUANCODE_APPROVAL_DIR` environment variable.
-
-### Timeout
-
-- Approval requests time out after 120 seconds
-- When that timeout is reached without a response, QuanCode records an automatic deny decision
-
-## 7. Auto-Fallback
+## 6. Auto-Fallback
 
 When a delegated task fails due to a **timeout** or **rate-limit** error, QuanCode automatically retries the task with the next available agent according to router priority. This is called auto-fallback.
 
@@ -394,7 +348,7 @@ To disable fallback entirely for a delegation:
 quancode delegate --no-fallback "migrate the database schema"
 ```
 
-## 8. Configuration Recipes
+## 7. Configuration Recipes
 
 For the full field reference, see [`agent-config-schema.md`](agent-config-schema.md).
 
@@ -448,7 +402,7 @@ agents:
     timeout_secs: 600
 ```
 
-## 9. Troubleshooting
+## 8. Troubleshooting
 
 ### `doctor` fails on config or missing commands
 
@@ -467,7 +421,6 @@ Check:
 - whether the target CLI is installed and logged in
 - whether the task is too broad for a one-shot delegate call
 - whether the agent timeout is too low
-- whether the delegate command is waiting for approval
 
 ### File-based prompt injection did not restore cleanly
 
@@ -493,7 +446,7 @@ This is a platform limitation, not a QuanCode issue. Workarounds:
 
 If you recently cleared that directory, the stats view starts from a fresh baseline.
 
-## 10. The `/quancode` Skill
+## 9. The `/quancode` Skill
 
 QuanCode ships a Claude Code skill that lets Claude Desktop (Code mode) and Dispatch orchestrate sub-agent delegation without leaving the conversation.
 

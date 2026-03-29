@@ -17,8 +17,7 @@ type Entry struct {
 	TimedOut       bool            `json:"timed_out"`
 	DurationMs     int64           `json:"duration_ms"`
 	ChangedFiles   []string        `json:"changed_files,omitempty"`
-	ApprovalEvents []ApprovalEvent `json:"approval_events,omitempty"`
-	Isolation      string          `json:"isolation,omitempty"`
+	Isolation string `json:"isolation,omitempty"`
 	WorkDir        string          `json:"work_dir"`
 	FinalStatus    string          `json:"final_status,omitempty"`
 
@@ -35,13 +34,6 @@ type Entry struct {
 	// VerifyRaw stores the verification result as raw JSON to avoid
 	// a circular dependency between ledger and cmd packages.
 	VerifyRaw json.RawMessage `json:"verify,omitempty"`
-}
-
-type ApprovalEvent struct {
-	RequestID   string `json:"request_id"`
-	Action      string `json:"action"`
-	Description string `json:"description"`
-	Decision    string `json:"decision,omitempty"`
 }
 
 // LogDir returns the path to the ledger log directory.
