@@ -13,6 +13,7 @@ import (
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/router"
 	"github.com/qq418716640/quancode/runner"
+	"github.com/qq418716640/quancode/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -213,6 +214,7 @@ var delegateCmd = &cobra.Command{
 
 		// Run attempt with fallback loop
 		tried := map[string]bool{agentKey: true}
+		var chain []ui.ChainLink
 		runID, err := ledger.NewRunID()
 		if err != nil {
 			return fmt.Errorf("generate run id: %w", err)
@@ -251,9 +253,16 @@ var delegateCmd = &cobra.Command{
 			}
 
 			if !shouldFallback {
-				return finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
+				err := finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
+				if len(chain) > 0 {
+					chain = append(chain, ui.ChainLink{Agent: agentKey, FailureClass: ar.failureClass})
+					ui.FallbackChain(chain)
+				}
+				return err
 			}
 
+			// Record this failed attempt in the chain
+			chain = append(chain, ui.ChainLink{Agent: agentKey, FailureClass: ar.failureClass})
 			fmt.Fprintf(os.Stderr, "[quancode] %s %s, looking for fallback...\n", agentKey, ar.failureClass)
 			// FallbackFrom/FallbackReason in meta describe where *this* attempt came from,
 			// so the failing attempt's entry has empty values; the next attempt records the link.
@@ -286,7 +295,10 @@ var delegateCmd = &cobra.Command{
 
 			if !found {
 				fmt.Fprintf(os.Stderr, "[quancode] no fallback agents available\n")
-				return finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
+				err := finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
+				chain = append(chain, ui.ChainLink{Agent: agentKey, FailureClass: ar.failureClass})
+				ui.FallbackChain(chain)
+				return err
 			}
 			meta.Attempt++
 			meta.FallbackFrom = previousAgent

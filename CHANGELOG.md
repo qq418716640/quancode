@@ -6,6 +6,19 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.17] - 2026-03-29
+
+### Added
+
+- Delegation ceremony: rich stderr output with start/success/failure messages, elapsed time, and changed file count
+- Spinner animation during delegation (TTY-aware, degrades to static line in non-TTY)
+- Fallback chain visualization: `Chain: claude (timed_out) → codex ✓`
+- New `ui/` package for terminal output utilities
+
+### Changed
+
+- Extracted `FormatDuration` to `ui` package, shared by `cmd/stats` and ceremony output
+
 ## [v0.4.16] - 2026-03-29
 
 ### Fixed

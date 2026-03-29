@@ -8,6 +8,7 @@ import (
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/runner"
+	"github.com/qq418716640/quancode/ui"
 )
 
 // verifySpec holds the parsed verification configuration for a delegation.
@@ -75,7 +76,7 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isola
 
 	ar.preSnapshot = gitStatusSnapshot(execDir)
 
-	fmt.Fprintf(os.Stderr, "[quancode] delegating to %s: %s\n", agentKey, task)
+	ui.DelegationStart(agentKey, task, isolation)
 	delegationID, err := ledger.NewDelegationID()
 	if err != nil {
 		ar.err = fmt.Errorf("generate delegation id: %w", err)
@@ -88,9 +89,12 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isola
 		fullTask = ctxPrefix + "\n\n=== TASK ===\n\n" + task
 	}
 
+	spinner := ui.NewSpinner(fmt.Sprintf("%s working...", agentKey))
+	defer spinner.Stop() // safety net for panic
 	result, delegateErr := a.Delegate(execDir, fullTask, agent.DelegateOptions{
 		DelegationID: delegationID,
 	})
+	spinner.Stop()
 	ar.result = result
 	ar.err = delegateErr
 
@@ -206,6 +210,17 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 func finalizeDelegation(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult) error {
 	// Record to ledger
 	logAttempt(agentKey, task, workDir, isolation, meta, ar)
+
+	// Ceremony: show completion/failure summary
+	if ar.failureClass == "" && ar.err == nil && ar.patchApplyErr == nil {
+		var durationMs int64
+		if ar.result != nil {
+			durationMs = ar.result.DurationMs
+		}
+		ui.DelegationSuccess(agentKey, durationMs, len(ar.changedFiles))
+	} else if ar.result != nil {
+		ui.DelegationFailure(agentKey, ar.result.DurationMs, ar.failureClass)
+	}
 
 	verifyStrictFailed := ar.verify.IsStrictFailure()
 

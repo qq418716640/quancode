@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/qq418716640/quancode/ledger"
+	"github.com/qq418716640/quancode/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -87,8 +88,8 @@ var statsCmd = &cobra.Command{
 				successRate,
 				s.failures,
 				s.timeouts,
-				formatDuration(avgMs),
-				formatDuration(s.totalMs),
+				ui.FormatDuration(avgMs),
+				ui.FormatDuration(s.totalMs),
 				s.files,
 			)
 		}
@@ -241,19 +242,6 @@ func printFallbackStats(entries []ledger.Entry) {
 		}
 		fmt.Println()
 	}
-}
-
-func formatDuration(ms int64) string {
-	if ms < 1000 {
-		return fmt.Sprintf("%dms", ms)
-	}
-	secs := float64(ms) / 1000
-	if secs < 60 {
-		return fmt.Sprintf("%.1fs", secs)
-	}
-	mins := int(secs) / 60
-	remainSecs := int(secs) % 60
-	return fmt.Sprintf("%dm%ds", mins, remainSecs)
 }
 
 func init() {
