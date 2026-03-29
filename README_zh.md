@@ -10,20 +10,14 @@ QuanCode 是一个面向终端编程智能体的 CLI 编排层。它负责启动
 
 ## 安装
 
-通过 Homebrew 安装（推荐）：
+前置条件：至少安装并完成登录一个受支持的 coding CLI。
 
 ```bash
 brew tap qq418716640/tap
 brew install quancode
 ```
 
-或通过源码安装：
-
-```bash
-go install github.com/qq418716640/quancode@latest
-```
-
-前置条件：至少安装并完成登录一个受支持的 coding CLI。
+Linux 用户如果没有 Homebrew，可以从 [GitHub Releases](https://github.com/qq418716640/quancode/releases) 下载二进制。
 
 ## 快速开始
 

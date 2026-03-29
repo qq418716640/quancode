@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/qq418716640/quancode/agent"
+	"github.com/qq418716640/quancode/version"
 	"github.com/spf13/cobra"
 )
 
@@ -16,10 +17,20 @@ var rootCmd = &cobra.Command{
 	Short:         "Unified CLI orchestrator for AI coding agents",
 	Long:          "QuanCode launches a primary AI coding CLI and enables it to delegate tasks to other CLIs as sub-agents.",
 	SilenceErrors: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		go version.BackgroundUpdate()
+	},
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	err := rootCmd.Execute()
+
+	// Show update notice after command completes
+	if notice := version.UpdateNotice(); notice != "" {
+		fmt.Fprintln(os.Stderr, notice)
+	}
+
+	if err != nil {
 		var exitErr *agent.ExitStatusError
 		if errors.As(err, &exitErr) {
 			os.Exit(exitErr.Code)

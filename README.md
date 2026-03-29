@@ -15,18 +15,12 @@ Use it when you want one terminal workflow that can hand off bounded tasks to th
 
 Prerequisites: at least one supported coding CLI installed and authenticated.
 
-Via Homebrew (recommended):
-
 ```bash
 brew tap qq418716640/tap
 brew install quancode
 ```
 
-Or install from source (requires Go 1.25+):
-
-```bash
-go install github.com/qq418716640/quancode@latest
-```
+For Linux users without Homebrew, download the binary from [GitHub Releases](https://github.com/qq418716640/quancode/releases).
 
 Check the installed version:
 
