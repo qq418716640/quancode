@@ -58,4 +58,4 @@ The skill infers the right agent and isolation mode from context.
 4. QuanCode routes to the best agent, handles approval, fallback, and isolation
 5. Claude summarizes the result back to you
 
-All sub-agent execution goes through `quancode delegate` — never directly calling CLI tools. This ensures proper auth, proxy, logging, quota tracking, and fallback.
+All sub-agent execution goes through `quancode delegate` — never directly calling CLI tools. This ensures proper auth, proxy, logging, and fallback.

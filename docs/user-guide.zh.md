@@ -239,51 +239,13 @@ quancode stats --days 7
 
 如果还没有 ledger 数据，`stats` 会提示你先运行 `quancode delegate`。
 
-### `quancode quota`
-
-查看当前 quota：
-
-```bash
-quancode quota
-```
-
-给某个 agent 设置 quota：
-
-```bash
-quancode quota --set-agent claude --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5 --notes "Claude Max"
-quancode quota --set-agent codex --unit calls --limit 200 --reset-mode weekly --reset-day 1 --notes "Codex Pro"
-```
-
-同一个 agent 可以设置 **多条 quota 规则**。使用 `--rule` 标志为每条规则命名，避免互相覆盖：
-
-```bash
-quancode quota --set-agent claude --rule 5h-window --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5
-quancode quota --set-agent claude --rule weekly-cap --unit calls --limit 200 --reset-mode weekly --reset-day 1
-```
-
-每条规则独立计算。任何一条规则达到上限，该 agent 就会被阻止。
-
-支持的 unit：
-
-- `calls`
-- `minutes`
-- `hours`
-
-支持的 reset mode：
-
-- `monthly`
-- `weekly`
-- `rolling_hours`
-
-quota 视图会展示当前周期内的使用量和剩余额度。
-
 ### Statusline
 
 `quancode init` 会自动配置 Claude Code 的 statusline。配置完成后，statusline 会显示：
 
 - QuanCode 会话标识和当前模型
 - 上下文窗口使用百分比
-- 5 小时和 7 天的 quota 消耗
+- 5 小时和 7 天的 rate limit 消耗
 - 当前会话的累计费用
 
 除了运行 `quancode init` 之外不需要额外配置。

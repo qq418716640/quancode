@@ -34,7 +34,7 @@ cmd/delegate.go → cmd/delegate_attempt.go → router/router.go → agent/agent
 - **router/** — `SelectAgent()` picks the best sub-agent: preferred_for keyword match > priority number > alphabetical.
 - **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection.
 - **approval/** — Handles `--auto-approve` and interactive confirmation for delegation commands.
-- **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Quota system supports calls/minutes/hours units with monthly/weekly/rolling_hours reset modes. Multiple quota rules can be defined per agent.
+- **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Records each delegation with agent, task, duration, exit code, changed files, and fallback chain.
 
 ### Prompt injection modes
 
@@ -59,7 +59,7 @@ Verification failure does not trigger fallback.
 
 ### Statusline
 
-`quancode init` configures the Claude Code statusline to show delegation cost and quota usage in the terminal status bar.
+`quancode init` configures the Claude Code statusline to show delegation cost and rate limit usage in the terminal status bar.
 
 ## Design principles
 

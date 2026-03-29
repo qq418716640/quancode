@@ -57,7 +57,7 @@ The `--primary` and `--agent` flags support tab-completion for agent names.
 - Delegates one-shot tasks to other coding CLIs and returns text or JSON output.
 - Routes tasks by keyword match and static priority. It does not do LLM-based routing.
 - Supports in-place execution, isolated git worktrees, or patch-only delegation.
-- Logs delegation calls to JSONL and supports optional per-agent quota limits.
+- Logs every delegation to JSONL for stats and auditing.
 - Auto-fallback: if an agent times out or hits a rate limit, QuanCode automatically retries with the next available agent. Disable with `--no-fallback`.
 
 ## Configuration
@@ -145,7 +145,7 @@ Project entry points:
 - `prompt/injection.go`: primary prompt construction
 - `router/router.go`: agent selection
 - `runner/`: execution and isolation helpers
-- `ledger/`: logs and quotas
+- `ledger/`: delegation logs and stats
 
 ## Documentation
 

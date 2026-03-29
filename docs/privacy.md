@@ -20,7 +20,7 @@ Depending on the command you run, QuanCode may locally process:
 - command output from third-party CLIs
 - local config files
 - git status and patch information
-- local ledger or quota files written under the user's config directory
+- local ledger files written under the user's config directory
 
 ## Third-Party CLI Behavior
 
@@ -39,7 +39,7 @@ QuanCode does not control or override the privacy policies of those tools or the
 
 - delegated tasks may cause upstream CLIs to read or modify files in the working directory
 - file-based prompt injection may temporarily write managed prompt content to a workspace file such as `AGENTS.md`
-- logs and quota data may be written locally for operational purposes
+- logs may be written locally for operational purposes
 
 ## Practical Guidance
 

@@ -261,7 +261,7 @@ Typical flow:
 - QuanCode starts the selected sub-agent in the chosen execution mode
 - the sub-agent performs the one-shot task
 - QuanCode returns the result and records it in the local ledger
-- `changed_files` and timing data are available for later stats and quota tracking
+- `changed_files` and timing data are available for later stats tracking
 
 ## 4. Routing
 
@@ -311,51 +311,13 @@ The stats view includes:
 
 If no ledger data exists yet, `stats` tells you to run `quancode delegate` first.
 
-### `quancode quota`
-
-View configured quota limits:
-
-```bash
-quancode quota
-```
-
-Set a quota for a specific agent:
-
-```bash
-quancode quota --set-agent claude --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5 --notes "Claude Max"
-quancode quota --set-agent codex --unit calls --limit 200 --reset-mode weekly --reset-day 1 --notes "Codex Pro"
-```
-
-A single agent can have **multiple quota rules**. Use the `--rule` flag to name each rule so they don't overwrite each other:
-
-```bash
-quancode quota --set-agent claude --rule 5h-window --unit hours --limit 5 --reset-mode rolling_hours --rolling-hours 5
-quancode quota --set-agent claude --rule weekly-cap --unit calls --limit 200 --reset-mode weekly --reset-day 1
-```
-
-Each rule is evaluated independently. The agent is blocked when any rule's limit is reached.
-
-Supported units:
-
-- `calls`
-- `minutes`
-- `hours`
-
-Supported reset modes:
-
-- `monthly`
-- `weekly`
-- `rolling_hours`
-
-The quota view shows current usage and remaining budget in the active period.
-
 ### Statusline
 
 `quancode init` auto-configures the Claude Code statusline. Once configured, the statusline shows:
 
 - QuanCode session indicator and current model
 - Context window usage percentage
-- 5-hour and 7-day quota consumption
+- 5-hour and 7-day rate limit consumption
 - Accumulated cost for the current session
 
 No extra setup is needed beyond running `quancode init`.
