@@ -115,6 +115,28 @@ func TestBackgroundUpdateSkipsWithEnvVar(t *testing.T) {
 	}
 }
 
+func TestIsNewer(t *testing.T) {
+	tests := []struct {
+		remote, local string
+		want          bool
+	}{
+		{"v0.5.0", "v0.4.17", true},
+		{"v0.4.18", "v0.4.17", true},
+		{"v1.0.0", "v0.9.9", true},
+		{"v0.4.17", "v0.4.17", false},
+		{"v0.4.14", "v0.4.17", false},
+		{"v0.3.0", "v0.4.0", false},
+		{"dev", "v0.4.17", false},
+		{"v0.4.17", "dev", false},
+	}
+	for _, tt := range tests {
+		got := isNewer(tt.remote, tt.local)
+		if got != tt.want {
+			t.Errorf("isNewer(%q, %q) = %v, want %v", tt.remote, tt.local, got, tt.want)
+		}
+	}
+}
+
 func TestSetNotice(t *testing.T) {
 	orig := Version
 	Version = "v0.4.12"

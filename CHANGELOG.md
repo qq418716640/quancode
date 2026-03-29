@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.18] - 2026-03-29
+
+### Fixed
+
+- Auto-update no longer downgrades when local version is newer than latest release — added semver comparison (`isNewer`) to replace naive string inequality check
+
 ## [v0.4.17] - 2026-03-29
 
 ### Added

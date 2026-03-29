@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -56,7 +57,7 @@ func BackgroundUpdate() {
 
 	// Check if we recently checked
 	if time.Since(cache.LastCheck) < checkInterval {
-		if cache.LatestVersion != "" && cache.LatestVersion != Version {
+		if cache.LatestVersion != "" && isNewer(cache.LatestVersion, Version) {
 			setNotice(cache.LatestVersion)
 		}
 		return
@@ -72,7 +73,7 @@ func BackgroundUpdate() {
 	cache.LatestVersion = latest
 	saveCache(cpath, cache)
 
-	if latest == Version {
+	if !isNewer(latest, Version) {
 		return
 	}
 
@@ -224,6 +225,37 @@ func downloadAndReplace(tag, exePath string) error {
 		return err
 	}
 	return nil
+}
+
+// isNewer reports whether remote is a strictly higher semver than local.
+// Both are expected in "vMAJOR.MINOR.PATCH" format. Returns false on parse errors.
+func isNewer(remote, local string) bool {
+	parse := func(v string) (int, int, int, bool) {
+		v = strings.TrimPrefix(v, "v")
+		parts := strings.SplitN(v, ".", 3)
+		if len(parts) != 3 {
+			return 0, 0, 0, false
+		}
+		maj, e1 := strconv.Atoi(parts[0])
+		min, e2 := strconv.Atoi(parts[1])
+		pat, e3 := strconv.Atoi(parts[2])
+		if e1 != nil || e2 != nil || e3 != nil {
+			return 0, 0, 0, false
+		}
+		return maj, min, pat, true
+	}
+	rMaj, rMin, rPat, ok1 := parse(remote)
+	lMaj, lMin, lPat, ok2 := parse(local)
+	if !ok1 || !ok2 {
+		return false
+	}
+	if rMaj != lMaj {
+		return rMaj > lMaj
+	}
+	if rMin != lMin {
+		return rMin > lMin
+	}
+	return rPat > lPat
 }
 
 func debugf(format string, args ...any) {
