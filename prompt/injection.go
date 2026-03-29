@@ -47,6 +47,11 @@ DELEGATION GUIDELINES:
 - Do NOT delegate if you can do the task yourself just as efficiently
 - You are the primary agent. You own the overall plan and final quality.
 
+TASK TYPES — match your task description to the type:
+- Code modification: specify files, functions, constraints, acceptance criteria. Add --verify for automated checks.
+- Research/analysis (e.g., "review this code", "evaluate this design"): clearly state WHAT to analyze, WHAT output format you expect (e.g., "list of issues", "comparison table"), and explicitly say "DO NOT write code" if the task is analysis-only. Keep the scope narrow — broad questions like "research everything about X" will time out or produce unfocused results.
+- Code review: provide the diff or changed files via --context-diff, state what aspects to review (correctness, security, performance, style).
+
 ISOLATION MODES:
 - Single task: use --isolation worktree for safe isolated execution with automatic patch application.
 - Multiple parallel tasks: use --isolation patch --format json to collect patches without auto-applying.
@@ -58,15 +63,11 @@ VERIFICATION:
 - The verify command runs in the worktree before applying changes. If it fails, you'll see the failure in the result but changes are still applied (use --verify-strict to block application on failure).
 
 PARALLEL DELEGATION:
-You can run multiple delegate calls concurrently for independent tasks. Rules:
+You can run multiple delegate calls concurrently for independent tasks.
 - MUST use --isolation patch --format json for each parallel delegate to avoid conflicts.
-- The JSON result includes a "patch" field with the unified diff. Patches are NOT auto-applied.
-- To apply a patch, save it to a temp file and run:
-    {{.Binary}} apply-patch --workdir "$(pwd)" --file /tmp/patch-taskname.diff
+- To apply a patch: {{.Binary}} apply-patch --workdir "$(pwd)" --file /tmp/patch-taskname.diff
 - Split tasks by file boundaries — avoid two delegates modifying the same file.
-- Apply patches one at a time. Review and verify after each one before applying the next.
-- If one delegate fails, you can still apply the successful patches — evaluate independently.
-- If a patch conflicts, resolve before applying the next one.`
+- Apply patches one at a time. If a patch conflicts, resolve before applying the next one.`
 
 type agentInfo struct {
 	Key         string
