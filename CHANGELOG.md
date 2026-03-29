@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.12] - 2026-03-29
+
+### Fixed
+
+- Delegate 前自动清理孤儿 worktree，防止 SIGKILL 后磁盘泄漏
+
 ## [v0.4.11] - 2026-03-29
 
 ### Added
