@@ -44,9 +44,11 @@ func UpdateNotice() string {
 // Safe to call from a goroutine. Never blocks the caller.
 func BackgroundUpdate() {
 	if Version == "dev" {
+		debugf("skipping update check: dev version")
 		return
 	}
 	if os.Getenv("QUANCODE_SKIP_UPDATE_CHECK") != "" {
+		debugf("skipping update check: QUANCODE_SKIP_UPDATE_CHECK set")
 		return
 	}
 
@@ -76,6 +78,7 @@ func BackgroundUpdate() {
 
 	// Perform update
 	if err := performUpdate(latest); err != nil {
+		debugf("update failed: %v", err)
 		return
 	}
 	setNotice(latest)
@@ -84,7 +87,7 @@ func BackgroundUpdate() {
 func setNotice(latest string) {
 	noticeMu.Lock()
 	defer noticeMu.Unlock()
-	updateNotice = fmt.Sprintf("[quancode] 已更新到 %s (当前进程仍为 %s，下次启动生效)", latest, Version)
+	updateNotice = fmt.Sprintf("[quancode] updated to %s (current process is still %s, takes effect on next launch)", latest, Version)
 }
 
 func updateCachePath() string {
@@ -127,11 +130,13 @@ func fetchLatestVersion() string {
 	}
 	resp, err := client.Get(releasesURL)
 	if err != nil {
+		debugf("update check failed: %v", err)
 		return ""
 	}
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusFound && resp.StatusCode != http.StatusMovedPermanently {
+		debugf("update check: unexpected status %d", resp.StatusCode)
 		return ""
 	}
 
@@ -219,6 +224,12 @@ func downloadAndReplace(tag, exePath string) error {
 		return err
 	}
 	return nil
+}
+
+func debugf(format string, args ...any) {
+	if os.Getenv("QUANCODE_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[quancode:debug] "+format+"\n", args...)
+	}
 }
 
 func extractBinaryFromTarGz(r io.Reader) ([]byte, error) {
