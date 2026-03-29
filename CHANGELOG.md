@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.15] - 2026-03-29
+
+### Removed
+
+- Removed quota system — limits were arbitrary and unenforceable; ledger and stats remain for auditing
+- Removed approval system — no sub-agent implements the file-based approval protocol; sub-agents use their own permission systems or run in full-auto mode
+- Moved ID generation helpers (NewDelegationID, NewRunID) from approval package to ledger/ids.go
+
 ## [v0.4.14] - 2026-03-29
 
 ### Added
