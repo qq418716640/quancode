@@ -48,6 +48,11 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isola
 		ar.failureClass = classifyFailure(ar)
 	}()
 
+	// Clean up orphan worktrees from previous crashed runs
+	if pruned := runner.PruneOrphanWorktrees(workDir); pruned > 0 {
+		fmt.Fprintf(os.Stderr, "[quancode] cleaned %d orphan worktree(s)\n", pruned)
+	}
+
 	execDir := workDir
 	var cleanupWorktree func()
 

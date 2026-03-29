@@ -339,6 +339,71 @@ func TestPatchSummaryValidPatch(t *testing.T) {
 	}
 }
 
+func TestPruneOrphanWorktreesNoOrphans(t *testing.T) {
+	repo := t.TempDir()
+	testGitRun(t, repo, "init")
+	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x"), 0644)
+	testGitRun(t, repo, "add", "-A")
+	testGitRun(t, repo, "commit", "-m", "init")
+
+	// No .quancode dir at all — should return 0
+	if pruned := PruneOrphanWorktrees(repo); pruned != 0 {
+		t.Fatalf("expected 0 pruned, got %d", pruned)
+	}
+}
+
+func TestPruneOrphanWorktreesRemovesOrphans(t *testing.T) {
+	repo := t.TempDir()
+	testGitRun(t, repo, "init")
+	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x"), 0644)
+	testGitRun(t, repo, "add", "-A")
+	testGitRun(t, repo, "commit", "-m", "init")
+
+	// Create a fake orphan directory (not a real git worktree)
+	base := filepath.Join(repo, ".quancode", "worktrees")
+	orphan := filepath.Join(base, "wt-orphan123")
+	if err := os.MkdirAll(orphan, 0755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(orphan, "junk.txt"), []byte("leftover"), 0644)
+
+	pruned := PruneOrphanWorktrees(repo)
+	if pruned != 1 {
+		t.Fatalf("expected 1 pruned, got %d", pruned)
+	}
+
+	// Verify orphan directory is gone
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Fatal("expected orphan directory to be removed")
+	}
+}
+
+func TestPruneOrphanWorktreesKeepsActive(t *testing.T) {
+	repo := t.TempDir()
+	testGitRun(t, repo, "init")
+	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x"), 0644)
+	testGitRun(t, repo, "add", "-A")
+	testGitRun(t, repo, "commit", "-m", "init")
+
+	// Create a real worktree via CreateWorktree
+	wtDir, cleanup, err := CreateWorktree(repo)
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	defer cleanup()
+
+	// Prune should not remove the active worktree
+	pruned := PruneOrphanWorktrees(repo)
+	if pruned != 0 {
+		t.Fatalf("expected 0 pruned (active worktree), got %d", pruned)
+	}
+
+	// Active worktree should still exist
+	if _, err := os.Stat(wtDir); err != nil {
+		t.Fatalf("expected active worktree to still exist: %v", err)
+	}
+}
+
 func TestParseConflictFiles(t *testing.T) {
 	tests := []struct {
 		name   string

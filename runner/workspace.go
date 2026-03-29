@@ -60,6 +60,57 @@ func IsGitRepo(dir string) bool {
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
+// PruneOrphanWorktrees removes leftover worktree directories from previous
+// runs that were not cleaned up (e.g. due to SIGKILL). It compares entries
+// in .quancode/worktrees/ against `git worktree list` to identify orphans.
+func PruneOrphanWorktrees(repoDir string) int {
+	base := filepath.Join(repoDir, ".quancode", "worktrees")
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return 0
+	}
+	if len(entries) == 0 {
+		return 0
+	}
+
+	// Get active worktree directory names from git.
+	// We compare by basename to avoid symlink resolution issues
+	// (e.g. macOS /tmp → /private/tmp).
+	activeNames := make(map[string]bool)
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, "worktree ") {
+				wtPath := strings.TrimPrefix(line, "worktree ")
+				activeNames[filepath.Base(wtPath)] = true
+			}
+		}
+	}
+
+	pruned := 0
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "wt-") {
+			continue
+		}
+		if activeNames[e.Name()] {
+			continue
+		}
+		wtPath := filepath.Join(base, e.Name())
+		// Orphan: not in git worktree list, safe to remove
+		exec.Command("git", "worktree", "remove", "--force", wtPath).Run()
+		os.RemoveAll(wtPath)
+		pruned++
+	}
+
+	// Also let git clean up its own stale metadata
+	if pruned > 0 {
+		exec.Command("git", "worktree", "prune").Run()
+	}
+	return pruned
+}
+
 // CreateWorktree creates a temporary git worktree for isolated execution.
 // Returns the worktree path and a cleanup function.
 func CreateWorktree(repoDir string) (string, func(), error) {
