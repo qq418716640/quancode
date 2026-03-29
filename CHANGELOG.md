@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.11] - 2026-03-29
+
+### Added
+
+- User preferences block in config: `default_isolation` and `fallback_mode`
+- Enum validation for `prompt_mode`, `task_mode`, `output_mode` in config
+
 ## [v0.4.0] - 2026-03-29
 
 ### Theme: Delegation Observability & Resilience
