@@ -6,6 +6,25 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.4.14] - 2026-03-29
+
+### Added
+
+- Prompt 新增 TASK TYPES 指引，区分代码修改/研究分析/代码审查任务
+- KnownAgents 新增 Gemini CLI、Copilot CLI、Amp、Goose、Cline CLI、Kiro CLI、aichat 自动检测
+- 并行委派简化：patch 自动缓存 + `apply-patch --id` 按 delegation_id 直接应用
+- `QUANCODE_DEBUG=1` 调试模式，输出自动更新等后台操作的诊断信息
+
+### Fixed
+
+- stderr 消息统一英文
+- OpenCode 的 DelegateArgs 修正为 `["-p"]`
+- `init` 支持列表改为从 KnownAgents 动态生成
+
+### Removed
+
+- 文档中移除未经验证的 Aider 和 OpenCode 引用（代码层保留自动检测）
+
 ## [v0.4.13] - 2026-03-29
 
 ### Added
