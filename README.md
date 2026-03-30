@@ -6,7 +6,7 @@ QuanCode is a lightweight CLI orchestrator for terminal coding agents. It starts
 
 It is an orchestration layer, not an agent itself.
 
-- **Lightweight** — a single ~4k-line Go binary with zero runtime dependencies. No daemon, no server, no framework.
+- **Lightweight** — a single Go binary with zero runtime dependencies. No daemon, no server, no framework.
 - **Universal** — works with any coding CLI that accepts a prompt and returns text. Adding a new agent is a YAML config change, not code.
 - **Self-controlled** — everything runs locally under your shell. You own the config, the logs, the prompts, and the process lifecycle. No hosted service, no vendor lock-in.
 
