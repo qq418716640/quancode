@@ -37,46 +37,66 @@ type attemptResult struct {
 
 
 
+// DelegateAttemptOptions controls the behavior of runDelegateAttempt.
+type DelegateAttemptOptions struct {
+	Agent     agent.Agent
+	AgentKey  string
+	Task      string
+	CtxPrefix string
+	WorkDir   string
+	Isolation string
+	Verify    *verifySpec
+	// Quiet suppresses UI output (spinner, stderr messages).
+	// Used by async job-runner where there is no terminal.
+	Quiet bool
+}
+
 // runDelegateAttempt executes one delegation attempt against a single agent,
 // including worktree setup, verification, and result collection.
-// ctxPrefix is the formatted context to prepend to the task (may be empty).
-func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isolation string, vs *verifySpec) (ar attemptResult) {
+func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 	defer func() {
 		ar.failureClass = classifyFailure(ar)
 	}()
 
-	// Clean up orphan worktrees from previous crashed runs
-	if pruned := runner.PruneOrphanWorktrees(workDir); pruned > 0 {
-		fmt.Fprintf(os.Stderr, "[quancode] cleaned %d orphan worktree(s)\n", pruned)
+	logf := func(format string, args ...any) {
+		if !opts.Quiet {
+			fmt.Fprintf(os.Stderr, format, args...)
+		}
 	}
 
-	execDir := workDir
+	// Clean up orphan worktrees from previous crashed runs
+	if pruned := runner.PruneOrphanWorktrees(opts.WorkDir); pruned > 0 {
+		logf("[quancode] cleaned %d orphan worktree(s)\n", pruned)
+	}
+
+	execDir := opts.WorkDir
 	var cleanupWorktree func()
 
-	if isolation == "worktree" || isolation == "patch" {
-		if !runner.IsGitRepo(workDir) {
-			ar.err = fmt.Errorf("--isolation %s requires a git repository", isolation)
+	if opts.Isolation == "worktree" || opts.Isolation == "patch" {
+		if !runner.IsGitRepo(opts.WorkDir) {
+			ar.err = fmt.Errorf("--isolation %s requires a git repository", opts.Isolation)
 			return ar
 		}
-		wt, cleanup, wtErr := runner.CreateWorktree(workDir)
+		wt, cleanup, wtErr := runner.CreateWorktree(opts.WorkDir)
 		if wtErr != nil {
 			ar.err = fmt.Errorf("create worktree: %w", wtErr)
 			return ar
 		}
 		cleanupWorktree = cleanup
-		// Ensure worktree is cleaned up even if later setup steps fail.
 		defer func() {
 			if cleanupWorktree != nil {
 				cleanupWorktree()
 			}
 		}()
 		execDir = wt
-		fmt.Fprintf(os.Stderr, "[quancode] running in isolated worktree: %s\n", wt)
+		logf("[quancode] running in isolated worktree: %s\n", wt)
 	}
 
 	ar.preSnapshot = gitStatusSnapshot(execDir)
 
-	ui.DelegationStart(agentKey, task, isolation)
+	if !opts.Quiet {
+		ui.DelegationStart(opts.AgentKey, opts.Task, opts.Isolation)
+	}
 	delegationID, err := ledger.NewDelegationID()
 	if err != nil {
 		ar.err = fmt.Errorf("generate delegation id: %w", err)
@@ -84,29 +104,34 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isola
 	}
 
 	// Assemble full task with context prefix
-	fullTask := task
-	if ctxPrefix != "" {
-		fullTask = ctxPrefix + "\n\n=== TASK ===\n\n" + task
+	fullTask := opts.Task
+	if opts.CtxPrefix != "" {
+		fullTask = opts.CtxPrefix + "\n\n=== TASK ===\n\n" + opts.Task
 	}
 
-	spinner := ui.NewSpinner(fmt.Sprintf("%s working...", agentKey))
-	defer spinner.Stop() // safety net for panic
-	result, delegateErr := a.Delegate(execDir, fullTask, agent.DelegateOptions{
+	var spinner *ui.Spinner
+	if !opts.Quiet {
+		spinner = ui.NewSpinner(fmt.Sprintf("%s working...", opts.AgentKey))
+		defer spinner.Stop()
+	}
+	result, delegateErr := opts.Agent.Delegate(execDir, fullTask, agent.DelegateOptions{
 		DelegationID: delegationID,
 	})
-	spinner.Stop()
+	if spinner != nil {
+		spinner.Stop()
+	}
 	ar.result = result
 	ar.err = delegateErr
 
 	// Collect patch from worktree
-	if isolation == "worktree" || isolation == "patch" {
+	if opts.Isolation == "worktree" || opts.Isolation == "patch" {
 		var collectErr error
 		ar.patch, ar.patchFiles, collectErr = runner.CollectPatch(execDir)
 		if collectErr != nil {
-			fmt.Fprintf(os.Stderr, "[quancode] warning: patch collection failed: %v\n", collectErr)
+			logf("[quancode] warning: patch collection failed: %v\n", collectErr)
 		}
 		// Cache patch for later apply-patch --id
-		if isolation == "patch" && ar.patch != "" {
+		if opts.Isolation == "patch" && ar.patch != "" {
 			if _, cacheErr := runner.CachePatch(delegationID, ar.patch); cacheErr != nil {
 				debugf("patch cache failed: %v", cacheErr)
 			}
@@ -116,28 +141,33 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isola
 	// Run verification only when agent succeeded — skip on timeout/failure
 	// to avoid blocking fallback due to unrelated baseline test failures.
 	if result != nil && !result.TimedOut && result.ExitCode == 0 {
-		ar.verify = runAndLogVerification(execDir, vs)
+		if opts.Quiet {
+			if opts.Verify != nil && len(opts.Verify.Commands) > 0 {
+				ar.verify = runVerification(execDir, opts.Verify.Commands, opts.Verify.TimeoutSec, opts.Verify.Strict)
+			}
+		} else {
+			ar.verify = runAndLogVerification(execDir, opts.Verify)
+		}
 	}
 
 	// Apply patch to main tree (worktree mode only)
-	if isolation == "worktree" && ar.patch != "" {
+	if opts.Isolation == "worktree" && ar.patch != "" {
 		if ar.verify.IsStrictFailure() {
-			fmt.Fprintf(os.Stderr, "[quancode] patch NOT applied (verify-strict failed)\n")
+			logf("[quancode] patch NOT applied (verify-strict failed)\n")
 		} else {
-			// Pre-check for conflicts before applying to avoid polluting the work tree
-			conflicts := runner.CheckPatchConflicts(workDir, ar.patch)
+			conflicts := runner.CheckPatchConflicts(opts.WorkDir, ar.patch)
 			if len(conflicts) > 0 {
 				ar.patchApplyErr = fmt.Errorf("patch conflicts with %d files", len(conflicts))
 				ar.conflictFiles = conflicts
-			} else if applyErr := runner.ApplyPatch(workDir, ar.patch); applyErr != nil {
+			} else if applyErr := runner.ApplyPatch(opts.WorkDir, ar.patch); applyErr != nil {
 				ar.patchApplyErr = applyErr
 			} else {
-				fmt.Fprintf(os.Stderr, "[quancode] changes applied to working directory\n")
+				logf("[quancode] changes applied to working directory\n")
 			}
 		}
 	}
 
-	if isolation == "worktree" || isolation == "patch" {
+	if opts.Isolation == "worktree" || opts.Isolation == "patch" {
 		cleanupWorktree = nil // prevent double cleanup
 	}
 
@@ -150,8 +180,8 @@ func runDelegateAttempt(a agent.Agent, agentKey, task, ctxPrefix, workDir, isola
 		}
 		if len(ar.patchFiles) > 0 {
 			ar.changedFiles = ar.patchFiles
-		} else if isolation == "" || isolation == "inplace" {
-			ar.changedFiles = detectNewChanges(workDir, ar.preSnapshot)
+		} else if opts.Isolation == "" || opts.Isolation == "inplace" {
+			ar.changedFiles = detectNewChanges(opts.WorkDir, ar.preSnapshot)
 		}
 	}
 

@@ -61,6 +61,8 @@ var runVerifyCommand = func(workDir string, timeoutSecs int, env []string, name 
 
 // runVerification executes verification commands in the given directory.
 // Commands are run sequentially; results are aggregated.
+// This function does not produce any stderr output; use runAndLogVerification
+// for the version that logs progress.
 func runVerification(execDir string, cmds []string, timeoutSecs int, strict bool) *VerifyResult {
 	if len(cmds) == 0 {
 		return &VerifyResult{Status: VerifySkipped}
@@ -140,8 +142,6 @@ func truncateOutput(s string) string {
 
 func runSingleVerify(execDir, cmdStr string, timeoutSecs int) VerifyCommandResult {
 	vcr := VerifyCommandResult{Command: cmdStr}
-
-	fmt.Fprintf(os.Stderr, "[quancode] verify: %s\n", cmdStr)
 
 	result, err := runVerifyCommand(execDir, timeoutSecs, nil, "sh", "-c", cmdStr)
 	if err != nil && result == nil {

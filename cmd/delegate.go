@@ -31,6 +31,8 @@ var (
 	delegateVerify         []string
 	delegateVerifyStrict   []string
 	delegateVerifyTimeout  int
+	delegateAsync          bool
+	delegateTimeout        int
 )
 
 type dryRunResult struct {
@@ -116,6 +118,9 @@ var delegateCmd = &cobra.Command{
 		isolation := delegateIsolation
 		if isolation == "" {
 			isolation = cfg.Preferences.DefaultIsolation
+		}
+		if isolation == "" {
+			isolation = "inplace"
 		}
 
 		// Resolve initial agent
@@ -206,6 +211,18 @@ var delegateCmd = &cobra.Command{
 			return nil
 		}
 
+		// Async mode: spawn a detached job-runner and return immediately.
+		if delegateAsync {
+			if isolation == "inplace" {
+				return fmt.Errorf("--async requires --isolation worktree or --isolation patch")
+			}
+			if vs != nil {
+				return fmt.Errorf("--async does not support --verify/--verify-strict (not yet implemented)")
+			}
+			effectiveTimeout := resolveEffectiveTimeout(delegateTimeout, ac.TimeoutSecs)
+			return launchAsyncJob(agentKey, task, workDir, isolation, effectiveTimeout)
+		}
+
 		// Resolve fallback: CLI flag > preferences > auto
 		noFallback := delegateNoFallback
 		if !cmd.Flags().Changed("no-fallback") {
@@ -234,7 +251,15 @@ var delegateCmd = &cobra.Command{
 				}
 			}
 
-			ar := runDelegateAttempt(a, agentKey, task, ctxPrefix, workDir, isolation, vs)
+			ar := runDelegateAttempt(DelegateAttemptOptions{
+				Agent:     a,
+				AgentKey:  agentKey,
+				Task:      task,
+				CtxPrefix: ctxPrefix,
+				WorkDir:   workDir,
+				Isolation: isolation,
+				Verify:    vs,
+			})
 
 			// Check if fallback is needed and allowed
 			shouldFallback := !noFallback &&
@@ -383,5 +408,7 @@ func init() {
 	delegateCmd.Flags().StringArrayVar(&delegateVerify, "verify", nil, "verification command to run after delegation (record only, can be specified multiple times)")
 	delegateCmd.Flags().StringArrayVar(&delegateVerifyStrict, "verify-strict", nil, "verification command — fail delegation if verification fails (can be specified multiple times)")
 	delegateCmd.Flags().IntVar(&delegateVerifyTimeout, "verify-timeout", 120, "timeout in seconds for each verification command")
+	delegateCmd.Flags().BoolVar(&delegateAsync, "async", false, "run delegation asynchronously (requires --isolation worktree or patch)")
+	delegateCmd.Flags().IntVar(&delegateTimeout, "timeout", 0, "timeout in seconds for async jobs (default: agent config timeout_secs)")
 	rootCmd.AddCommand(delegateCmd)
 }

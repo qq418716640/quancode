@@ -42,6 +42,9 @@ type AgentConfig struct {
 	PromptFile string `yaml:"prompt_file"` // file name for prompt_mode=file (default: AGENTS.md)
 	TaskMode   string `yaml:"task_mode"`   // "arg" (default), "stdin"
 	OutputMode string `yaml:"output_mode"` // "stdout" (default), "file"
+	// NonInteractiveArgs are extra arguments appended in async mode
+	// to ensure the agent runs without interactive prompts.
+	NonInteractiveArgs []string `yaml:"non_interactive_args,omitempty"`
 	// Context injection config (overrides global ContextDefaults)
 	Context *qcontext.ContextSpec `yaml:"context,omitempty"`
 }

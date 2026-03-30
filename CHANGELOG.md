@@ -6,6 +6,33 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+
+- **Async delegation**: `delegate --async` runs tasks in a detached background process, freeing the primary agent to continue working
+  - Requires `--isolation worktree` or `--isolation patch` (inplace not allowed)
+  - `--timeout` flag to set per-task timeout (default: agent config `timeout_secs`)
+  - Returns a `job_id` immediately; background runner handles execution, fallback, and result collection
+- **Job management commands**: `quancode job list|status|result|logs|cancel|clean`
+  - `job list` with `--workdir`, `--limit`, `--latest`, `--format json` filtering
+  - `job status` and `job result` with JSON output support
+  - `job logs` with `--tail` for viewing agent output
+  - `job cancel` with SIGTERM→SIGKILL and idempotent handling
+  - `job clean --ttl` for removing expired job files and orphan artifacts
+- New `job/` package: persistent job state with flock+CAS atomic writes, schema versioning, TTL cleanup, PID reuse detection via `pid_start_time`
+- `AgentConfig.NonInteractiveArgs` field for async-mode-specific agent arguments
+- Async delegation guidance in system prompt injection template
+
+### Changed
+
+- `runDelegateAttempt` refactored to accept `DelegateAttemptOptions` struct with `Quiet` mode for non-interactive execution
+- `runVerification` / `runSingleVerify` no longer produce stderr output; logging handled by `runAndLogVerification` wrapper
+- Isolation resolution standardized: empty string normalized to `"inplace"` after config resolution
+
+### Known Limitations
+
+- `delegate --async` does not support `--verify`/`--verify-strict` (planned for future release)
+- `delegate --async` does not pass `--context-files`/`--context-diff` flags (uses default context only)
+
 ## [v0.4.18] - 2026-03-29
 
 ### Fixed

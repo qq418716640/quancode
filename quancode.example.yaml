@@ -51,6 +51,8 @@ agents:
       - write
       - quick
     priority: 20
+    # non_interactive_args:  # extra args appended in async mode
+    #   - --yes
 
 # User preferences for delegation behavior.
 # CLI flags always override these. Omitted fields use defaults.

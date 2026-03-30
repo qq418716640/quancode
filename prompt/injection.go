@@ -68,7 +68,25 @@ You can run multiple delegate calls concurrently for independent tasks.
 - Patches are automatically cached. To apply, use the delegation_id from the JSON result:
     {{.Binary}} apply-patch --id <delegation_id>
 - Split tasks by file boundaries — avoid two delegates modifying the same file.
-- Apply patches one at a time. If a patch conflicts, resolve before applying the next one.`
+- Apply patches one at a time. If a patch conflicts, resolve before applying the next one.
+
+ASYNC DELEGATION:
+For tasks expected to take longer than a few minutes, use --async to run them in the background:
+    {{.Binary}} delegate --async --agent <agent-name> --isolation worktree --format json "long running task"
+This returns immediately with a job_id. The task runs in a detached background process.
+- --async REQUIRES --isolation worktree or --isolation patch (inplace is not allowed).
+- --async does NOT support --verify/--verify-strict yet.
+- Use --timeout <seconds> to set a per-task timeout (capped at agent config timeout_secs).
+- Manage async jobs with:
+    {{.Binary}} job list [--workdir .]       # list jobs (newest first)
+    {{.Binary}} job status <job_id>          # check status
+    {{.Binary}} job result <job_id>          # get result (only when finished)
+    {{.Binary}} job logs <job_id>            # view output
+    {{.Binary}} job cancel <job_id>          # cancel a running job
+    {{.Binary}} job clean [--ttl 168h]      # remove expired job files
+- For async+patch mode, apply the result with: {{.Binary}} apply-patch --id <delegation_id> (get delegation_id from job result --format json).
+- Do NOT rely on remembering job_ids — use "job list --workdir ." to find them.
+- Prefer sync delegation for quick tasks. Use async only when the task is expected to take long or you want to continue working on other things while it runs.`
 
 type agentInfo struct {
 	Key         string
