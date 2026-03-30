@@ -2,11 +2,13 @@
 
 [中文](README_zh.md)
 
-QuanCode is a CLI orchestrator for terminal coding agents. It starts one AI coding CLI as the primary interface and lets it delegate bounded tasks to other coding CLIs.
+QuanCode is a lightweight CLI orchestrator for terminal coding agents. It starts one AI coding CLI as the primary interface and lets it delegate bounded tasks to other coding CLIs.
 
 It is an orchestration layer, not an agent itself.
 
-Use it when you want one terminal workflow that can hand off bounded tasks to the most suitable coding CLI without constant manual switching.
+- **Lightweight** — a single ~4k-line Go binary with zero runtime dependencies. No daemon, no server, no framework.
+- **Universal** — works with any coding CLI that accepts a prompt and returns text. Adding a new agent is a YAML config change, not code.
+- **Self-controlled** — everything runs locally under your shell. You own the config, the logs, the prompts, and the process lifecycle. No hosted service, no vendor lock-in.
 
 > **Status: beta**
 > Core delegation, isolation, fallback, and verification flows are stable. Agent adapter coverage varies by CLI.
