@@ -101,6 +101,12 @@ Config lookup order:
 - Type: boolean
 - Meaning: whether the agent is available for selection and launch
 
+### `non_interactive_args`
+
+- Type: list of strings
+- Default: empty
+- Meaning: extra arguments appended to `delegate_args` when the agent runs in async mode (background execution without a terminal). Use this for flags like `--yes` or `--no-confirm` that prevent interactive prompts.
+
 ### `env`
 
 - Type: map of string to string

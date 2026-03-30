@@ -50,6 +50,7 @@ quancode start --primary codex
 - 超时或限速时自动降级到下一个可用 agent（`--no-fallback` 可禁用）
 - 支持原地执行、git worktree 隔离和 patch-only 三种委派模式
 - 以 JSONL 记录每次 delegation，用于统计和审计
+- 异步委派：`delegate --async` 在后台执行任务，通过 `job list|status|result|logs|cancel|clean` 管理生命周期
 - 自动配置 Claude Code statusline，显示会话标识、配额和费用
 - 提供 `/quancode` skill，支持从 Claude Desktop 和手机 Dispatch 编排任务
 
@@ -136,6 +137,8 @@ Release 构建可以通过 Go ldflags 覆盖默认版本字符串。最终以 re
 - `router/router.go`: agent 选择
 - `runner/`: 执行与隔离辅助
 - `ledger/`: 日志与配额
+- `cmd/job*.go`: 异步任务管理命令
+- `job/`: 持久化任务状态与生命周期
 
 ## 路线图
 

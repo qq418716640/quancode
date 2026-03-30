@@ -23,6 +23,8 @@ QuanCode is a Go CLI that launches a primary AI coding agent and lets it delegat
 cmd/start.go → prompt/injection.go → agent/agent.go (LaunchAsPrimary)
 cmd/delegate.go → cmd/delegate_attempt.go → router/router.go → agent/agent.go (Delegate) → runner/
                   cmd/fallback.go (auto-retry)                                              → ledger/
+cmd/delegate_async.go → job/ (write pending) → cmd/run_job.go (detached) → delegate_attempt.go
+cmd/job*.go → job/ (list/status/result/logs/cancel/clean)
 ```
 
 ### Key packages
@@ -34,6 +36,7 @@ cmd/delegate.go → cmd/delegate_attempt.go → router/router.go → agent/agent
 - **router/** — `SelectAgent()` picks the best sub-agent: preferred_for keyword match > priority number > alphabetical.
 - **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection.
 - **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Records each delegation with agent, task, duration, exit code, changed files, and fallback chain. Also provides ID generation (NewDelegationID, NewRunID) for tracking.
+- **job/** — Persistent async job state at `~/.config/quancode/jobs/`. Atomic writes via flock+CAS with schema versioning. Handles job lifecycle (pending→running→succeeded/failed/timed_out/cancelled/lost), TTL cleanup, PID reuse detection via `pid_start_time`, and capped output files (50MB).
 
 ### Prompt injection modes
 
@@ -55,6 +58,10 @@ The primary CLI receives delegation instructions via one of:
 Verification only runs after the delegated agent succeeds.
 In `worktree` mode, verification runs before patch apply.
 Verification failure does not trigger fallback.
+
+### Async delegation
+
+`--async` spawns a detached `_run-job` process (Setsid) that executes the full delegation pipeline in the background. Only `worktree`/`patch` isolation allowed. The parent writes a `pending` job state, forks, and returns immediately. The runner transitions through `pending→running→terminal`, writes output/patch files, and records to ledger independently. `--verify` is not supported in async mode. `job list/status/result/logs/cancel/clean` manage the lifecycle.
 
 ### Statusline
 

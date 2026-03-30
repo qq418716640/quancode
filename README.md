@@ -61,6 +61,7 @@ The `--primary` and `--agent` flags support tab-completion for agent names.
 - Supports in-place execution, isolated git worktrees, or patch-only delegation.
 - Logs every delegation to JSONL for stats and auditing.
 - Auto-fallback: if an agent times out or hits a rate limit, QuanCode automatically retries with the next available agent. Disable with `--no-fallback`.
+- Async delegation: `delegate --async` runs tasks in the background with full lifecycle management (`job list|status|result|logs|cancel|clean`).
 
 ## Configuration
 
@@ -147,6 +148,8 @@ Project entry points:
 - `router/router.go`: agent selection
 - `runner/`: execution and isolation helpers
 - `ledger/`: delegation logs and stats
+- `cmd/job*.go`: async job management commands
+- `job/`: persistent job state and lifecycle
 
 ## Documentation
 

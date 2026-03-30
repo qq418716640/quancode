@@ -178,6 +178,40 @@ echo "$PATCH" | quancode apply-patch --workdir /path/to/repo
 
 并行任务尽量按文件边界切分，避免 patch 冲突。
 
+### 异步委派
+
+使用 `--async` 在后台运行委派任务：
+
+```bash
+quancode delegate --async --agent codex --isolation worktree "implement feature X"
+```
+
+立即返回 `job_id`，任务在后台独立进程中执行。
+
+规则：
+- `--async` 必须搭配 `--isolation worktree` 或 `--isolation patch`
+- `--async` 不支持 `--verify` / `--verify-strict`
+- `--timeout <seconds>` 设置单任务超时（不超过 agent 配置的 `timeout_secs`）
+
+通过 `quancode job` 管理异步任务：
+
+```bash
+quancode job list [--workdir /path/to/repo]   # 列出任务（最新优先）
+quancode job status <job_id>                   # 查看状态
+quancode job result <job_id>                   # 获取结果（仅终态任务）
+quancode job logs <job_id> [--tail 50]         # 查看输出
+quancode job cancel <job_id>                   # 取消运行中的任务
+quancode job clean [--ttl 168h]                # 清理过期任务文件
+```
+
+对于 `--isolation patch` 的异步任务，用以下命令应用 patch：
+
+```bash
+quancode apply-patch --id <delegation_id>
+```
+
+`delegation_id` 可从 `quancode job result --format json` 的输出中获取。
+
 ### 一个端到端示例
 
 ```bash

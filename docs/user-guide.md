@@ -250,6 +250,40 @@ echo "$PATCH" | quancode apply-patch --workdir /path/to/repo
 
 Split parallel tasks by file boundaries to avoid patch conflicts.
 
+### Async Delegation
+
+Use `--async` to run a delegation in the background:
+
+```bash
+quancode delegate --async --agent codex --isolation worktree "implement feature X"
+```
+
+This returns a `job_id` immediately. The task runs in a detached background process.
+
+Rules:
+- `--async` requires `--isolation worktree` or `--isolation patch`
+- `--async` does not support `--verify` / `--verify-strict`
+- `--timeout <seconds>` sets a per-task timeout (capped at agent config `timeout_secs`)
+
+Manage jobs with `quancode job`:
+
+```bash
+quancode job list [--workdir /path/to/repo]   # list jobs (newest first)
+quancode job status <job_id>                   # check status
+quancode job result <job_id>                   # get result (terminal jobs only)
+quancode job logs <job_id> [--tail 50]         # view output
+quancode job cancel <job_id>                   # cancel a running job
+quancode job clean [--ttl 168h]                # remove expired job files
+```
+
+For `--isolation patch` async jobs, apply the result patch with:
+
+```bash
+quancode apply-patch --id <delegation_id>
+```
+
+The `delegation_id` is available in `quancode job result --format json` output.
+
 ### End-to-End Delegation Example
 
 ```bash
