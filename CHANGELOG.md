@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.5.0] - 2026-03-31
+
 ### Added
 
 - **Async delegation**: `delegate --async` runs tasks in a detached background process, freeing the primary agent to continue working

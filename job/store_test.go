@@ -135,6 +135,58 @@ func TestCASVersionConflict(t *testing.T) {
 	}
 }
 
+func TestWriteStateFailurePath(t *testing.T) {
+	_, cleanup := setupTestDir(t)
+	defer cleanup()
+
+	state := &State{
+		JobID:            "job_20260330T100000Z_fail0001",
+		Agent:            "codex",
+		Task:             "test write failure",
+		WorkDir:          "/tmp",
+		Isolation:        "worktree",
+		EffectiveTimeout: 300,
+		Status:           StatusPending,
+		CreatedAt:        time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if err := WriteState(state); err != nil {
+		t.Fatalf("initial write: %v", err)
+	}
+	if state.StatusVersion != 1 {
+		t.Fatalf("expected initial status_version=1, got %d", state.StatusVersion)
+	}
+
+	// Force tmp file creation to fail so WriteState exits after cloning state
+	// but before any on-disk update or caller mutation.
+	tmpPath := StatePath(state.JobID) + ".tmp"
+	if err := os.Mkdir(tmpPath, 0755); err != nil {
+		t.Fatalf("mkdir tmp path: %v", err)
+	}
+	defer os.RemoveAll(tmpPath)
+
+	state.Status = StatusRunning
+	err := WriteState(state)
+	if err == nil {
+		t.Fatal("expected write failure, got nil")
+	}
+
+	if state.StatusVersion != 1 {
+		t.Fatalf("status_version should remain 1 after failed write, got %d", state.StatusVersion)
+	}
+
+	got, err := ReadState(state.JobID)
+	if err != nil {
+		t.Fatalf("ReadState after failed write: %v", err)
+	}
+	if got.StatusVersion != 1 {
+		t.Fatalf("on-disk status_version should remain 1, got %d", got.StatusVersion)
+	}
+	if got.Status != StatusPending {
+		t.Fatalf("on-disk status should remain pending, got %s", got.Status)
+	}
+}
+
 func TestListJobsFilterByWorkDir(t *testing.T) {
 	_, cleanup := setupTestDir(t)
 	defer cleanup()
