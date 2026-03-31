@@ -25,7 +25,7 @@ var KnownAgents = map[string]AgentConfig{
 		PromptFile:   "AGENTS.md",
 		DelegateArgs: []string{"exec", "--full-auto", "--ephemeral"},
 		OutputFlag:   "--output-last-message",
-		TimeoutSecs:  180,
+		TimeoutSecs:  300,
 		Enabled:      true,
 		PreferredFor: []string{"test", "fix", "generate", "create", "write", "quick"},
 		Priority:     20,

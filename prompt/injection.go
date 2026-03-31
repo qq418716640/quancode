@@ -30,6 +30,7 @@ TO LIST AVAILABLE AGENTS:
 
 DELEGATION GUIDELINES:
 - ALWAYS use "{{.Binary}} delegate" to invoke other agents. NEVER call their CLI commands directly (e.g., do NOT run "claude -p ..." or "codex exec ..." yourself). QuanCode manages authentication, proxy, and environment for each agent.
+- Delegation can take several minutes. When running via a shell tool (e.g., Bash), set a timeout of at least 300000ms (5 minutes) to avoid killing the process prematurely.
 - Delegate well-scoped, independent tasks (e.g., "write tests for X", "refactor file Y", "summarize the design decisions in module Z")
 - Always tell the sub-agent what output format you expect (code change, bullet list, table, prose, file, etc.).
 - QuanCode automatically injects project context (CLAUDE.md, AGENTS.md) into every delegation. You do NOT need to copy these files into the task description. Focus on WHAT to do and WHY.
