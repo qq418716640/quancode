@@ -6,6 +6,19 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.5.1] - 2026-03-31
+
+### Changed
+
+- Delegation prompt no longer biased toward coding tasks — now covers research, documentation, writing, and analysis scenarios equally
+  - Opening description changed from "AI coding agents" to "AI agents"
+  - Added Documentation/writing task type with guidance on audience, structure, and tone
+  - Added non-coding Good example (approach comparison with markdown table output)
+  - Result checking now instructs primary agent to check exit_code/timed_out first, then task-appropriate deliverables (output, changed_files, or both)
+  - Verification section clarifies non-code tasks do not need --verify
+  - Isolation inplace mode clarifies suitability for read-only tasks
+  - Broad/underspecified task warning promoted from research-only to universal rule
+
 ## [v0.5.0] - 2026-03-31
 
 ### Added
