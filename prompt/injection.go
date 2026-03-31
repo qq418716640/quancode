@@ -9,7 +9,7 @@ import (
 	"github.com/qq418716640/quancode/config"
 )
 
-const promptTemplate = `You have access to additional AI coding agents through quancode.
+const promptTemplate = `You have access to additional AI agents through quancode.
 
 AVAILABLE AGENTS:
 {{- range .Agents}}
@@ -21,46 +21,51 @@ TO DELEGATE A TASK:
   {{.Binary}} delegate --agent <agent-name> --format json --workdir "$(pwd)" "<detailed task description>"
 
 The JSON result contains:
-  {"agent":"...", "task":"...", "exit_code":0, "timed_out":false, "duration_ms":1234, "output":"...", "changed_files":["file1.go","file2.go"]}
+  {"agent":"...", "task":"...", "exit_code":0, "timed_out":false, "duration_ms":1234, "output":"...", "changed_files":["file1.go","docs/guide.md"]}
 
-Use --format text instead if you only need the raw output.
+Use --format text if you only need the raw output.
 
 TO LIST AVAILABLE AGENTS:
   {{.Binary}} agents
 
 DELEGATION GUIDELINES:
 - ALWAYS use "{{.Binary}} delegate" to invoke other agents. NEVER call their CLI commands directly (e.g., do NOT run "claude -p ..." or "codex exec ..." yourself). QuanCode manages authentication, proxy, and environment for each agent.
-- Delegate well-scoped, independent tasks (e.g., "write tests for X", "refactor file Y")
+- Delegate well-scoped, independent tasks (e.g., "write tests for X", "refactor file Y", "summarize the design decisions in module Z")
+- Always tell the sub-agent what output format you expect (code change, bullet list, table, prose, file, etc.).
 - QuanCode automatically injects project context (CLAUDE.md, AGENTS.md) into every delegation. You do NOT need to copy these files into the task description. Focus on WHAT to do and WHY.
 - If the sub-agent needs specific source files for context, use --context-files:
     {{.Binary}} delegate --agent codex --context-files "router/router.go" --context-files "router/router_test.go" "add tests for SelectAgentExcluding"
 - Use --context-diff staged or --context-diff working to include uncommitted changes when relevant.
-- Use --no-context to disable automatic context injection if the task is self-contained.
+- Use --no-context to disable automatic context injection if the task is self-contained or does not relate to the current project.
 - The sub-agent CANNOT see your conversation history. Your task description + injected context is all it gets. Be specific about:
   - What to do and why
   - Which files, functions, or symbols are involved
   - Constraints, non-goals, and acceptance criteria
   - Good: "Add unit tests for router/router.go SelectAgent — cover: no match returns nil, keyword match beats priority, exclude list is respected. Do not modify production code."
+  - Good: "Compare approach A vs B for config migration. Output a markdown table with columns: complexity, risk, migration effort, recommendation. DO NOT write code."
   - Bad: "Write tests for the router changes we discussed."
-- After delegation completes, check changed_files in the JSON result and verify the changes
+- After delegation completes, first check exit_code and timed_out for execution status, then check the deliverables: output for analysis/writing tasks, changed_files for modification tasks, or both.
 - Do NOT delegate tasks that require multi-step conversation or clarification from the user
 - Do NOT delegate if you can do the task yourself just as efficiently
 - You are the primary agent. You own the overall plan and final quality.
 
 TASK TYPES — match your task description to the type:
-- Code modification: specify files, functions, constraints, acceptance criteria. Add --verify for automated checks.
-- Research/analysis (e.g., "review this code", "evaluate this design"): clearly state WHAT to analyze, WHAT output format you expect (e.g., "list of issues", "comparison table"), and explicitly say "DO NOT write code" if the task is analysis-only. Keep the scope narrow — broad questions like "research everything about X" will time out or produce unfocused results.
+- Code modification: specify files, functions, constraints, acceptance criteria. Add --verify when a reliable automated check exists.
+- Research/analysis (e.g., "review this code", "evaluate this design", "compare approaches"): clearly state WHAT to analyze, WHAT output format you expect, and explicitly say "DO NOT write code" if the task is analysis-only.
+- Documentation/writing (e.g., "draft an RFC", "write release notes", "update the migration guide"): specify target audience, structure, tone, and whether to write into a file or return as output.
 - Code review: provide the diff or changed files via --context-diff, state what aspects to review (correctness, security, performance, style).
+- Keep all delegated tasks well-scoped. Broad, underspecified tasks tend to produce unfocused output or time out.
 
 ISOLATION MODES:
 - Single task: use --isolation worktree for safe isolated execution with automatic patch application.
 - Multiple parallel tasks: use --isolation patch --format json to collect patches without auto-applying.
-- Default (inplace): runs directly in the working directory. Use only when isolation is unnecessary.
+- Default (inplace): runs directly in the working directory. Use for read-only tasks (research, analysis) or when you explicitly do not need isolation.
 
 VERIFICATION:
 - For code modification tasks, add --verify to run a check after the sub-agent finishes:
     {{.Binary}} delegate --agent codex --isolation worktree --verify "go test ./affected/package" "fix the bug in parser"
 - The verify command runs in the worktree before applying changes. If it fails, you'll see the failure in the result but changes are still applied (use --verify-strict to block application on failure).
+- Non-code tasks (research, writing) typically do not need --verify. Judge their quality by output content, structure, and completeness.
 
 PARALLEL DELEGATION:
 You can run multiple delegate calls concurrently for independent tasks.
