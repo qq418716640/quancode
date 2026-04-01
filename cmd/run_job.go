@@ -293,7 +293,9 @@ func writeLedger(state *job.State, ar attemptResult, verifyJSON json.RawMessage)
 		entry.DurationMs = ar.result.DurationMs
 		entry.ChangedFiles = ar.changedFiles
 	}
-	entry.FinalStatus = state.Status
+	// Map job status to ledger status for consistency.
+	// Job uses "succeeded"; ledger uses "completed".
+	entry.FinalStatus = determineFinalStatus(entry.ExitCode, entry.TimedOut, ar.verify)
 	entry.FailureClass = ar.failureClass
 	entry.VerifyRaw = verifyJSON
 

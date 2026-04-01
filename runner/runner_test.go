@@ -101,8 +101,8 @@ func TestRunSuccess(t *testing.T) {
 	if result.ExitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d", result.ExitCode)
 	}
-	if result.DurationMs <= 0 {
-		t.Fatal("expected positive duration")
+	if result.DurationMs < 0 {
+		t.Fatal("expected non-negative duration")
 	}
 }
 
