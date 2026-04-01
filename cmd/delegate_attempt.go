@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -50,6 +51,10 @@ type DelegateAttemptOptions struct {
 	// Quiet suppresses UI output (spinner, stderr messages).
 	// Used by async job-runner where there is no terminal.
 	Quiet bool
+	// Speculative parallelism fields
+	Ctx             context.Context // external context for cancellation; nil = use agent's internal timeout
+	DeferPatchApply bool            // collect patch but don't apply to main tree
+	DeferVerify     bool            // skip verification (caller will verify the winner)
 }
 
 // runDelegateAttempt executes one delegation attempt against a single agent,
@@ -115,10 +120,18 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 		spinner = ui.NewSpinner(fmt.Sprintf("%s working...", opts.AgentKey))
 		defer spinner.Stop()
 	}
-	result, delegateErr := opts.Agent.Delegate(execDir, fullTask, agent.DelegateOptions{
+
+	delegateOpts := agent.DelegateOptions{
 		DelegationID:    delegationID,
 		TimeoutOverride: opts.TimeoutOverride,
-	})
+	}
+	var result *runner.Result
+	var delegateErr error
+	if opts.Ctx != nil {
+		result, delegateErr = opts.Agent.DelegateWithContext(opts.Ctx, execDir, fullTask, delegateOpts)
+	} else {
+		result, delegateErr = opts.Agent.Delegate(execDir, fullTask, delegateOpts)
+	}
 	if spinner != nil {
 		spinner.Stop()
 	}
@@ -142,7 +155,8 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 
 	// Run verification only when agent succeeded — skip on timeout/failure
 	// to avoid blocking fallback due to unrelated baseline test failures.
-	if result != nil && !result.TimedOut && result.ExitCode == 0 {
+	// DeferVerify skips verification (speculative mode — caller verifies the winner).
+	if !opts.DeferVerify && result != nil && !result.TimedOut && result.ExitCode == 0 {
 		if opts.Quiet {
 			if opts.Verify != nil && len(opts.Verify.Commands) > 0 {
 				ar.verify = runVerification(execDir, opts.Verify.Commands, opts.Verify.TimeoutSec, opts.Verify.Strict)
@@ -152,8 +166,9 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 		}
 	}
 
-	// Apply patch to main tree (worktree mode only)
-	if opts.Isolation == "worktree" && ar.patch != "" {
+	// Apply patch to main tree (worktree mode only).
+	// DeferPatchApply skips application (speculative mode — caller applies the winner's patch).
+	if !opts.DeferPatchApply && opts.Isolation == "worktree" && ar.patch != "" {
 		if ar.verify.IsStrictFailure() {
 			logf("[quancode] patch NOT applied (verify-strict failed)\n")
 		} else {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -60,15 +61,32 @@ func BuildEnv(extra map[string]string) []string {
 	return MergeEnv(os.Environ(), extra)
 }
 
-// Run executes a command with timeout and captures output.
-// If env is non-nil, it replaces the subprocess environment.
-func Run(workDir string, timeoutSecs int, env []string, name string, args ...string) (*Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
-	defer cancel()
+// killProcessGroup sends a signal to the entire process group.
+// Falls back to killing just the process if group kill fails.
+func killProcessGroup(cmd *exec.Cmd, sig syscall.Signal) error {
+	if cmd.Process == nil {
+		return nil
+	}
+	pgid, err := syscall.Getpgid(cmd.Process.Pid)
+	if err == nil {
+		return syscall.Kill(-pgid, sig)
+	}
+	return cmd.Process.Signal(sig)
+}
 
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = workDir
-	cmd.Env = env
+// setupProcessGroup configures the command to run in its own process group
+// and sets up Cancel/WaitDelay so the entire group is killed on context cancel.
+func setupProcessGroup(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return killProcessGroup(cmd, syscall.SIGKILL)
+	}
+	cmd.WaitDelay = 5 * time.Second
+}
+
+// runCmd is the shared execution core for all Run variants.
+func runCmd(ctx context.Context, cmd *exec.Cmd) (*Result, error) {
+	setupProcessGroup(cmd)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -84,10 +102,10 @@ func Run(workDir string, timeoutSecs int, env []string, name string, args ...str
 		DurationMs: durationMs,
 	}
 
-	if ctx.Err() == context.DeadlineExceeded {
+	if ctx.Err() != nil {
 		result.ExitCode = 124
 		result.TimedOut = true
-		return result, fmt.Errorf("command timed out after %ds", timeoutSecs)
+		return result, fmt.Errorf("command timed out or cancelled")
 	}
 
 	if exitErr, ok := err.(*exec.ExitError); ok {
@@ -100,6 +118,29 @@ func Run(workDir string, timeoutSecs int, env []string, name string, args ...str
 	}
 
 	return result, nil
+}
+
+// Run executes a command with timeout and captures output.
+// If env is non-nil, it replaces the subprocess environment.
+func Run(workDir string, timeoutSecs int, env []string, name string, args ...string) (*Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = workDir
+	cmd.Env = env
+
+	return runCmd(ctx, cmd)
+}
+
+// RunWithContext executes a command using the provided context.
+// The caller controls cancellation (used by speculative parallelism).
+func RunWithContext(ctx context.Context, workDir string, env []string, name string, args ...string) (*Result, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = workDir
+	cmd.Env = env
+
+	return runCmd(ctx, cmd)
 }
 
 // RunWithStdin executes a command and pipes stdinContent to its stdin.
@@ -112,42 +153,21 @@ func RunWithStdin(workDir string, timeoutSecs int, env []string, stdinContent st
 	cmd.Env = env
 	cmd.Stdin = bytes.NewReader([]byte(stdinContent))
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	start := time.Now()
-	err := cmd.Run()
-	durationMs := time.Since(start).Milliseconds()
-
-	result := &Result{
-		Stdout:     stdout.String(),
-		Stderr:     stderr.String(),
-		DurationMs: durationMs,
-	}
-
-	if ctx.Err() == context.DeadlineExceeded {
-		result.ExitCode = 124
-		result.TimedOut = true
-		return result, fmt.Errorf("command timed out after %ds", timeoutSecs)
-	}
-
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		result.ExitCode = exitErr.ExitCode()
-		return result, nil
-	}
-
-	if err != nil {
-		return result, err
-	}
-
-	return result, nil
+	return runCmd(ctx, cmd)
 }
 
-// RunWithOutputFile executes a command that writes output to a temp file.
-// flagArgs are placed before the prompt, outputFlag and tmpfile are inserted between them.
-// Final order: name flagArgs... outputFlag tmpfile prompt
-func RunWithOutputFile(workDir string, timeoutSecs int, env []string, outputFlag string, name string, flagArgs []string, prompt string) (*Result, error) {
+// RunWithStdinContext executes a command with stdin using the provided context.
+func RunWithStdinContext(ctx context.Context, workDir string, env []string, stdinContent string, name string, args ...string) (*Result, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = workDir
+	cmd.Env = env
+	cmd.Stdin = bytes.NewReader([]byte(stdinContent))
+
+	return runCmd(ctx, cmd)
+}
+
+// runWithOutputFileCore contains shared logic for output file variants.
+func runWithOutputFileCore(runFn func(name string, args ...string) (*Result, error), outputFlag string, name string, flagArgs []string, prompt string) (*Result, error) {
 	tmpFile, err := os.CreateTemp("", "quancode-output-*.txt")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
@@ -162,7 +182,7 @@ func RunWithOutputFile(workDir string, timeoutSecs int, env []string, outputFlag
 	fullArgs = append(fullArgs, outputFlag, tmpPath)
 	fullArgs = append(fullArgs, prompt)
 
-	result, err := Run(workDir, timeoutSecs, env, name, fullArgs...)
+	result, err := runFn(name, fullArgs...)
 	if err != nil {
 		return result, err
 	}
@@ -174,4 +194,21 @@ func RunWithOutputFile(workDir string, timeoutSecs int, env []string, outputFlag
 	}
 
 	return result, nil
+}
+
+// RunWithOutputFile executes a command that writes output to a temp file.
+// flagArgs are placed before the prompt, outputFlag and tmpfile are inserted between them.
+// Final order: name flagArgs... outputFlag tmpfile prompt
+func RunWithOutputFile(workDir string, timeoutSecs int, env []string, outputFlag string, name string, flagArgs []string, prompt string) (*Result, error) {
+	return runWithOutputFileCore(func(n string, a ...string) (*Result, error) {
+		return Run(workDir, timeoutSecs, env, n, a...)
+	}, outputFlag, name, flagArgs, prompt)
+}
+
+// RunWithOutputFileContext executes a command that writes output to a temp file,
+// using the provided context for cancellation.
+func RunWithOutputFileContext(ctx context.Context, workDir string, env []string, outputFlag string, name string, flagArgs []string, prompt string) (*Result, error) {
+	return runWithOutputFileCore(func(n string, a ...string) (*Result, error) {
+		return RunWithContext(ctx, workDir, env, n, a...)
+	}, outputFlag, name, flagArgs, prompt)
 }

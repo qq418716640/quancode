@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -24,6 +25,9 @@ type Agent interface {
 	Name() string
 	LaunchAsPrimary(workDir, systemPrompt string) error
 	Delegate(workDir, task string, opts DelegateOptions) (*runner.Result, error)
+	// DelegateWithContext is like Delegate but uses the provided context for cancellation.
+	// Used by speculative parallelism to cancel a running agent.
+	DelegateWithContext(ctx context.Context, workDir, task string, opts DelegateOptions) (*runner.Result, error)
 	IsAvailable() (bool, string)
 }
 
@@ -108,15 +112,16 @@ func (a *genericAgent) LaunchAsPrimary(workDir, systemPrompt string) error {
 	return syscall.Exec(binary, cliArgs, env)
 }
 
-func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*runner.Result, error) {
+// delegatePrep prepares the common delegation state: args, env, timeout, delegationID.
+func (a *genericAgent) delegatePrep(opts DelegateOptions) (args []string, env []string, timeout int, delegationID string, err error) {
 	if len(a.cfg.DelegateArgs) == 0 && a.cfg.Command == "" {
-		return nil, fmt.Errorf("agent %q: no delegate_args configured", a.key)
+		return nil, nil, 0, "", fmt.Errorf("agent %q: no delegate_args configured", a.key)
 	}
 
-	args := make([]string, len(a.cfg.DelegateArgs))
+	args = make([]string, len(a.cfg.DelegateArgs))
 	copy(args, a.cfg.DelegateArgs)
 
-	timeout := a.cfg.TimeoutSecs
+	timeout = a.cfg.TimeoutSecs
 	if timeout <= 0 {
 		timeout = 300
 	}
@@ -124,21 +129,29 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*ru
 		timeout = opts.TimeoutOverride
 	}
 
-	env := runner.BuildEnv(a.cfg.Env)
+	env = runner.BuildEnv(a.cfg.Env)
 	if env == nil {
 		env = os.Environ()
 	}
-	delegationID := opts.DelegationID
+	delegationID = opts.DelegationID
 	if delegationID == "" {
-		var err error
 		delegationID, err = ledger.NewDelegationID()
 		if err != nil {
-			return nil, fmt.Errorf("generate delegation id: %w", err)
+			return nil, nil, 0, "", fmt.Errorf("generate delegation id: %w", err)
 		}
 	}
 	env = runner.MergeEnv(env, map[string]string{
 		"QUANCODE_DELEGATION_ID": delegationID,
 	})
+
+	return args, env, timeout, delegationID, nil
+}
+
+func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*runner.Result, error) {
+	args, env, timeout, delegationID, err := a.delegatePrep(opts)
+	if err != nil {
+		return nil, err
+	}
 
 	taskMode := a.cfg.TaskMode
 	if taskMode == "" {
@@ -152,7 +165,6 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*ru
 
 	if taskMode == "stdin" {
 		if outputMode == "file" && a.cfg.OutputFlag != "" {
-			// output file mode + stdin: flags only, task via stdin
 			result, err := runner.RunWithOutputFile(workDir, timeout, env, a.cfg.OutputFlag, a.cfg.Command, args, "")
 			if result != nil {
 				result.DelegationID = delegationID
@@ -168,7 +180,6 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*ru
 
 	// taskMode == "arg"
 	if outputMode == "file" && a.cfg.OutputFlag != "" {
-		// RunWithOutputFile appends prompt as last arg, so don't append task to args
 		result, err := runner.RunWithOutputFile(workDir, timeout, env, a.cfg.OutputFlag, a.cfg.Command, args, task)
 		if result != nil {
 			result.DelegationID = delegationID
@@ -179,6 +190,55 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*ru
 	args = append(args, task)
 
 	result, err := runner.Run(workDir, timeout, env, a.cfg.Command, args...)
+	if result != nil {
+		result.DelegationID = delegationID
+	}
+	return result, err
+}
+
+func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task string, opts DelegateOptions) (*runner.Result, error) {
+	args, env, _, delegationID, err := a.delegatePrep(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	taskMode := a.cfg.TaskMode
+	if taskMode == "" {
+		taskMode = "arg"
+	}
+
+	outputMode := a.cfg.OutputMode
+	if outputMode == "" {
+		outputMode = "stdout"
+	}
+
+	if taskMode == "stdin" {
+		if outputMode == "file" && a.cfg.OutputFlag != "" {
+			result, err := runner.RunWithOutputFileContext(ctx, workDir, env, a.cfg.OutputFlag, a.cfg.Command, args, "")
+			if result != nil {
+				result.DelegationID = delegationID
+			}
+			return result, err
+		}
+		result, err := runner.RunWithStdinContext(ctx, workDir, env, task, a.cfg.Command, args...)
+		if result != nil {
+			result.DelegationID = delegationID
+		}
+		return result, err
+	}
+
+	// taskMode == "arg"
+	if outputMode == "file" && a.cfg.OutputFlag != "" {
+		result, err := runner.RunWithOutputFileContext(ctx, workDir, env, a.cfg.OutputFlag, a.cfg.Command, args, task)
+		if result != nil {
+			result.DelegationID = delegationID
+		}
+		return result, err
+	}
+
+	args = append(args, task)
+
+	result, err := runner.RunWithContext(ctx, workDir, env, a.cfg.Command, args...)
 	if result != nil {
 		result.DelegationID = delegationID
 	}

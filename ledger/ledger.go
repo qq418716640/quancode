@@ -33,6 +33,11 @@ type Entry struct {
 	FailureClass  string   `json:"failure_class,omitempty"`
 	ConflictFiles []string `json:"conflict_files,omitempty"`
 
+	// Speculative parallelism tracking
+	Speculative     bool   `json:"speculative,omitempty"`      // true if this attempt was part of speculative execution
+	SpeculativeRole string `json:"speculative_role,omitempty"` // "primary" or "speculative"
+	CancelledBy     string `json:"cancelled_by,omitempty"`     // agent key that won, causing this one to be cancelled
+
 	// VerifyRaw stores the verification result as raw JSON to avoid
 	// a circular dependency between ledger and cmd packages.
 	VerifyRaw json.RawMessage `json:"verify,omitempty"`

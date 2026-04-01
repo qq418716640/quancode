@@ -2,12 +2,13 @@ package cmd
 
 // Failure class values recorded in ledger entries.
 const (
-	FailureClassLaunchFailure = "launch_failure"
-	FailureClassTimedOut      = "timed_out"
-	FailureClassRateLimited   = "rate_limited"
-	FailureClassAgentFailed   = "agent_failed"
-	FailureClassPatchConflict = "patch_conflict"
-	FailureClassVerifyFailed  = "verify_failed"
+	FailureClassLaunchFailure        = "launch_failure"
+	FailureClassTimedOut             = "timed_out"
+	FailureClassRateLimited          = "rate_limited"
+	FailureClassAgentFailed          = "agent_failed"
+	FailureClassPatchConflict        = "patch_conflict"
+	FailureClassVerifyFailed         = "verify_failed"
+	FailureClassSpeculativeCancelled = "speculative_cancelled"
 )
 
 // classifyFailure determines the failure class for a delegation attempt.

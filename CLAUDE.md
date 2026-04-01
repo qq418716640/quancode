@@ -34,7 +34,7 @@ cmd/job*.go → job/ (list/status/result/logs/cancel/clean)
 - **context/** — Builds delegation context bundles by auto-injecting project instruction files such as `CLAUDE.md` and `AGENTS.md`, with support for explicit files, git diff injection, size budgets, and path safety checks.
 - **prompt/** — Builds the system prompt injected into the primary CLI. Uses `text/template`. Excludes the actual primary from the listed agents.
 - **router/** — `SelectAgent()` picks the best sub-agent: preferred_for keyword match > priority number > alphabetical.
-- **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection.
+- **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection. All processes run in their own process group (`Setpgid`); timeout kills the entire group to prevent child process leaks. `RunWithContext` variants accept external contexts for speculative cancellation.
 - **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Records each delegation with agent, task, duration, exit code, changed files, and fallback chain. Also provides ID generation (NewDelegationID, NewRunID) for tracking.
 - **job/** — Persistent async job state at `~/.config/quancode/jobs/`. Atomic writes via flock+CAS with schema versioning. Handles job lifecycle (pending→running→succeeded/failed/timed_out/cancelled/lost), TTL cleanup, PID reuse detection via `pid_start_time`, and capped output files (50MB).
 
@@ -62,6 +62,10 @@ Verification failure does not trigger fallback.
 ### Async delegation
 
 `--async` spawns a detached `_run-job` process (Setsid) that executes the full delegation pipeline in the background. Only `worktree`/`patch` isolation allowed. The parent writes a `pending` job state, forks, and returns immediately. The runner transitions through `pending→running→terminal`, writes output/patch files, and records to ledger independently. `--verify` is not supported in async mode. `job list/status/result/logs/cancel/clean` manage the lifecycle.
+
+### Speculative parallelism
+
+When `preferences.speculative_delay_secs > 0` and isolation is `worktree`/`patch`, the primary agent gets a lead window. If it hasn't completed within the delay, a backup agent is launched in parallel (each in its own worktree). First success wins; the loser is cancelled via context cancellation (process group kill). Only works in synchronous mode (not `--async`). Requires fallback to be enabled. Orchestrated by `cmd/speculative.go`.
 
 ### Statusline
 

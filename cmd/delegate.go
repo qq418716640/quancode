@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -231,6 +232,31 @@ var delegateCmd = &cobra.Command{
 		noFallback := delegateNoFallback
 		if !cmd.Flags().Changed("no-fallback") {
 			noFallback = cfg.Preferences.FallbackMode == "off"
+		}
+
+		// Speculative parallelism: when enabled and isolation allows it,
+		// launch a backup agent in parallel after the delay window.
+		specDelay := cfg.Preferences.SpeculativeDelaySecs
+		if specDelay > 0 && !noFallback && (isolation == "worktree" || isolation == "patch") {
+			err := runSpeculativeDelegation(speculativeDelegationOpts{
+				cfg:             cfg,
+				primaryAgent:    a,
+				primaryKey:      agentKey,
+				task:            task,
+				workDir:         workDir,
+				isolation:       isolation,
+				verify:          vs,
+				timeoutOverride: delegateTimeout,
+				delaySecs:       specDelay,
+				noContext:       delegateNoContext,
+				contextFiles:    delegateContextFiles,
+				contextDiff:     delegateContextDiff,
+				contextMaxSize:  delegateContextMaxSize,
+			})
+			if !errors.Is(err, errNoSpeculativeAgent) {
+				return err // speculative ran (nil = success, non-nil = failure)
+			}
+			// No backup agent available — fall through to normal serial path
 		}
 
 		// Run attempt with fallback loop

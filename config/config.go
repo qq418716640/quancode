@@ -20,8 +20,9 @@ type Config struct {
 // Preferences contains user-level defaults for delegation behavior.
 // CLI flags override these when explicitly set.
 type Preferences struct {
-	DefaultIsolation string `yaml:"default_isolation"` // "inplace" (default), "worktree", "patch"
-	FallbackMode     string `yaml:"fallback_mode"`     // "auto" (default), "off"
+	DefaultIsolation     string `yaml:"default_isolation"`      // "inplace" (default), "worktree", "patch"
+	FallbackMode         string `yaml:"fallback_mode"`          // "auto" (default), "off"
+	SpeculativeDelaySecs int    `yaml:"speculative_delay_secs"` // seconds before launching speculative agent; 0 = disabled (default)
 }
 
 type AgentConfig struct {
