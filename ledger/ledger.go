@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/qq418716640/quancode/version"
 )
 
 // Entry represents a single delegation attempt record.
@@ -34,6 +36,9 @@ type Entry struct {
 	// VerifyRaw stores the verification result as raw JSON to avoid
 	// a circular dependency between ledger and cmd packages.
 	VerifyRaw json.RawMessage `json:"verify,omitempty"`
+
+	// Version records the quancode version that produced this entry.
+	Version string `json:"version,omitempty"`
 }
 
 // LogDir returns the path to the ledger log directory.
@@ -59,6 +64,9 @@ func Append(entry *Entry) error {
 
 	if entry.Timestamp == "" {
 		entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
+	}
+	if entry.Version == "" {
+		entry.Version = version.Version
 	}
 
 	data, err := json.Marshal(entry)

@@ -6,6 +6,30 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+
+- Ledger entries now include `version` field recording the quancode version that produced the entry
+
+## [v0.5.3] - 2026-04-01
+
+### Added
+
+- `--timeout` flag now works for sync delegation (previously async-only), capped at agent config `timeout_secs`
+- New prompt sections: BEFORE DELEGATING (task sizing signals and split strategies) and TIMEOUT CONTROL
+- Negative `--timeout` values are now rejected with a clear error
+
+### Changed
+
+- `DelegateOptions` gains `TimeoutOverride` field for per-task timeout control
+- `--timeout` flag description updated from async-specific to general
+
+## [v0.5.2] - 2026-03-31
+
+### Fixed
+
+- Increased Codex CLI default timeout from 180s to 300s for consistency with other agents
+- Added Bash timeout guidance in delegation prompt (300000ms minimum) to prevent premature process kills
+
 ## [v0.5.1] - 2026-03-31
 
 ### Changed
