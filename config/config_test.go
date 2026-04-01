@@ -509,3 +509,138 @@ func TestDefaultConfigHasPreferences(t *testing.T) {
 		t.Fatalf("expected auto, got %q", cfg.Preferences.FallbackMode)
 	}
 }
+
+func TestSupportsIsolation(t *testing.T) {
+	tests := []struct {
+		name      string
+		supported []string
+		mode      string
+		want      bool
+	}{
+		{"empty list supports all", nil, "worktree", true},
+		{"empty list supports inplace", nil, "inplace", true},
+		{"explicit match", []string{"inplace"}, "inplace", true},
+		{"explicit mismatch", []string{"inplace"}, "worktree", false},
+		{"multiple supported", []string{"inplace", "worktree"}, "worktree", true},
+		{"multiple not matched", []string{"inplace", "worktree"}, "patch", false},
+		{"empty string mode with empty list", nil, "", true},
+		{"empty string mode with explicit list", []string{"inplace"}, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ac := &AgentConfig{SupportedIsolations: tt.supported}
+			got := ac.SupportsIsolation(tt.mode)
+			if got != tt.want {
+				t.Errorf("SupportsIsolation(%q) = %v, want %v", tt.mode, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateDefaultIsolationNotInSupported(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "test",
+		Agents: map[string]AgentConfig{
+			"test": {
+				Command:             "test",
+				Enabled:             true,
+				DefaultIsolation:    "patch",
+				SupportedIsolations: []string{"inplace"},
+			},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if strings.Contains(p, "default_isolation") && strings.Contains(p, "not in supported_isolations") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected default_isolation/supported_isolations mismatch problem, got %v", problems)
+	}
+}
+
+func TestValidateDefaultIsolationInSupported(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "test",
+		Agents: map[string]AgentConfig{
+			"test": {
+				Command:             "test",
+				Enabled:             true,
+				DefaultIsolation:    "inplace",
+				SupportedIsolations: []string{"inplace"},
+			},
+		},
+	}
+	problems := cfg.Validate()
+	for _, p := range problems {
+		if strings.Contains(p, "not in supported_isolations") {
+			t.Fatalf("unexpected problem: %s", p)
+		}
+	}
+}
+
+func TestValidateInvalidSupportedIsolation(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "test",
+		Agents: map[string]AgentConfig{
+			"test": {
+				Command:             "test",
+				Enabled:             true,
+				SupportedIsolations: []string{"invalid_mode"},
+			},
+		},
+	}
+	problems := cfg.Validate()
+	found := false
+	for _, p := range problems {
+		if strings.Contains(p, "invalid supported_isolations") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected invalid supported_isolations problem, got %v", problems)
+	}
+}
+
+func TestApplyKnownAgentDefaultsBackfillsSupportedIsolations(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "qoder",
+		Agents: map[string]AgentConfig{
+			"qoder": {
+				Name:    "Qoder CLI",
+				Command: "qodercli",
+				Enabled: true,
+				// No SupportedIsolations set — should be backfilled
+			},
+		},
+	}
+	applyKnownAgentDefaults(cfg)
+	ac := cfg.Agents["qoder"]
+	if len(ac.SupportedIsolations) == 0 {
+		t.Fatal("expected SupportedIsolations to be backfilled for qoder")
+	}
+	if ac.SupportedIsolations[0] != "inplace" {
+		t.Fatalf("expected inplace, got %v", ac.SupportedIsolations)
+	}
+}
+
+func TestApplyKnownAgentDefaultsDoesNotOverrideExistingSupportedIsolations(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "qoder",
+		Agents: map[string]AgentConfig{
+			"qoder": {
+				Name:                "Qoder CLI",
+				Command:             "qodercli",
+				Enabled:             true,
+				SupportedIsolations: []string{"inplace", "worktree"}, // User override
+			},
+		},
+	}
+	applyKnownAgentDefaults(cfg)
+	ac := cfg.Agents["qoder"]
+	if len(ac.SupportedIsolations) != 2 {
+		t.Fatalf("expected user's 2-element list preserved, got %v", ac.SupportedIsolations)
+	}
+}

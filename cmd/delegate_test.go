@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/qq418716640/quancode/runner"
@@ -94,9 +97,9 @@ func TestBuildDelegationResultJSONFields(t *testing.T) {
 			TimedOut:   false,
 			DurationMs: 42,
 		},
-		output:         "done",
-		patch:          "diff --git a/file b/file",
-		changedFiles:   []string{"file.go"},
+		output:       "done",
+		patch:        "diff --git a/file b/file",
+		changedFiles: []string{"file.go"},
 	}
 
 	got := buildDelegationResult("codex", "write tests", "patch", ar)
@@ -146,6 +149,73 @@ func TestBuildDelegationResultErrorForcesExitCodeOneWhenUnset(t *testing.T) {
 	}
 }
 
+func TestWarnContextSize(t *testing.T) {
+	tests := []struct {
+		name       string
+		totalBytes int
+		wantWarn   bool
+	}{
+		{name: "below threshold", totalBytes: 24*1024 - 1, wantWarn: false},
+		{name: "at threshold", totalBytes: 24 * 1024, wantWarn: true},
+		{name: "above threshold", totalBytes: 25 * 1024, wantWarn: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := captureStderr(t, func() {
+				warnContextSize(nil, tt.totalBytes)
+			})
+
+			if tt.wantWarn {
+				if !strings.Contains(out, "[quancode] warning: total prompt size") {
+					t.Fatalf("expected warning output, got %q", out)
+				}
+				return
+			}
+
+			if out != "" {
+				t.Fatalf("expected no output, got %q", out)
+			}
+		})
+	}
+}
+
+func TestWarnContextSizeNilBundleDoesNotPanic(t *testing.T) {
+	captureStderr(t, func() {
+		warnContextSize(nil, 0)
+	})
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
+
+	var buf bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		_, copyErr := io.Copy(&buf, r)
+		_ = r.Close()
+		done <- copyErr
+	}()
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("read captured stderr: %v", err)
+	}
+	return buf.String()
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -156,4 +226,93 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func TestClassifyFailure(t *testing.T) {
+	tests := []struct {
+		name string
+		ar   attemptResult
+		want string
+	}{
+		{
+			name: "success",
+			ar:   attemptResult{result: &runner.Result{ExitCode: 0}},
+			want: "",
+		},
+		{
+			name: "launch failure",
+			ar:   attemptResult{result: nil, err: errors.New("not found")},
+			want: FailureClassLaunchFailure,
+		},
+		{
+			name: "timed out",
+			ar:   attemptResult{result: &runner.Result{TimedOut: true, ExitCode: 124}},
+			want: FailureClassTimedOut,
+		},
+		{
+			name: "agent failed non-zero exit",
+			ar:   attemptResult{result: &runner.Result{ExitCode: 1}},
+			want: FailureClassAgentFailed,
+		},
+		{
+			name: "rate limited",
+			ar: attemptResult{
+				result: &runner.Result{ExitCode: 1},
+				output: "Error: rate limit exceeded",
+			},
+			want: FailureClassRateLimited,
+		},
+		{
+			name: "patch conflict",
+			ar: attemptResult{
+				result:        &runner.Result{ExitCode: 0},
+				patchApplyErr: errors.New("conflict"),
+			},
+			want: FailureClassPatchConflict,
+		},
+		{
+			name: "verify strict failure",
+			ar: attemptResult{
+				result: &runner.Result{ExitCode: 0},
+				verify: &VerifyResult{Enabled: true, Strict: true, Status: VerifyFailed, FailedCount: 1},
+			},
+			want: FailureClassVerifyFailed,
+		},
+		{
+			name: "verify non-strict is not failure",
+			ar: attemptResult{
+				result: &runner.Result{ExitCode: 0},
+				verify: &VerifyResult{Enabled: true, Strict: false, Status: VerifyFailed, FailedCount: 1},
+			},
+			want: "",
+		},
+		{
+			name: "nil result no error is empty",
+			ar:   attemptResult{result: nil, err: nil},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifyFailure(tt.ar)
+			if got != tt.want {
+				t.Errorf("classifyFailure() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsTransientFailure(t *testing.T) {
+	transient := []string{FailureClassLaunchFailure, FailureClassTimedOut, FailureClassRateLimited}
+	for _, fc := range transient {
+		if !isTransientFailure(fc) {
+			t.Errorf("%q should be transient", fc)
+		}
+	}
+	nonTransient := []string{FailureClassAgentFailed, FailureClassPatchConflict, FailureClassVerifyFailed, FailureClassSpeculativeCancelled, ""}
+	for _, fc := range nonTransient {
+		if isTransientFailure(fc) {
+			t.Errorf("%q should not be transient", fc)
+		}
+	}
 }
