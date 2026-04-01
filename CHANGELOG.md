@@ -8,6 +8,16 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Added
 
+- **Speculative parallelism**: when `preferences.speculative_delay_secs > 0` and isolation is worktree/patch, a backup agent launches in parallel after the delay window — first success wins, loser is cancelled
+- **Process group management**: all subprocess execution uses Setpgid + group kill to prevent child process leaks on timeout
+- `RunWithContext`, `RunWithStdinContext`, `RunWithOutputFileContext` runner variants for external cancellation
+- `Agent.DelegateWithContext` interface method for context-controlled delegation
+- `preferences.speculative_delay_secs` config field (default 0 = disabled)
+- Ledger fields: `speculative`, `speculative_role`, `cancelled_by` for tracking speculative execution
+- `speculative_cancelled` failure class
+- Per-agent `default_isolation` config field — allows agents incompatible with certain isolation modes (e.g. Qoder + worktree) to override the global default
+- Speculative parallelism now skips backup agents whose per-agent isolation is incompatible with the current isolation mode
+- Qoder built-in default set to `inplace` isolation (worktree incompatible due to upstream cwd behavior)
 - Ledger entries now include `version` field recording the quancode version that produced the entry
 
 ## [v0.5.3] - 2026-04-01

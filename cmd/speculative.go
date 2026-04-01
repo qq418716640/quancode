@@ -48,15 +48,37 @@ type speculativeDelegationOpts struct {
 // After delaySecs, if the primary is still running, a backup agent is launched
 // in parallel. The first successful result wins.
 func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
-	// Find speculative agent
+	// Find speculative agent — must be available and compatible with the
+	// current isolation mode (agents with a per-agent default_isolation that
+	// differs from the requested isolation are excluded, since they would
+	// run in a different isolation and break the parallel race assumption).
 	tried := map[string]bool{opts.primaryKey: true}
-	specSel := router.SelectAgentExcluding(opts.cfg, opts.task, tried)
-	if specSel == nil {
-		return errNoSpeculativeAgent
+	var specSel *router.Selection
+	var specAc config.AgentConfig
+	var specAgent agent.Agent
+	for {
+		sel := router.SelectAgentExcluding(opts.cfg, opts.task, tried)
+		if sel == nil {
+			return errNoSpeculativeAgent
+		}
+		tried[sel.AgentKey] = true
+		ac := opts.cfg.Agents[sel.AgentKey]
+		// Skip agents whose per-agent isolation is incompatible
+		if ac.DefaultIsolation != "" && ac.DefaultIsolation != opts.isolation {
+			fmt.Fprintf(os.Stderr, "[quancode] skipping %s for speculative (isolation %s incompatible with %s)\n",
+				sel.AgentKey, ac.DefaultIsolation, opts.isolation)
+			continue
+		}
+		a := agent.FromConfig(sel.AgentKey, ac)
+		if ok, _ := a.IsAvailable(); !ok {
+			continue
+		}
+		specSel = sel
+		specAc = ac
+		specAgent = a
+		break
 	}
-	specAc := opts.cfg.Agents[specSel.AgentKey]
-	specAgent := agent.FromConfig(specSel.AgentKey, specAc)
-	if ok, _ := specAgent.IsAvailable(); !ok {
+	if specSel == nil {
 		return errNoSpeculativeAgent
 	}
 

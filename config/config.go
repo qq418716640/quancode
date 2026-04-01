@@ -46,6 +46,9 @@ type AgentConfig struct {
 	// NonInteractiveArgs are extra arguments appended in async mode
 	// to ensure the agent runs without interactive prompts.
 	NonInteractiveArgs []string `yaml:"non_interactive_args,omitempty"`
+	// DefaultIsolation overrides the global preferences.default_isolation for this agent.
+	// Use when an agent is incompatible with certain isolation modes (e.g. Qoder + worktree).
+	DefaultIsolation string `yaml:"default_isolation,omitempty"`
 	// Context injection config (overrides global ContextDefaults)
 	Context *qcontext.ContextSpec `yaml:"context,omitempty"`
 }
@@ -124,6 +127,9 @@ func applyKnownAgentDefaults(cfg *Config) {
 		if ac.OutputMode == "" {
 			ac.OutputMode = def.OutputMode
 		}
+		if ac.DefaultIsolation == "" {
+			ac.DefaultIsolation = def.DefaultIsolation
+		}
 		cfg.Agents[key] = ac
 	}
 }
@@ -168,6 +174,9 @@ func (c *Config) Validate() []string {
 		}
 		if !validOutputModes[ac.OutputMode] {
 			problems = append(problems, fmt.Sprintf("agent %q: invalid output_mode %q", key, ac.OutputMode))
+		}
+		if !validIsolationModes[ac.DefaultIsolation] {
+			problems = append(problems, fmt.Sprintf("agent %q: invalid default_isolation %q", key, ac.DefaultIsolation))
 		}
 	}
 

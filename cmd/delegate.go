@@ -115,14 +115,9 @@ var delegateCmd = &cobra.Command{
 			workDir, _ = os.Getwd()
 		}
 
-		// Resolve isolation: CLI flag > preferences > "inplace"
+		// Resolve isolation: CLI flag > agent default > preferences > "inplace"
 		isolation := delegateIsolation
-		if isolation == "" {
-			isolation = cfg.Preferences.DefaultIsolation
-		}
-		if isolation == "" {
-			isolation = "inplace"
-		}
+		// Agent-level default is resolved after agent selection below
 
 		if delegateTimeout < 0 {
 			return fmt.Errorf("--timeout must be a positive number of seconds")
@@ -154,6 +149,17 @@ var delegateCmd = &cobra.Command{
 			if ok, _ := a.IsAvailable(); !ok {
 				return fmt.Errorf("agent %s: command %q not found in PATH", agentKey, ac.Command)
 			}
+		}
+
+		// Finish resolving isolation: CLI flag > agent default > preferences > "inplace"
+		if isolation == "" {
+			isolation = ac.DefaultIsolation
+		}
+		if isolation == "" {
+			isolation = cfg.Preferences.DefaultIsolation
+		}
+		if isolation == "" {
+			isolation = "inplace"
 		}
 
 		// Validate verify flags (mutually exclusive)
