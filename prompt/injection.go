@@ -30,7 +30,7 @@ TO LIST AVAILABLE AGENTS:
 
 DELEGATION GUIDELINES:
 - ALWAYS use "{{.Binary}} delegate" to invoke other agents. NEVER call their CLI commands directly (e.g., do NOT run "claude -p ..." or "codex exec ..." yourself). QuanCode manages authentication, proxy, and environment for each agent.
-- Delegation can take several minutes. When running via a shell tool (e.g., Bash), set a timeout of at least 300000ms (5 minutes) to avoid killing the process prematurely.
+- Delegation can take several minutes. When running via a shell tool (e.g., Bash), set a timeout of at least 480000ms (8 minutes) to avoid killing the process prematurely.
 - Delegate well-scoped, independent tasks (e.g., "write tests for X", "refactor file Y", "summarize the design decisions in module Z")
 - Always tell the sub-agent what output format you expect (code change, bullet list, table, prose, file, etc.).
 - QuanCode automatically injects project context (CLAUDE.md, AGENTS.md) into every delegation. You do NOT need to copy these files into the task description. Focus on WHAT to do and WHY.
@@ -70,7 +70,7 @@ TASK TYPES — match your task description to the type:
 - Code modification: specify files, functions, constraints, acceptance criteria. Add --verify when a reliable automated check exists.
 - Research/analysis (e.g., "review this code", "evaluate this design", "compare approaches"): clearly state WHAT to analyze, WHAT output format you expect, and explicitly say "DO NOT write code" if the task is analysis-only.
 - Documentation/writing (e.g., "draft an RFC", "write release notes", "update the migration guide"): specify target audience, structure, tone, and whether to write into a file or return as output.
-- Code review: provide the diff or changed files via --context-diff, state what aspects to review (correctness, security, performance, style).
+- Code review: provide the diff or changed files via --context-diff, state what aspects to review (correctness, security, performance, style). For large diffs (>300 lines), split by file or module into multiple review delegations rather than one large review.
 - Keep all delegated tasks well-scoped. Broad, underspecified tasks tend to produce unfocused output or time out.
 
 ISOLATION MODES:
@@ -108,7 +108,8 @@ This returns immediately with a job_id. The task runs in a detached background p
     {{.Binary}} job clean [--ttl 168h]      # remove expired job files
 - For async+patch mode, apply the result with: {{.Binary}} apply-patch --id <delegation_id> (get delegation_id from job result --format json).
 - Do NOT rely on remembering job_ids — use "job list --workdir ." to find them.
-- Prefer sync delegation for quick tasks. Use async only when the task is expected to take long or you want to continue working on other things while it runs.`
+- Prefer sync delegation for quick tasks. Use async only when the task is expected to take long or you want to continue working on other things while it runs.
+- Long-running analysis, documentation, and non-diff-dependent review tasks are good candidates for async delegation.`
 
 type agentInfo struct {
 	Key         string

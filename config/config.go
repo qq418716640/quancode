@@ -49,8 +49,27 @@ type AgentConfig struct {
 	// DefaultIsolation overrides the global preferences.default_isolation for this agent.
 	// Use when an agent is incompatible with certain isolation modes (e.g. Qoder + worktree).
 	DefaultIsolation string `yaml:"default_isolation,omitempty"`
+	// SupportedIsolations declares which isolation modes this agent can use.
+	// Empty means all modes are supported (default). Used by speculative
+	// parallelism to filter incompatible backup agents, and by delegate
+	// to warn when the requested isolation is unsupported.
+	SupportedIsolations []string `yaml:"supported_isolations,omitempty"`
 	// Context injection config (overrides global ContextDefaults)
 	Context *qcontext.ContextSpec `yaml:"context,omitempty"`
+}
+
+// SupportsIsolation reports whether the agent supports the given isolation mode.
+// Returns true if SupportedIsolations is empty (all modes supported).
+func (ac *AgentConfig) SupportsIsolation(mode string) bool {
+	if len(ac.SupportedIsolations) == 0 {
+		return true
+	}
+	for _, s := range ac.SupportedIsolations {
+		if s == mode {
+			return true
+		}
+	}
+	return false
 }
 
 // Valid enum values for configuration fields.
@@ -130,6 +149,9 @@ func applyKnownAgentDefaults(cfg *Config) {
 		if ac.DefaultIsolation == "" {
 			ac.DefaultIsolation = def.DefaultIsolation
 		}
+		if len(ac.SupportedIsolations) == 0 && len(def.SupportedIsolations) > 0 {
+			ac.SupportedIsolations = def.SupportedIsolations
+		}
 		cfg.Agents[key] = ac
 	}
 }
@@ -177,6 +199,23 @@ func (c *Config) Validate() []string {
 		}
 		if !validIsolationModes[ac.DefaultIsolation] {
 			problems = append(problems, fmt.Sprintf("agent %q: invalid default_isolation %q", key, ac.DefaultIsolation))
+		}
+		for _, iso := range ac.SupportedIsolations {
+			if !validIsolationModes[iso] {
+				problems = append(problems, fmt.Sprintf("agent %q: invalid supported_isolations value %q", key, iso))
+			}
+		}
+		if ac.DefaultIsolation != "" && len(ac.SupportedIsolations) > 0 {
+			supported := false
+			for _, iso := range ac.SupportedIsolations {
+				if iso == ac.DefaultIsolation {
+					supported = true
+					break
+				}
+			}
+			if !supported {
+				problems = append(problems, fmt.Sprintf("agent %q: default_isolation %q not in supported_isolations %v", key, ac.DefaultIsolation, ac.SupportedIsolations))
+			}
 		}
 	}
 

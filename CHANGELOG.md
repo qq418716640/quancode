@@ -18,6 +18,11 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Per-agent `default_isolation` config field — allows agents incompatible with certain isolation modes (e.g. Qoder + worktree) to override the global default
 - Speculative parallelism now skips backup agents whose per-agent isolation is incompatible with the current isolation mode
 - Qoder built-in default set to `inplace` isolation (worktree incompatible due to upstream cwd behavior)
+- `supported_isolations` capability field on AgentConfig — agents can declare which isolation modes they support; incompatible modes are auto-downgraded with a warning
+- Config validation now catches `default_isolation` not in `supported_isolations`
+- Context size warning when total prompt exceeds 24KB
+- Claude and Codex default timeout increased from 300s to 480s (other agents remain at 300s)
+- Prompt: code review guidance for large diffs (>300 lines split by module), async delegation hints, Bash timeout bumped to 480000ms
 - Ledger entries now include `version` field recording the quancode version that produced the entry
 
 ## [v0.5.3] - 2026-04-01

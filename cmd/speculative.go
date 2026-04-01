@@ -63,10 +63,10 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		}
 		tried[sel.AgentKey] = true
 		ac := opts.cfg.Agents[sel.AgentKey]
-		// Skip agents whose per-agent isolation is incompatible
-		if ac.DefaultIsolation != "" && ac.DefaultIsolation != opts.isolation {
-			fmt.Fprintf(os.Stderr, "[quancode] skipping %s for speculative (isolation %s incompatible with %s)\n",
-				sel.AgentKey, ac.DefaultIsolation, opts.isolation)
+		// Skip agents that don't support the current isolation mode
+		if !ac.SupportsIsolation(opts.isolation) {
+			fmt.Fprintf(os.Stderr, "[quancode] skipping %s for speculative (does not support isolation %s)\n",
+				sel.AgentKey, opts.isolation)
 			continue
 		}
 		a := agent.FromConfig(sel.AgentKey, ac)

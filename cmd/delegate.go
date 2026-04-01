@@ -162,6 +162,20 @@ var delegateCmd = &cobra.Command{
 			isolation = "inplace"
 		}
 
+		// Warn if the agent doesn't support the resolved isolation mode
+		if !ac.SupportsIsolation(isolation) {
+			fallbackIso := ac.DefaultIsolation
+			if fallbackIso == "" && len(ac.SupportedIsolations) > 0 {
+				fallbackIso = ac.SupportedIsolations[0]
+			}
+			if fallbackIso == "" {
+				fallbackIso = "inplace"
+			}
+			fmt.Fprintf(os.Stderr, "[quancode] warning: %s does not support isolation %q, falling back to %s\n",
+				agentKey, isolation, fallbackIso)
+			isolation = fallbackIso
+		}
+
 		// Validate verify flags (mutually exclusive)
 		if len(delegateVerify) > 0 && len(delegateVerifyStrict) > 0 {
 			return fmt.Errorf("--verify and --verify-strict are mutually exclusive")
@@ -285,6 +299,7 @@ var delegateCmd = &cobra.Command{
 				for _, w := range bundle.Warnings {
 					fmt.Fprintf(os.Stderr, "[quancode] context: %s\n", w)
 				}
+				warnContextSize(bundle, len(ctxPrefix)+len(task))
 			}
 
 			ar := runDelegateAttempt(DelegateAttemptOptions{
@@ -422,6 +437,16 @@ func dedupe(items []string) []string {
 		}
 	}
 	return result
+}
+
+// warnContextSize emits a stderr warning when the total prompt size
+// (formatted context + task) is large enough to risk sub-agent timeouts.
+func warnContextSize(_ *qcontext.ContextBundle, totalBytes int) {
+	const warnThresholdKB = 24 // 24KB — 75% of default 32KB context budget
+	totalKB := totalBytes / 1024
+	if totalKB >= warnThresholdKB {
+		fmt.Fprintf(os.Stderr, "[quancode] warning: total prompt size %dKB is large — consider --no-context, fewer --context-files, or splitting the task\n", totalKB)
+	}
 }
 
 func init() {

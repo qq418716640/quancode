@@ -10,7 +10,7 @@ var KnownAgents = map[string]AgentConfig{
 		Strengths:    []string{"architecture", "complex-reasoning", "debugging", "multi-file-edits"},
 		PrimaryArgs:  []string{"--append-system-prompt"},
 		DelegateArgs: []string{"-p", "--output-format", "text"},
-		TimeoutSecs:  300,
+		TimeoutSecs:  480,
 		Enabled:      true,
 		PreferredFor: []string{"architecture", "refactor", "debug", "design", "plan"},
 		Priority:     10,
@@ -25,7 +25,7 @@ var KnownAgents = map[string]AgentConfig{
 		PromptFile:   "AGENTS.md",
 		DelegateArgs: []string{"exec", "--full-auto", "--ephemeral"},
 		OutputFlag:   "--output-last-message",
-		TimeoutSecs:  300,
+		TimeoutSecs:  480,
 		Enabled:      true,
 		PreferredFor: []string{"test", "fix", "generate", "create", "write", "quick"},
 		Priority:     20,
@@ -40,7 +40,8 @@ var KnownAgents = map[string]AgentConfig{
 		Enabled:          true,
 		PreferredFor:     []string{"analyze", "explain", "review"},
 		Priority:         25,
-		DefaultIsolation: "inplace", // Qoder ignores worktree cwd; see feedback_qoder_worktree.md
+		DefaultIsolation:    "inplace",                // Qoder ignores worktree cwd; see feedback_qoder_worktree.md
+		SupportedIsolations: []string{"inplace"},      // worktree/patch unsupported (upstream cwd issue)
 	},
 	"aider": {
 		Name:         "Aider",
