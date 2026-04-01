@@ -28,7 +28,8 @@ type Agent interface {
 }
 
 type DelegateOptions struct {
-	DelegationID string
+	DelegationID    string
+	TimeoutOverride int // per-task timeout in seconds; 0 means use agent default
 }
 
 type ExitStatusError struct {
@@ -118,6 +119,9 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*ru
 	timeout := a.cfg.TimeoutSecs
 	if timeout <= 0 {
 		timeout = 300
+	}
+	if opts.TimeoutOverride > 0 && opts.TimeoutOverride < timeout {
+		timeout = opts.TimeoutOverride
 	}
 
 	env := runner.BuildEnv(a.cfg.Env)

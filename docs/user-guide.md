@@ -263,7 +263,7 @@ This returns a `job_id` immediately. The task runs in a detached background proc
 Rules:
 - `--async` requires `--isolation worktree` or `--isolation patch`
 - `--async` does not support `--verify` / `--verify-strict`
-- `--timeout <seconds>` sets a per-task timeout (capped at agent config `timeout_secs`)
+- `--timeout <seconds>` sets a per-task timeout (capped at agent config `timeout_secs`). Also works for sync delegation
 
 Manage jobs with `quancode job`:
 

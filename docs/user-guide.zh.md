@@ -191,7 +191,7 @@ quancode delegate --async --agent codex --isolation worktree "implement feature 
 规则：
 - `--async` 必须搭配 `--isolation worktree` 或 `--isolation patch`
 - `--async` 不支持 `--verify` / `--verify-strict`
-- `--timeout <seconds>` 设置单任务超时（不超过 agent 配置的 `timeout_secs`）
+- `--timeout <seconds>` 设置单任务超时（不超过 agent 配置的 `timeout_secs`），同步委派同样适用
 
 通过 `quancode job` 管理异步任务：
 

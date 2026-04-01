@@ -39,13 +39,14 @@ type attemptResult struct {
 
 // DelegateAttemptOptions controls the behavior of runDelegateAttempt.
 type DelegateAttemptOptions struct {
-	Agent     agent.Agent
-	AgentKey  string
-	Task      string
-	CtxPrefix string
-	WorkDir   string
-	Isolation string
-	Verify    *verifySpec
+	Agent           agent.Agent
+	AgentKey        string
+	Task            string
+	CtxPrefix       string
+	WorkDir         string
+	Isolation       string
+	Verify          *verifySpec
+	TimeoutOverride int // per-task timeout override in seconds; 0 means use agent default
 	// Quiet suppresses UI output (spinner, stderr messages).
 	// Used by async job-runner where there is no terminal.
 	Quiet bool
@@ -115,7 +116,8 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 		defer spinner.Stop()
 	}
 	result, delegateErr := opts.Agent.Delegate(execDir, fullTask, agent.DelegateOptions{
-		DelegationID: delegationID,
+		DelegationID:    delegationID,
+		TimeoutOverride: opts.TimeoutOverride,
 	})
 	if spinner != nil {
 		spinner.Stop()

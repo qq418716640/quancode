@@ -123,6 +123,10 @@ var delegateCmd = &cobra.Command{
 			isolation = "inplace"
 		}
 
+		if delegateTimeout < 0 {
+			return fmt.Errorf("--timeout must be a positive number of seconds")
+		}
+
 		// Resolve initial agent
 		agentKey := delegateAgent
 		if agentKey == "" {
@@ -252,13 +256,14 @@ var delegateCmd = &cobra.Command{
 			}
 
 			ar := runDelegateAttempt(DelegateAttemptOptions{
-				Agent:     a,
-				AgentKey:  agentKey,
-				Task:      task,
-				CtxPrefix: ctxPrefix,
-				WorkDir:   workDir,
-				Isolation: isolation,
-				Verify:    vs,
+				Agent:           a,
+				AgentKey:        agentKey,
+				Task:            task,
+				CtxPrefix:       ctxPrefix,
+				WorkDir:         workDir,
+				Isolation:       isolation,
+				Verify:          vs,
+				TimeoutOverride: delegateTimeout,
 			})
 
 			// Check if fallback is needed and allowed
@@ -409,6 +414,6 @@ func init() {
 	delegateCmd.Flags().StringArrayVar(&delegateVerifyStrict, "verify-strict", nil, "verification command — fail delegation if verification fails (can be specified multiple times)")
 	delegateCmd.Flags().IntVar(&delegateVerifyTimeout, "verify-timeout", 120, "timeout in seconds for each verification command")
 	delegateCmd.Flags().BoolVar(&delegateAsync, "async", false, "run delegation asynchronously (requires --isolation worktree or patch)")
-	delegateCmd.Flags().IntVar(&delegateTimeout, "timeout", 0, "timeout in seconds for async jobs (default: agent config timeout_secs)")
+	delegateCmd.Flags().IntVar(&delegateTimeout, "timeout", 0, "timeout in seconds (overrides agent config timeout_secs)")
 	rootCmd.AddCommand(delegateCmd)
 }

@@ -50,6 +50,22 @@ DELEGATION GUIDELINES:
 - Do NOT delegate if you can do the task yourself just as efficiently
 - You are the primary agent. You own the overall plan and final quality.
 
+BEFORE DELEGATING — assess task size:
+- If the task involves multiple deliverables, multiple phases, or edits across many files, consider splitting it.
+- Strong signals to split:
+  - multiple deliverables in one request (e.g., "refactor X and add tests and update docs")
+  - mixed phases: analysis + implementation + verification in one task
+  - unclear module boundaries or broad scope (e.g., "refactor the entire package")
+- Preferred split strategies:
+  - by phase or deliverable: separate analysis, implementation, tests, and docs
+  - by file/module boundary (best for parallel delegation)
+  - by dependency: prerequisite tasks first, then downstream
+- Do not over-split trivial tasks — single-file, single-outcome tasks should stay together.
+
+TIMEOUT CONTROL:
+- Use --timeout <seconds> to set a shorter deadline for tasks you expect to finish quickly (capped at the agent's configured timeout).
+- If a task genuinely needs more time, split it rather than increasing the timeout.
+
 TASK TYPES — match your task description to the type:
 - Code modification: specify files, functions, constraints, acceptance criteria. Add --verify when a reliable automated check exists.
 - Research/analysis (e.g., "review this code", "evaluate this design", "compare approaches"): clearly state WHAT to analyze, WHAT output format you expect, and explicitly say "DO NOT write code" if the task is analysis-only.
@@ -82,7 +98,7 @@ For tasks expected to take longer than a few minutes, use --async to run them in
 This returns immediately with a job_id. The task runs in a detached background process.
 - --async REQUIRES --isolation worktree or --isolation patch (inplace is not allowed).
 - --async does NOT support --verify/--verify-strict yet.
-- Use --timeout <seconds> to set a per-task timeout (capped at agent config timeout_secs).
+- Use --timeout <seconds> to set a shorter per-task timeout (capped at agent config timeout_secs). Works for both sync and async delegation.
 - Manage async jobs with:
     {{.Binary}} job list [--workdir .]       # list jobs (newest first)
     {{.Binary}} job status <job_id>          # check status

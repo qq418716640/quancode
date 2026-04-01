@@ -40,3 +40,28 @@ func TestBuildExcludesPrimaryAndUsesBinaryPath(t *testing.T) {
 		t.Fatalf("expected injected prompt to use provided binary path")
 	}
 }
+
+func TestBuildContainsDelegationGuidance(t *testing.T) {
+	cfg := &config.Config{
+		Agents: map[string]config.AgentConfig{
+			"codex": {Name: "Codex CLI", Enabled: true},
+		},
+	}
+
+	out, err := Build(cfg, "claude", "quancode")
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+
+	for _, section := range []string{
+		"BEFORE DELEGATING",
+		"TIMEOUT CONTROL",
+		"TASK TYPES",
+		"ISOLATION MODES",
+		"ASYNC DELEGATION",
+	} {
+		if !strings.Contains(out, section) {
+			t.Errorf("expected prompt to contain %q section", section)
+		}
+	}
+}
