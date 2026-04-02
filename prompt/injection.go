@@ -66,6 +66,38 @@ TIMEOUT CONTROL:
 - Use --timeout <seconds> to set a shorter deadline for tasks you expect to finish quickly (capped at the agent's configured timeout).
 - If a task genuinely needs more time, split it rather than increasing the timeout.
 
+PIPELINE (multi-stage delegation):
+Use pipeline when the task has sequential phase dependencies — later steps need earlier outputs.
+- Single well-scoped task → use delegate
+- Multi-phase task (analyze → implement → test, review → fix → verify) → use pipeline
+- Independent parallel subtasks → use multiple delegate calls, NOT pipeline
+Trigger signals: "analyze then implement", "plan then change then verify", "review then fix"
+How to use:
+1. Write a temporary pipeline YAML file (e.g., /tmp/pipeline-<task>.yaml)
+2. Run: {{.Binary}} pipeline /tmp/pipeline-<task>.yaml --format json --no-context "<user task>"
+3. The pipeline creates a worktree, runs stages sequentially, and applies the final patch.
+Pipeline YAML format:
+    name: <descriptive-name>
+    stages:
+      - name: analyze
+        agent: <agent-key or omit for auto-route>
+        task: |
+          <task description with template variables>
+      - name: implement
+        task: |
+          Based on analysis: {{"{{"}} .Stages.analyze.Output {{"}}"}}
+          {{"{{"}} .Input {{"}}"}}
+        verify:
+          - "go test ./..."
+        verify_strict: true
+    on_failure: stop
+Template variables: {{"{{"}} .Input {{"}}"}} (user task), {{"{{"}} .Prev.Output {{"}}"}} (previous stage output), {{"{{"}} .Stages.NAME.Output {{"}}"}} (specific stage output), {{"{{"}} .Stages.NAME.ChangedFiles {{"}}"}} (files changed by a stage).
+Guidelines:
+- Keep pipelines short (2-4 stages). If more stages are needed, reconsider the decomposition.
+- Always include verify on implementation stages when a reliable check exists.
+- Do NOT use pipeline when user clarification is needed between stages — use interactive delegate calls instead.
+- Clean up temporary pipeline files after use.
+
 TASK TYPES — match your task description to the type:
 - Code modification: specify files, functions, constraints, acceptance criteria. Add --verify when a reliable automated check exists.
 - Research/analysis (e.g., "review this code", "evaluate this design", "compare approaches"): clearly state WHAT to analyze, WHAT output format you expect, and explicitly say "DO NOT write code" if the task is analysis-only.

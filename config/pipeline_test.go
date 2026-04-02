@@ -45,6 +45,45 @@ on_failure: stop
 	}
 }
 
+func TestLoadPipeline_DirectPathYML(t *testing.T) {
+	dir := t.TempDir()
+	yamlContent := `
+name: test-pipeline
+stages:
+  - name: analyze
+    agent: claude
+    task: "Analyze: {{.Input}}"
+  - name: implement
+    task: "Implement based on: {{.Prev.Output}}"
+    verify:
+      - "go test ./..."
+    verify_strict: true
+on_failure: stop
+`
+	path := filepath.Join(dir, "test.yml")
+	os.WriteFile(path, []byte(yamlContent), 0644)
+
+	def, err := LoadPipeline(path)
+	if err != nil {
+		t.Fatalf("LoadPipeline: %v", err)
+	}
+	if def.Name != "test-pipeline" {
+		t.Errorf("name = %q, want %q", def.Name, "test-pipeline")
+	}
+	if len(def.Stages) != 2 {
+		t.Fatalf("stages = %d, want 2", len(def.Stages))
+	}
+	if def.Stages[0].Agent != "claude" {
+		t.Errorf("stage[0].agent = %q, want %q", def.Stages[0].Agent, "claude")
+	}
+	if def.Stages[1].VerifyStrict != true {
+		t.Error("stage[1].verify_strict should be true")
+	}
+	if def.OnFailure != "stop" {
+		t.Errorf("on_failure = %q, want %q", def.OnFailure, "stop")
+	}
+}
+
 func TestLoadPipeline_ByName(t *testing.T) {
 	dir := t.TempDir()
 	pipelinesDir := filepath.Join(dir, ".quancode", "pipelines")

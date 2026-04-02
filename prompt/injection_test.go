@@ -59,6 +59,7 @@ func TestBuildContainsDelegationGuidance(t *testing.T) {
 		"TASK TYPES",
 		"ISOLATION MODES",
 		"ASYNC DELEGATION",
+		"PIPELINE (multi-stage delegation)",
 	} {
 		if !strings.Contains(out, section) {
 			t.Errorf("expected prompt to contain %q section", section)

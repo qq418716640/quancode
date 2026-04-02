@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.7.1] - 2026-04-03
+
+### Added
+
+- Prompt injection now includes pipeline guidance — primary agent can autonomously decide when to use `quancode pipeline` vs single `delegate` for multi-phase tasks
+
 ## [v0.7.0] - 2026-04-02
 
 ### Added
