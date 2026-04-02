@@ -12,6 +12,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 - Complete Gemini CLI agent configuration: PromptMode file injection via GEMINI.md, non-interactive delegation args (`--yolo -o text`), refined routing keywords and timeout
 
+### Fixed
+
+- Reorder Gemini DelegateArgs so `-p` is last before task text — Gemini CLI requires prompt value immediately after `-p`
+
 ## [v0.7.1] - 2026-04-03
 
 ### Added
