@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.7.2] - 2026-04-03
+
+### Added
+
+- Complete Gemini CLI agent configuration: PromptMode file injection via GEMINI.md, non-interactive delegation args (`--yolo -o text`), refined routing keywords and timeout
+
 ## [v0.7.1] - 2026-04-03
 
 ### Added
