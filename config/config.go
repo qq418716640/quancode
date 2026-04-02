@@ -126,13 +126,43 @@ func Load(explicit string) (*Config, error) {
 	return DefaultConfig(), nil
 }
 
-// applyKnownAgentDefaults backfills newer adapter fields for known agents
-// when loading older configs generated before those fields existed.
+// applyKnownAgentDefaults backfills zero-value fields from KnownAgents
+// so that user configs only need to specify overrides.
 func applyKnownAgentDefaults(cfg *Config) {
 	for key, ac := range cfg.Agents {
 		def, ok := KnownAgents[key]
 		if !ok {
 			continue
+		}
+		if ac.Name == "" {
+			ac.Name = def.Name
+		}
+		if ac.Command == "" {
+			ac.Command = def.Command
+		}
+		if ac.Description == "" {
+			ac.Description = def.Description
+		}
+		if len(ac.Strengths) == 0 && len(def.Strengths) > 0 {
+			ac.Strengths = def.Strengths
+		}
+		if len(ac.PrimaryArgs) == 0 && len(def.PrimaryArgs) > 0 {
+			ac.PrimaryArgs = def.PrimaryArgs
+		}
+		if len(ac.DelegateArgs) == 0 && len(def.DelegateArgs) > 0 {
+			ac.DelegateArgs = def.DelegateArgs
+		}
+		if ac.OutputFlag == "" {
+			ac.OutputFlag = def.OutputFlag
+		}
+		if ac.TimeoutSecs == 0 {
+			ac.TimeoutSecs = def.TimeoutSecs
+		}
+		if len(ac.PreferredFor) == 0 && len(def.PreferredFor) > 0 {
+			ac.PreferredFor = def.PreferredFor
+		}
+		if ac.Priority == 0 {
+			ac.Priority = def.Priority
 		}
 		if ac.PromptMode == "" {
 			ac.PromptMode = def.PromptMode
@@ -151,6 +181,9 @@ func applyKnownAgentDefaults(cfg *Config) {
 		}
 		if len(ac.SupportedIsolations) == 0 && len(def.SupportedIsolations) > 0 {
 			ac.SupportedIsolations = def.SupportedIsolations
+		}
+		if len(ac.NonInteractiveArgs) == 0 && len(def.NonInteractiveArgs) > 0 {
+			ac.NonInteractiveArgs = def.NonInteractiveArgs
 		}
 		cfg.Agents[key] = ac
 	}
