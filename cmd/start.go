@@ -9,6 +9,7 @@ import (
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
 	"github.com/qq418716640/quancode/prompt"
+	"github.com/qq418716640/quancode/version"
 	"github.com/spf13/cobra"
 )
 
@@ -68,7 +69,7 @@ var startCmd = &cobra.Command{
 		if promptMode == "" {
 			promptMode = "append_arg"
 		}
-		fmt.Fprintf(os.Stderr, "[quancode] session active\n")
+		fmt.Fprintf(os.Stderr, "[quancode] session active (v%s)\n", version.Version)
 		fmt.Fprintf(os.Stderr, "[quancode] primary: %s (%s)\n", primary, ac.Name)
 		fmt.Fprintf(os.Stderr, "[quancode] prompt:  %s\n", promptMode)
 
