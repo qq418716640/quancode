@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.7.3] - 2026-04-03
+
+### Added
+
+- `applyKnownAgentDefaults` now backfills all zero-value fields (Name, Description, Strengths, PrimaryArgs, DelegateArgs, PreferredFor, Priority, etc.) — user configs only need to specify overrides
+- Full auto-approve flags added to all agent defaults: Claude (`--dangerously-skip-permissions`), Codex (`-s danger-full-access`), Qoder (`--dangerously-skip-permissions`), Gemini (`--yolo`)
+
 ## [v0.7.2] - 2026-04-03
 
 ### Added
