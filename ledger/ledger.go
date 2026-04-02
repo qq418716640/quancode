@@ -38,6 +38,12 @@ type Entry struct {
 	SpeculativeRole string `json:"speculative_role,omitempty"` // "primary" or "speculative"
 	CancelledBy     string `json:"cancelled_by,omitempty"`     // agent key that won, causing this one to be cancelled
 
+	// Pipeline tracking — links stages in a pipeline execution.
+	PipelineID   string `json:"pipeline_id,omitempty"`
+	PipelineName string `json:"pipeline_name,omitempty"`
+	StageName    string `json:"stage_name,omitempty"`
+	StageIndex   int    `json:"stage_index,omitempty"`
+
 	// VerifyRaw stores the verification result as raw JSON to avoid
 	// a circular dependency between ledger and cmd packages.
 	VerifyRaw json.RawMessage `json:"verify,omitempty"`

@@ -18,9 +18,9 @@ func TestFirstLine(t *testing.T) {
 		{"", 10, ""},
 	}
 	for _, tt := range tests {
-		got := firstLine(tt.input, tt.maxLen)
+		got := FirstLine(tt.input, tt.maxLen)
 		if got != tt.want {
-			t.Errorf("firstLine(%q, %d) = %q, want %q", tt.input, tt.maxLen, got, tt.want)
+			t.Errorf("FirstLine(%q, %d) = %q, want %q", tt.input, tt.maxLen, got, tt.want)
 		}
 	}
 }

@@ -9,7 +9,7 @@ import (
 // DelegationStart prints a formatted delegation start message to stderr.
 func DelegationStart(agentKey, task, isolation string) {
 	// Truncate task for display (keep first line, max 80 chars)
-	displayTask := firstLine(task, 80)
+	displayTask := FirstLine(task, 80)
 
 	fmt.Fprintf(os.Stderr, "[quancode] ⚡ Dispatching to %s...\n", agentKey)
 	fmt.Fprintf(os.Stderr, "[quancode]    Task: %s\n", displayTask)
@@ -62,7 +62,8 @@ type ChainLink struct {
 	FailureClass string
 }
 
-func firstLine(s string, maxLen int) string {
+// FirstLine returns the first line of s, truncated to maxLen characters.
+func FirstLine(s string, maxLen int) string {
 	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
 		s = s[:idx]
 	}

@@ -25,6 +25,15 @@ func NewRunID() (string, error) {
 	return "run_" + suffix, nil
 }
 
+// NewPipelineID generates a unique identifier for a pipeline execution.
+func NewPipelineID() (string, error) {
+	suffix, err := randomHex(8)
+	if err != nil {
+		return "", err
+	}
+	return "pipe_" + suffix, nil
+}
+
 func randomHex(n int) (string, error) {
 	buf := make([]byte, n)
 	if _, err := rand.Read(buf); err != nil {

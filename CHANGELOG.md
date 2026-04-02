@@ -6,6 +6,21 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [v0.7.0] - 2026-04-02
+
+### Added
+
+- **Pipeline (multi-stage delegation)**: `quancode pipeline <name-or-file> [task]` runs an ordered sequence of delegation stages defined in YAML, with inter-stage output passing via Go template variables (`{{.Input}}`, `{{.Prev.Output}}`, `{{.Stages.NAME.Output}}`)
+- Pipeline definitions loaded from explicit paths, `.quancode/pipelines/`, or `~/.config/quancode/pipelines/`
+- Per-stage agent override, timeout, verify commands, and `on_failure` policy (`stop`/`continue`)
+- Pipeline-level worktree isolation: all stages execute as inplace within a shared worktree, changes accumulate naturally
+- `CollectPatchSince(baseSHA)` captures both committed and uncommitted changes across pipeline stages
+- Pipeline-level verification commands (`verify`/`verify_strict` in pipeline YAML)
+- Ledger entries now include `pipeline_id`, `pipeline_name`, `stage_name`, `stage_index` for workflow-level grouping
+- `--dry-run` mode shows execution plan without running
+- JSON and text output formats for pipeline results
+- Show version number in startup banner (`quancode start`)
+
 ## [v0.6.3] - 2026-04-02
 
 ### Fixed

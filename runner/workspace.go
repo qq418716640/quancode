@@ -192,6 +192,43 @@ func CollectPatch(worktreeDir string) (string, []string, error) {
 	return string(patchBytes), files, nil
 }
 
+// CollectPatchSince generates a unified diff of all changes since the given base commit.
+// Unlike CollectPatch, this captures both committed and uncommitted changes,
+// which is needed for pipeline mode where stages may create commits.
+func CollectPatchSince(worktreeDir, baseSHA string) (string, []string, error) {
+	// Stage any uncommitted changes so they appear in the diff
+	stageCmd := exec.Command("git", "add", "-A")
+	stageCmd.Dir = worktreeDir
+	if out, err := stageCmd.CombinedOutput(); err != nil {
+		return "", nil, fmt.Errorf("git add -A: %s: %w", string(out), err)
+	}
+
+	// Diff from base SHA to current staged state (captures commits + unstaged changes)
+	diffCmd := exec.Command("git", "diff", baseSHA, "--binary")
+	diffCmd.Dir = worktreeDir
+	patchBytes, err := diffCmd.Output()
+	if err != nil {
+		return "", nil, fmt.Errorf("git diff %s: %w", baseSHA, err)
+	}
+
+	// Get changed file names
+	namesCmd := exec.Command("git", "diff", baseSHA, "--name-only")
+	namesCmd.Dir = worktreeDir
+	namesBytes, err := namesCmd.Output()
+	if err != nil {
+		return string(patchBytes), nil, fmt.Errorf("git diff --name-only: %w", err)
+	}
+
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(namesBytes)), "\n") {
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+
+	return string(patchBytes), files, nil
+}
+
 // PatchSummary runs git apply --stat to show what a patch would change
 // without actually applying it. Returns the summary text.
 func PatchSummary(targetDir, patch string) (string, error) {

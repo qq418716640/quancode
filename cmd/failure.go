@@ -9,6 +9,7 @@ const (
 	FailureClassPatchConflict        = "patch_conflict"
 	FailureClassVerifyFailed         = "verify_failed"
 	FailureClassSpeculativeCancelled = "speculative_cancelled"
+	FailureClassTemplateError        = "template_error"
 )
 
 // classifyFailure determines the failure class for a delegation attempt.

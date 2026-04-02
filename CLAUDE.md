@@ -23,6 +23,8 @@ QuanCode is a Go CLI that launches a primary AI coding agent and lets it delegat
 cmd/start.go → prompt/injection.go → agent/agent.go (LaunchAsPrimary)
 cmd/delegate.go → cmd/delegate_attempt.go → router/router.go → agent/agent.go (Delegate) → runner/
                   cmd/fallback.go (auto-retry)                                              → ledger/
+cmd/pipeline.go → config/pipeline.go (LoadPipeline) → cmd/delegate_attempt.go (per stage)  → runner/
+                                                                                             → ledger/
 cmd/delegate_async.go → job/ (write pending) → cmd/run_job.go (detached) → delegate_attempt.go
 cmd/job*.go → job/ (list/status/result/logs/cancel/clean)
 ```
@@ -35,7 +37,7 @@ cmd/job*.go → job/ (list/status/result/logs/cancel/clean)
 - **prompt/** — Builds the system prompt injected into the primary CLI. Uses `text/template`. Excludes the actual primary from the listed agents.
 - **router/** — `SelectAgent()` picks the best sub-agent: preferred_for keyword match > priority number > alphabetical.
 - **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection. All processes run in their own process group (`Setpgid`); timeout kills the entire group to prevent child process leaks. `RunWithContext` variants accept external contexts for speculative cancellation.
-- **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Records each delegation with agent, task, duration, exit code, changed files, and fallback chain. Also provides ID generation (NewDelegationID, NewRunID) for tracking.
+- **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Records each delegation with agent, task, duration, exit code, changed files, and fallback chain. Also provides ID generation (NewDelegationID, NewRunID, NewPipelineID) for tracking. Pipeline entries include PipelineID, PipelineName, StageName, StageIndex for workflow-level grouping.
 - **job/** — Persistent async job state at `~/.config/quancode/jobs/`. Atomic writes via flock+CAS with schema versioning. Handles job lifecycle (pending→running→succeeded/failed/timed_out/cancelled/lost), TTL cleanup, PID reuse detection via `pid_start_time`, and capped output files (50MB).
 
 ### Prompt injection modes
@@ -66,6 +68,10 @@ Verification failure does not trigger fallback.
 ### Speculative parallelism
 
 When `preferences.speculative_delay_secs > 0` and isolation is `worktree`/`patch`, the primary agent gets a lead window. If it hasn't completed within the delay, a backup agent is launched in parallel (each in its own worktree). First success wins; the loser is cancelled via context cancellation (process group kill). Only works in synchronous mode (not `--async`). Requires fallback to be enabled. Orchestrated by `cmd/speculative.go`.
+
+### Pipeline (multi-stage delegation)
+
+`quancode pipeline <name-or-file> [task]` runs an ordered sequence of delegation stages defined in YAML. Creates a pipeline-level worktree where all stages execute as `inplace`, with code changes accumulating naturally. Stage outputs flow to subsequent stages via Go `text/template` variables (`{{.Input}}`, `{{.Prev.Output}}`, `{{.Stages.NAME.Output}}`). Pipeline definitions are loaded from explicit paths, `.quancode/pipelines/`, or `~/.config/quancode/pipelines/`. Each stage can specify its own agent, timeout, verify commands, and on_failure policy (`stop`/`continue`). Final patch is collected via `CollectPatchSince(baseSHA)` to capture both committed and uncommitted changes.
 
 ### Statusline
 

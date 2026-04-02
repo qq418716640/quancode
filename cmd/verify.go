@@ -21,6 +21,7 @@ const (
 	StatusCompleted                      = "completed"
 	StatusFailed                         = "failed"
 	StatusTimedOut                       = "timed_out"
+	StatusSkipped                        = "skipped"
 	StatusCompletedWithVerifyFailures    = "completed_with_verification_failures"
 )
 
