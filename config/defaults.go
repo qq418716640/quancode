@@ -72,7 +72,7 @@ var KnownAgents = map[string]AgentConfig{
 		Strengths:    []string{"large-context", "exploration", "explanation", "multi-modal"},
 		PromptMode:   "file",
 		PromptFile:   "GEMINI.md",
-		DelegateArgs: []string{"-p", "--yolo", "-o", "text"},
+		DelegateArgs: []string{"--yolo", "-o", "text", "-p"},
 		TimeoutSecs:  420,
 		Enabled:      true,
 		PreferredFor: []string{"explore", "explain", "summarize", "generate"},
