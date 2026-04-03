@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.7.5] - 2026-04-03
+
+### Fixed
+
+- Worktree leak: delegation in `worktree`/`patch` isolation mode never cleaned up the git worktree after completion — `cleanupWorktree` was set to nil before the deferred cleanup could run
+
 ## [v0.7.4] - 2026-04-03
 
 ### Added

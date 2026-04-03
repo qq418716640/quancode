@@ -184,10 +184,6 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 		}
 	}
 
-	if opts.Isolation == "worktree" || opts.Isolation == "patch" {
-		cleanupWorktree = nil // prevent double cleanup
-	}
-
 	// Build output
 	if result != nil {
 		ar.output = result.Stdout
