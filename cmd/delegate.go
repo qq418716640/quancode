@@ -164,13 +164,7 @@ var delegateCmd = &cobra.Command{
 
 		// Warn if the agent doesn't support the resolved isolation mode
 		if !ac.SupportsIsolation(isolation) {
-			fallbackIso := ac.DefaultIsolation
-			if fallbackIso == "" && len(ac.SupportedIsolations) > 0 {
-				fallbackIso = ac.SupportedIsolations[0]
-			}
-			if fallbackIso == "" {
-				fallbackIso = "inplace"
-			}
+			fallbackIso := ac.FallbackIsolation()
 			fmt.Fprintf(os.Stderr, "[quancode] warning: %s does not support isolation %q, falling back to %s\n",
 				agentKey, isolation, fallbackIso)
 			isolation = fallbackIso

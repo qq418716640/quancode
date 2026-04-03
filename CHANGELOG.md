@@ -6,6 +6,16 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+
+- `AgentConfig.FallbackIsolation()` method — centralizes isolation fallback logic (DefaultIsolation → SupportedIsolations[0] → inplace), eliminates duplication between delegate and speculative paths
+
+### Changed
+
+- Prompt: isolation mode guidance now explicitly directs primary agent to omit `--isolation` for read-only tasks (code review, research, analysis) to avoid unnecessary worktree overhead and agent exclusion from speculative execution
+- Prompt: code review task type now explicitly warns against `--isolation worktree`
+- Speculative execution comment clarifies why mixed isolation modes are rejected (semantic mismatch between worktree apply vs patch-only)
+
 ### Fixed
 
 - Remove duplicate `v` prefix in session active version display (`vv0.7.3` → `v0.7.3`)

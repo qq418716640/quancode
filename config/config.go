@@ -72,6 +72,19 @@ func (ac *AgentConfig) SupportsIsolation(mode string) bool {
 	return false
 }
 
+// FallbackIsolation returns the best isolation mode to use when the
+// requested mode is unsupported. Checks DefaultIsolation, then
+// SupportedIsolations[0], then falls back to "inplace".
+func (ac *AgentConfig) FallbackIsolation() string {
+	if ac.DefaultIsolation != "" {
+		return ac.DefaultIsolation
+	}
+	if len(ac.SupportedIsolations) > 0 {
+		return ac.SupportedIsolations[0]
+	}
+	return "inplace"
+}
+
 // Valid enum values for configuration fields.
 var (
 	validPromptModes   = map[string]bool{"": true, "append_arg": true, "stdin": true, "env": true, "file": true}

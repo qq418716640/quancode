@@ -48,10 +48,9 @@ type speculativeDelegationOpts struct {
 // After delaySecs, if the primary is still running, a backup agent is launched
 // in parallel. The first successful result wins.
 func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
-	// Find speculative agent — must be available and compatible with the
-	// current isolation mode (agents with a per-agent default_isolation that
-	// differs from the requested isolation are excluded, since they would
-	// run in a different isolation and break the parallel race assumption).
+	// Find speculative agent — must be available and support the same
+	// isolation mode. Mixed isolation would break race semantics (e.g.
+	// worktree applies changes but patch doesn't).
 	tried := map[string]bool{opts.primaryKey: true}
 	var specSel *router.Selection
 	var specAc config.AgentConfig
@@ -63,7 +62,6 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		}
 		tried[sel.AgentKey] = true
 		ac := opts.cfg.Agents[sel.AgentKey]
-		// Skip agents that don't support the current isolation mode
 		if !ac.SupportsIsolation(opts.isolation) {
 			fmt.Fprintf(os.Stderr, "[quancode] skipping %s for speculative (does not support isolation %s)\n",
 				sel.AgentKey, opts.isolation)
@@ -77,9 +75,6 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		specAc = ac
 		specAgent = a
 		break
-	}
-	if specSel == nil {
-		return errNoSpeculativeAgent
 	}
 
 	runID, err := ledger.NewRunID()
@@ -267,7 +262,6 @@ func loserOf(primary, spec *speculativeResult, winnerRole string) *speculativeRe
 
 // finalizeSpeculativeWinner handles the winning result: verify, apply patch, log both entries.
 func finalizeSpeculativeWinner(opts speculativeDelegationOpts, winner speculativeResult, loser *speculativeResult, runID string) error {
-	// Apply patch for the winner
 	if opts.isolation == "worktree" && winner.ar.patch != "" {
 		conflicts := runner.CheckPatchConflicts(opts.workDir, winner.ar.patch)
 		if len(conflicts) > 0 {
