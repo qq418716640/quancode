@@ -514,30 +514,28 @@ func TestPipelineCmd_StageFallback(t *testing.T) {
 	runGitCmd(t, dir, "add", "-A")
 	runGitCmd(t, dir, "commit", "-m", "init")
 
-	// Stage uses timeout-agent (simulates timeout via quick exit code 124)
-	// which should fallback to ok-agent
+	// rate-limit-agent outputs a rate limit error (transient), triggering fallback to ok-agent
 	pipelineYAML := `
 name: fallback-pipe
 stages:
   - name: work
-    agent: timeout-agent
+    agent: rate-limit-agent
     task: "do work"
 `
 	pipelinePath := filepath.Join(dir, "fallback-pipe.yaml")
 	os.WriteFile(pipelinePath, []byte(pipelineYAML), 0644)
 
 	cfgPath := writeConfig(t, dir, `
-default_primary: timeout-agent
+default_primary: rate-limit-agent
 agents:
-  timeout-agent:
-    name: Timeout Agent
+  rate-limit-agent:
+    name: Rate Limited Agent
     command: /bin/sh
     enabled: true
     delegate_args:
       - -c
-      - "echo timed-out-output; exit 1"
+      - "echo 'error: rate limit exceeded'; exit 1"
     priority: 10
-    timeout_secs: 1
   ok-agent:
     name: OK Agent
     command: /bin/sh
@@ -570,12 +568,12 @@ agents:
 	}()
 
 	out := captureStdout(t, func() {
-		// This may succeed (fallback to ok-agent) or fail (timeout-agent fails non-transiently).
-		// We just verify the pipeline runs without panic and produces valid JSON.
-		_ = pipelineCmd.RunE(pipelineCmd, []string{pipelinePath, "hello"})
+		err := pipelineCmd.RunE(pipelineCmd, []string{pipelinePath, "hello"})
+		if err != nil {
+			t.Fatalf("pipeline returned error: %v", err)
+		}
 	})
 
-	// Should produce valid JSON regardless of outcome
 	var result PipelineResult
 	if err := json.Unmarshal([]byte(out), &result); err != nil {
 		t.Fatalf("parse JSON output: %v\nraw: %s", err, out)
@@ -583,8 +581,18 @@ agents:
 	if result.Pipeline != "fallback-pipe" {
 		t.Errorf("pipeline = %q, want %q", result.Pipeline, "fallback-pipe")
 	}
-	if len(result.Stages) == 0 {
-		t.Error("expected at least one stage result")
+	if result.Status != StatusCompleted {
+		t.Errorf("status = %q, want %q (fallback should have succeeded)", result.Status, StatusCompleted)
+	}
+	if len(result.Stages) != 1 {
+		t.Fatalf("stages = %d, want 1", len(result.Stages))
+	}
+	// The stage should have been completed by the fallback agent (ok-agent)
+	if result.Stages[0].Agent != "ok-agent" {
+		t.Errorf("stage agent = %q, want %q (should have fallen back)", result.Stages[0].Agent, "ok-agent")
+	}
+	if result.Stages[0].Status != StatusCompleted {
+		t.Errorf("stage status = %q, want %q", result.Stages[0].Status, StatusCompleted)
 	}
 }
 

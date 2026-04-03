@@ -335,7 +335,7 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 				meta.FallbackFrom = chain[len(chain)-1].Agent
 				meta.FallbackReason = chain[len(chain)-1].FailureClass
 			}
-			logPipelineEntry(pipelineID, def.Name, stageDef.Name, i, currentAgentKey, rendered, execDir, runID, ar)
+			logPipelineEntry(pipelineID, def.Name, stageDef.Name, i, currentAgentKey, rendered, execDir, meta, ar)
 
 			if !fl.shouldRetry(ar, attempt) {
 				break
@@ -344,7 +344,7 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 			chain = append(chain, ui.ChainLink{Agent: currentAgentKey, FailureClass: ar.failureClass})
 			fmt.Fprintf(os.Stderr, "[quancode]   %s %s, looking for fallback...\n", currentAgentKey, ar.failureClass)
 
-			nextKey, nextA := fl.nextAgent()
+			nextKey, nextA, nextReason := fl.nextAgent()
 			if nextA == nil {
 				fmt.Fprintf(os.Stderr, "[quancode]   no fallback agents available\n")
 				break
@@ -355,7 +355,7 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 				fmt.Fprintf(os.Stderr, "[quancode] warning: restore failed: %v\n", restoreErr)
 			}
 
-			fmt.Fprintf(os.Stderr, "[quancode]   falling back to %s\n", nextKey)
+			fmt.Fprintf(os.Stderr, "[quancode]   falling back to %s (%s)\n", nextKey, nextReason)
 			currentAgentKey = nextKey
 			currentAgent = nextA
 			attempt++
@@ -610,18 +610,20 @@ func renderTemplate(tmplStr string, pctx *pipelineContext, missingKeyOpt string)
 }
 
 func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int,
-	agentKey, task, workDir, runID string, ar attemptResult) {
+	agentKey, task, workDir string, meta attemptMeta, ar attemptResult) {
 	logEntry := &ledger.Entry{
-		Agent:        agentKey,
-		Task:         task,
-		WorkDir:      workDir,
-		Isolation:    "inplace",
-		RunID:        runID,
-		Attempt:      1,
-		PipelineID:   pipelineID,
-		PipelineName: pipelineName,
-		StageName:    stageName,
-		StageIndex:   stageIndex,
+		Agent:          agentKey,
+		Task:           task,
+		WorkDir:        workDir,
+		Isolation:      "inplace",
+		RunID:          meta.RunID,
+		Attempt:        meta.Attempt,
+		FallbackFrom:   meta.FallbackFrom,
+		FallbackReason: meta.FallbackReason,
+		PipelineID:     pipelineID,
+		PipelineName:   pipelineName,
+		StageName:      stageName,
+		StageIndex:     stageIndex,
 	}
 	if ar.result != nil {
 		logEntry.ExitCode = ar.result.ExitCode

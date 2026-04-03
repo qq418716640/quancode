@@ -81,16 +81,19 @@ func TestFallbackLoop_NextAgent(t *testing.T) {
 	fl := newFallbackLoop(cfg, "test", "primary", 3)
 
 	// First call should return backup (primary is already tried)
-	key, a := fl.nextAgent()
+	key, a, reason := fl.nextAgent()
 	if key != "backup" {
 		t.Errorf("first nextAgent = %q, want %q", key, "backup")
 	}
 	if a == nil {
 		t.Fatal("expected non-nil agent")
 	}
+	if reason == "" {
+		t.Error("expected non-empty reason")
+	}
 
 	// Second call should return nothing (backup tried, disabled is disabled)
-	key2, a2 := fl.nextAgent()
+	key2, a2, _ := fl.nextAgent()
 	if key2 != "" || a2 != nil {
 		t.Errorf("second nextAgent = %q, want empty", key2)
 	}

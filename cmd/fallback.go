@@ -40,22 +40,22 @@ func (fl *fallbackLoop) shouldRetry(ar attemptResult, attempt int) bool {
 }
 
 // nextAgent selects the next available fallback agent.
-// Returns empty key and nil agent if none available.
-func (fl *fallbackLoop) nextAgent() (string, agent.Agent) {
+// Returns empty key, nil agent, and empty reason if none available.
+func (fl *fallbackLoop) nextAgent() (key string, a agent.Agent, reason string) {
 	for {
 		sel := router.SelectAgentExcluding(fl.cfg, fl.task, fl.tried)
 		if sel == nil {
-			return "", nil
+			return "", nil, ""
 		}
 		fl.tried[sel.AgentKey] = true
 
 		ac := fl.cfg.Agents[sel.AgentKey]
-		a := agent.FromConfig(sel.AgentKey, ac)
-		if ok, _ := a.IsAvailable(); !ok {
+		next := agent.FromConfig(sel.AgentKey, ac)
+		if ok, _ := next.IsAvailable(); !ok {
 			fmt.Fprintf(os.Stderr, "[quancode] fallback %s not available, skipping\n", sel.AgentKey)
 			continue
 		}
-		return sel.AgentKey, a
+		return sel.AgentKey, next, sel.Reason
 	}
 }
 

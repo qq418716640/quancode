@@ -337,18 +337,17 @@ var delegateCmd = &cobra.Command{
 
 			previousAgent := agentKey
 
-			nextKey, nextA := fl.nextAgent()
+			nextKey, nextA, nextReason := fl.nextAgent()
 			if nextA == nil {
 				fmt.Fprintf(os.Stderr, "[quancode] no fallback agents available\n")
 				err := finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
-				chain = append(chain, ui.ChainLink{Agent: agentKey, FailureClass: ar.failureClass})
 				ui.FallbackChain(chain)
 				return err
 			}
 
 			agentKey = nextKey
 			a = nextA
-			fmt.Fprintf(os.Stderr, "[quancode] falling back to %s\n", agentKey)
+			fmt.Fprintf(os.Stderr, "[quancode] falling back to %s (%s)\n", agentKey, nextReason)
 			meta.Attempt++
 			meta.FallbackFrom = previousAgent
 			meta.FallbackReason = ar.failureClass
