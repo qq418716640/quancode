@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -64,12 +65,7 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 	if !ac.Enabled {
 		return markFailed(state, job.ErrCodeRouteFailed, fmt.Sprintf("agent %s is disabled", agentKey))
 	}
-	// Override agent timeout with the job's effective timeout.
-	ac.TimeoutSecs = state.EffectiveTimeout
-	// Append non-interactive args for async mode.
-	if len(ac.NonInteractiveArgs) > 0 {
-		ac.DelegateArgs = append(ac.DelegateArgs, ac.NonInteractiveArgs...)
-	}
+	prepareAsyncAgent(&ac, state.EffectiveTimeout)
 	a := agent.FromConfig(agentKey, ac)
 	if avail, _ := a.IsAvailable(); !avail {
 		return markFailed(state, job.ErrCodeSpawnFailed, fmt.Sprintf("agent %s: command %q not found", agentKey, ac.Command))
@@ -88,19 +84,26 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(sigCh)
 
-	cancelled := make(chan struct{})
-	var cancelOnce sync.Once
-	closeCancelled := func() { cancelOnce.Do(func() { close(cancelled) }) }
+	// Parent context cancelled on SIGTERM/SIGINT — shared by primary and fallback attempts.
+	parentCtx, parentCancel := context.WithCancel(context.Background())
+	defer parentCancel()
+
+	jobTimeout := time.Duration(state.EffectiveTimeout) * time.Second
+	agentCtx, agentCancel := context.WithTimeout(parentCtx, jobTimeout)
+	defer agentCancel()
+
+	// signalled is closed when SIGTERM/SIGINT is received — distinct from normal completion.
+	signalled := make(chan struct{})
+	var signalOnce sync.Once
+	closeSignalled := func() { signalOnce.Do(func() { close(signalled) }) }
 	go func() {
-		select {
-		case <-sigCh:
-			closeCancelled()
-		case <-cancelled:
-		}
+		<-sigCh
+		closeSignalled()
+		parentCancel() // cancel the running agent subprocess (primary or fallback)
 	}()
 
 	// Run the delegation attempt (quiet mode — no UI output).
-	// The agent's own timeout_secs controls execution time.
+	// The agent subprocess is controlled by agentCtx for both timeout and cancellation.
 	doneCh := make(chan attemptResult, 1)
 	go func() {
 		ar := runDelegateAttempt(DelegateAttemptOptions{
@@ -111,6 +114,7 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			WorkDir:   state.WorkDir,
 			Isolation: state.Isolation,
 			Quiet:     true,
+			Ctx:       agentCtx,
 		})
 		doneCh <- ar
 	}()
@@ -119,23 +123,25 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 	var ar attemptResult
 	select {
 	case ar = <-doneCh:
-		closeCancelled()
-	case <-cancelled:
+		// Normal completion (success or failure).
+	case <-signalled:
 		select {
 		case ar = <-doneCh:
-			// Agent finished during grace period.
+			// Agent finished during grace period (context cancel propagates quickly).
 		case <-time.After(15 * time.Second):
 			return markCancelled(state)
 		}
+		// Signal received — skip fallback and mark cancelled.
+		return markCancelled(state)
 	}
 
 	// Handle fallback: try other agents if eligible.
 	if ar.failureClass != "" && isTransientFailure(ar.failureClass) {
 		tried := map[string]bool{agentKey: true}
 		for attempt := 2; attempt <= 3; attempt++ {
-			// Check if cancelled.
+			// Check if signalled during fallback.
 			select {
-			case <-cancelled:
+			case <-signalled:
 				return markCancelled(state)
 			default:
 			}
@@ -146,6 +152,14 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			}
 			tried[sel.AgentKey] = true
 			nextAc := cfg.Agents[sel.AgentKey]
+
+			// Skip agents that don't support the job's isolation mode.
+			if !nextAc.SupportsIsolation(state.Isolation) {
+				continue
+			}
+
+			prepareAsyncAgent(&nextAc, state.EffectiveTimeout)
+
 			nextA := agent.FromConfig(sel.AgentKey, nextAc)
 			if avail, _ := nextA.IsAvailable(); !avail {
 				continue
@@ -155,6 +169,9 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			nextBundle := nextBuilder.Build(state.WorkDir, nil, "", 0)
 			nextCtxPrefix := qcontext.Format(nextBundle)
 
+			// Derive from parentCtx so SIGTERM cancels fallback attempts too.
+			fbCtx, fbCancel := context.WithTimeout(parentCtx, jobTimeout)
+
 			ar = runDelegateAttempt(DelegateAttemptOptions{
 				Agent:     nextA,
 				AgentKey:  sel.AgentKey,
@@ -163,7 +180,9 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 				WorkDir:   state.WorkDir,
 				Isolation: state.Isolation,
 				Quiet:     true,
+				Ctx:       fbCtx,
 			})
+			fbCancel()
 			agentKey = sel.AgentKey
 			if !isTransientFailure(ar.failureClass) {
 				break
@@ -310,6 +329,18 @@ func truncateForField(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "...[truncated]"
+}
+
+// prepareAsyncAgent overrides timeout and appends non-interactive args for async mode.
+// The DelegateArgs slice is copied to avoid mutating the shared config's underlying array.
+func prepareAsyncAgent(ac *config.AgentConfig, effectiveTimeout int) {
+	ac.TimeoutSecs = effectiveTimeout
+	if len(ac.NonInteractiveArgs) > 0 {
+		combined := make([]string, 0, len(ac.DelegateArgs)+len(ac.NonInteractiveArgs))
+		combined = append(combined, ac.DelegateArgs...)
+		combined = append(combined, ac.NonInteractiveArgs...)
+		ac.DelegateArgs = combined
+	}
 }
 
 func init() {

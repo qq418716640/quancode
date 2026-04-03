@@ -13,7 +13,7 @@ func TestFallbackLoop_ShouldRetry(t *testing.T) {
 			"a": {Command: "echo", Enabled: true, Priority: 10},
 		},
 	}
-	fl := newFallbackLoop(cfg, "test task", "a", 3)
+	fl := newFallbackLoop(cfg, "test task", "a", "", 3)
 
 	tests := []struct {
 		name     string
@@ -78,7 +78,7 @@ func TestFallbackLoop_NextAgent(t *testing.T) {
 		},
 	}
 
-	fl := newFallbackLoop(cfg, "test", "primary", 3)
+	fl := newFallbackLoop(cfg, "test", "primary", "", 3)
 
 	// First call should return backup (primary is already tried)
 	key, a, reason := fl.nextAgent()
@@ -105,7 +105,7 @@ func TestFallbackLoop_DefaultMaxAttempts(t *testing.T) {
 			"a": {Command: "echo", Enabled: true},
 		},
 	}
-	fl := newFallbackLoop(cfg, "task", "a", 0) // 0 = default
+	fl := newFallbackLoop(cfg, "task", "a", "", 0) // 0 = default
 	if fl.maxAttempts != defaultMaxFallbackAttempts {
 		t.Errorf("maxAttempts = %d, want %d", fl.maxAttempts, defaultMaxFallbackAttempts)
 	}

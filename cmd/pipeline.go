@@ -293,7 +293,7 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 		}
 
 		// Stage execution with fallback loop
-		fl := newFallbackLoop(cfg, rendered, agentKey, 0)
+		fl := newFallbackLoop(cfg, rendered, agentKey, "inplace", 0)
 		currentAgentKey := agentKey
 		currentAgent := a
 		var ar attemptResult

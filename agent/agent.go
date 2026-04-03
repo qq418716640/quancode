@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/qq418716640/quancode/config"
 	"github.com/qq418716640/quancode/ledger"
@@ -197,9 +198,17 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*ru
 }
 
 func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task string, opts DelegateOptions) (*runner.Result, error) {
-	args, env, _, delegationID, err := a.delegatePrep(opts)
+	args, env, timeout, delegationID, err := a.delegatePrep(opts)
 	if err != nil {
 		return nil, err
+	}
+
+	// Safety net: if the caller's context has no deadline, apply the agent's
+	// own timeout to prevent infinite execution.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+		defer cancel()
 	}
 
 	taskMode := a.cfg.TaskMode
@@ -260,6 +269,7 @@ func runManagedPrimary(binary string, args, env []string, workDir string) error 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
 		return err
@@ -275,7 +285,11 @@ func runManagedPrimary(binary string, args, env []string, workDir string) error 
 	go func() {
 		for sig := range sigCh {
 			if cmd.Process != nil {
-				_ = cmd.Process.Signal(sig)
+				if s, ok := sig.(syscall.Signal); ok {
+					_ = runner.KillProcessGroup(cmd.Process.Pid, s)
+				} else {
+					_ = cmd.Process.Signal(sig)
+				}
 			}
 		}
 	}()

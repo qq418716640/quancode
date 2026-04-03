@@ -61,17 +61,25 @@ func BuildEnv(extra map[string]string) []string {
 	return MergeEnv(os.Environ(), extra)
 }
 
-// killProcessGroup sends a signal to the entire process group.
+// KillProcessGroup sends a signal to the entire process group of the given PID.
+// Falls back to signalling just the process if the group kill fails.
+func KillProcessGroup(pid int, sig syscall.Signal) error {
+	pgid, err := syscall.Getpgid(pid)
+	if err == nil {
+		if killErr := syscall.Kill(-pgid, sig); killErr == nil {
+			return nil
+		}
+	}
+	return syscall.Kill(pid, sig)
+}
+
+// killProcessGroup sends a signal to the entire process group via exec.Cmd.
 // Falls back to killing just the process if group kill fails.
 func killProcessGroup(cmd *exec.Cmd, sig syscall.Signal) error {
 	if cmd.Process == nil {
 		return nil
 	}
-	pgid, err := syscall.Getpgid(cmd.Process.Pid)
-	if err == nil {
-		return syscall.Kill(-pgid, sig)
-	}
-	return cmd.Process.Signal(sig)
+	return KillProcessGroup(cmd.Process.Pid, sig)
 }
 
 // setupProcessGroup configures the command to run in its own process group

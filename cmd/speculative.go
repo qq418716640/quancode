@@ -274,8 +274,10 @@ func finalizeSpeculativeWinner(opts speculativeDelegationOpts, winner speculativ
 		}
 	}
 
-	// Run verification on the winner (in working directory after patch apply)
-	if winner.ar.failureClass == "" && winner.ar.err == nil && opts.verify != nil {
+	// Run verification on the winner (in working directory after patch apply).
+	// Skip for patch mode: the patch is not applied to workDir, so verifying
+	// the baseline tree would be meaningless.
+	if winner.ar.failureClass == "" && winner.ar.err == nil && opts.verify != nil && opts.isolation != "patch" {
 		winner.ar.verify = runAndLogVerification(opts.workDir, opts.verify)
 	}
 

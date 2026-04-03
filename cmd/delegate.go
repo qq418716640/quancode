@@ -274,7 +274,7 @@ var delegateCmd = &cobra.Command{
 		}
 
 		// Run attempt with fallback loop
-		fl := newFallbackLoop(cfg, task, agentKey, 0)
+		fl := newFallbackLoop(cfg, task, agentKey, isolation, 0)
 		var chain []ui.ChainLink
 		runID, err := ledger.NewRunID()
 		if err != nil {

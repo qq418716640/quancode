@@ -17,18 +17,21 @@ const defaultMaxFallbackAttempts = 3
 type fallbackLoop struct {
 	cfg         *config.Config
 	task        string
+	isolation   string // required isolation mode; agents that don't support it are skipped
 	tried       map[string]bool
 	maxAttempts int
 }
 
 // newFallbackLoop creates a fallback loop with the initial agent already marked as tried.
-func newFallbackLoop(cfg *config.Config, task, initialAgent string, maxAttempts int) *fallbackLoop {
+// isolation is the required isolation mode for fallback agents (empty means no filtering).
+func newFallbackLoop(cfg *config.Config, task, initialAgent, isolation string, maxAttempts int) *fallbackLoop {
 	if maxAttempts <= 0 {
 		maxAttempts = defaultMaxFallbackAttempts
 	}
 	return &fallbackLoop{
 		cfg:         cfg,
 		task:        task,
+		isolation:   isolation,
 		tried:       map[string]bool{initialAgent: true},
 		maxAttempts: maxAttempts,
 	}
@@ -50,6 +53,11 @@ func (fl *fallbackLoop) nextAgent() (key string, a agent.Agent, reason string) {
 		fl.tried[sel.AgentKey] = true
 
 		ac := fl.cfg.Agents[sel.AgentKey]
+		// Skip agents that don't support the required isolation mode.
+		if fl.isolation != "" && !ac.SupportsIsolation(fl.isolation) {
+			fmt.Fprintf(os.Stderr, "[quancode] fallback %s does not support isolation %s, skipping\n", sel.AgentKey, fl.isolation)
+			continue
+		}
 		next := agent.FromConfig(sel.AgentKey, ac)
 		if ok, _ := next.IsAvailable(); !ok {
 			fmt.Fprintf(os.Stderr, "[quancode] fallback %s not available, skipping\n", sel.AgentKey)
