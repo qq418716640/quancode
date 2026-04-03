@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.0] - 2026-04-03
+
+### Added
+
+- **Per-stage fallback in pipelines**: pipeline stages now automatically retry with a different agent on transient failures (timeout, rate limit, launch failure), matching the existing delegation fallback behavior
+- Git checkpoint/restore for pipeline fallback: before each stage, a checkpoint commit is created; on fallback, the worktree is restored to prevent dirty state from affecting the retry agent
+- `validateTemplateRefs`: pipeline template references (e.g., `{{.Stages.X.Output}}`) are validated at parse time — forward references and nonexistent stage names are caught before execution
+- `fallbackLoop` helper: extracted reusable agent selection and retry logic from the delegation fallback loop, now shared by both `delegate` and `pipeline` commands
+- Per-stage fallback chain recorded in ledger: each retry attempt gets its own ledger entry with `fallback_from` and `fallback_reason` for full traceability
+
+### Changed
+
+- Refactored `delegate` command fallback loop to use the shared `fallbackLoop` helper, reducing duplication
+
 ## [v0.7.5] - 2026-04-03
 
 ### Fixed

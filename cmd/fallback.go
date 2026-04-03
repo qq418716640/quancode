@@ -1,10 +1,63 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
 	"strings"
 
+	"github.com/qq418716640/quancode/agent"
+	"github.com/qq418716640/quancode/config"
+	"github.com/qq418716640/quancode/router"
 	"github.com/qq418716640/quancode/runner"
 )
+
+const defaultMaxFallbackAttempts = 3
+
+// fallbackLoop tracks tried agents and selects fallbacks on transient failures.
+type fallbackLoop struct {
+	cfg         *config.Config
+	task        string
+	tried       map[string]bool
+	maxAttempts int
+}
+
+// newFallbackLoop creates a fallback loop with the initial agent already marked as tried.
+func newFallbackLoop(cfg *config.Config, task, initialAgent string, maxAttempts int) *fallbackLoop {
+	if maxAttempts <= 0 {
+		maxAttempts = defaultMaxFallbackAttempts
+	}
+	return &fallbackLoop{
+		cfg:         cfg,
+		task:        task,
+		tried:       map[string]bool{initialAgent: true},
+		maxAttempts: maxAttempts,
+	}
+}
+
+// shouldRetry returns true if the failure is transient and attempts remain.
+func (fl *fallbackLoop) shouldRetry(ar attemptResult, attempt int) bool {
+	return attempt < fl.maxAttempts && isTransientFailure(ar.failureClass)
+}
+
+// nextAgent selects the next available fallback agent.
+// Returns empty key and nil agent if none available.
+func (fl *fallbackLoop) nextAgent() (string, agent.Agent) {
+	for {
+		sel := router.SelectAgentExcluding(fl.cfg, fl.task, fl.tried)
+		if sel == nil {
+			return "", nil
+		}
+		fl.tried[sel.AgentKey] = true
+
+		ac := fl.cfg.Agents[sel.AgentKey]
+		a := agent.FromConfig(sel.AgentKey, ac)
+		if ok, _ := a.IsAvailable(); !ok {
+			fmt.Fprintf(os.Stderr, "[quancode] fallback %s not available, skipping\n", sel.AgentKey)
+			continue
+		}
+		return sel.AgentKey, a
+	}
+}
 
 // rateLimitPatterns are stderr/stdout substrings that indicate a transient
 // rate-limit or capacity error, where retrying with a different agent may succeed.

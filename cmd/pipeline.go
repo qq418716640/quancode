@@ -63,6 +63,8 @@ type stageResult struct {
 	FailureClass string
 	Verify       *VerifyResult
 	Skipped      bool
+	// FallbackChain records the agents tried for this stage (including the final one).
+	FallbackChain []ui.ChainLink
 }
 
 // pipelineContext is the template data available to stage task templates.
@@ -99,6 +101,14 @@ var pipelineCmd = &cobra.Command{
 				fmt.Fprintf(os.Stderr, "[quancode] pipeline error: %s\n", p)
 			}
 			return fmt.Errorf("pipeline validation failed (%d errors)", len(problems))
+		}
+
+		// Validate template references (stage ordering)
+		if refProblems := validateTemplateRefs(def); len(refProblems) > 0 {
+			for _, p := range refProblems {
+				fmt.Fprintf(os.Stderr, "[quancode] pipeline error: %s\n", p)
+			}
+			return fmt.Errorf("pipeline template validation failed (%d errors)", len(refProblems))
 		}
 
 		workDir := pipelineWorkdir
@@ -264,17 +274,6 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 			continue
 		}
 
-		// Build context prefix
-		var ctxPrefix string
-		if !pipelineNoContext {
-			builder := qcontext.NewBuilder(cfg.ContextDefaults, ac.Context)
-			bundle := builder.Build(execDir, nil, "", 0)
-			ctxPrefix = qcontext.Format(bundle)
-			for _, w := range bundle.Warnings {
-				fmt.Fprintf(os.Stderr, "[quancode] context: %s\n", w)
-			}
-		}
-
 		// Build verify spec
 		var vs *verifySpec
 		if len(stageDef.Verify) > 0 {
@@ -287,22 +286,85 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 
 		fmt.Fprintf(os.Stderr, "[quancode] [%d/%d] %s → %s\n", i+1, totalStages, stageDef.Name, agentKey)
 
-		// Run the stage
-		ar := runDelegateAttempt(DelegateAttemptOptions{
-			Agent:           a,
-			AgentKey:        agentKey,
-			Task:            rendered,
-			CtxPrefix:       ctxPrefix,
-			WorkDir:         execDir,
-			Isolation:       "inplace",
-			Verify:          vs,
-			TimeoutOverride: stageDef.TimeoutSecs,
-		})
+		// Checkpoint worktree state so we can restore on fallback
+		checkpointErr := checkpointWorktree(execDir)
+		if checkpointErr != nil {
+			fmt.Fprintf(os.Stderr, "[quancode] warning: checkpoint failed: %v\n", checkpointErr)
+		}
 
-		// Build stage result
+		// Stage execution with fallback loop
+		fl := newFallbackLoop(cfg, rendered, agentKey, 0)
+		currentAgentKey := agentKey
+		currentAgent := a
+		var ar attemptResult
+		var chain []ui.ChainLink
+		attempt := 1
+
+		runID, runIDErr := ledger.NewRunID()
+		if runIDErr != nil {
+			fmt.Fprintf(os.Stderr, "[quancode] warning: generate run id: %v\n", runIDErr)
+		}
+
+		for {
+			// Build context per-agent (may differ between agents)
+			var attemptCtxPrefix string
+			if !pipelineNoContext {
+				currentAc := cfg.Agents[currentAgentKey]
+				builder := qcontext.NewBuilder(cfg.ContextDefaults, currentAc.Context)
+				bundle := builder.Build(execDir, nil, "", 0)
+				attemptCtxPrefix = qcontext.Format(bundle)
+				for _, w := range bundle.Warnings {
+					fmt.Fprintf(os.Stderr, "[quancode] context: %s\n", w)
+				}
+			}
+
+			ar = runDelegateAttempt(DelegateAttemptOptions{
+				Agent:           currentAgent,
+				AgentKey:        currentAgentKey,
+				Task:            rendered,
+				CtxPrefix:       attemptCtxPrefix,
+				WorkDir:         execDir,
+				Isolation:       "inplace",
+				Verify:          vs,
+				TimeoutOverride: stageDef.TimeoutSecs,
+			})
+
+			// Log each attempt to ledger
+			meta := attemptMeta{RunID: runID, Attempt: attempt}
+			if attempt > 1 {
+				meta.FallbackFrom = chain[len(chain)-1].Agent
+				meta.FallbackReason = chain[len(chain)-1].FailureClass
+			}
+			logPipelineEntry(pipelineID, def.Name, stageDef.Name, i, currentAgentKey, rendered, execDir, runID, ar)
+
+			if !fl.shouldRetry(ar, attempt) {
+				break
+			}
+
+			chain = append(chain, ui.ChainLink{Agent: currentAgentKey, FailureClass: ar.failureClass})
+			fmt.Fprintf(os.Stderr, "[quancode]   %s %s, looking for fallback...\n", currentAgentKey, ar.failureClass)
+
+			nextKey, nextA := fl.nextAgent()
+			if nextA == nil {
+				fmt.Fprintf(os.Stderr, "[quancode]   no fallback agents available\n")
+				break
+			}
+
+			// Restore worktree to checkpoint before retrying
+			if restoreErr := restoreCheckpoint(execDir); restoreErr != nil {
+				fmt.Fprintf(os.Stderr, "[quancode] warning: restore failed: %v\n", restoreErr)
+			}
+
+			fmt.Fprintf(os.Stderr, "[quancode]   falling back to %s\n", nextKey)
+			currentAgentKey = nextKey
+			currentAgent = nextA
+			attempt++
+		}
+
+		// Build stage result from final attempt
 		sr := stageResult{
 			Name:     stageDef.Name,
-			AgentKey: agentKey,
+			AgentKey: currentAgentKey,
 		}
 		if ar.result != nil {
 			sr.Output = ar.output
@@ -313,6 +375,10 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 		}
 		sr.FailureClass = ar.failureClass
 		sr.Verify = ar.verify
+		if len(chain) > 0 {
+			chain = append(chain, ui.ChainLink{Agent: currentAgentKey, FailureClass: ar.failureClass})
+			sr.FallbackChain = chain
+		}
 
 		results = append(results, sr)
 		pctx.Stages[stageDef.Name] = &results[len(results)-1]
@@ -320,17 +386,13 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 
 		allChangedFiles = appendUnique(allChangedFiles, sr.ChangedFiles)
 
-		// Log to ledger
-		runID, runIDErr := ledger.NewRunID()
-		if runIDErr != nil {
-			fmt.Fprintf(os.Stderr, "[quancode] warning: generate run id: %v\n", runIDErr)
-		}
-		logPipelineEntry(pipelineID, def.Name, stageDef.Name, i, agentKey, rendered, execDir, runID, ar)
-
 		// Check outcome
 		if sr.FailureClass != "" {
 			pipelineSuccess = false
 			fmt.Fprintf(os.Stderr, "[quancode]   ✗ %s failed (%s)\n", stageDef.Name, sr.FailureClass)
+			if len(sr.FallbackChain) > 0 {
+				ui.FallbackChain(sr.FallbackChain)
+			}
 
 			if def.ResolveOnFailure(stageDef) == "stop" {
 				break
@@ -339,6 +401,9 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 		} else {
 			completedCount++
 			dur := ui.FormatDuration(sr.DurationMs)
+			if len(sr.FallbackChain) > 0 {
+				ui.FallbackChain(sr.FallbackChain)
+			}
 			if len(sr.ChangedFiles) > 0 {
 				fmt.Fprintf(os.Stderr, "[quancode]   ✓ completed in %s — %d file(s) changed\n", dur, len(sr.ChangedFiles))
 			} else {
@@ -463,6 +528,65 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 		return &agent.ExitStatusError{Code: 1}
 	}
 	return nil
+}
+
+// checkpointWorktree creates a temporary commit to snapshot the current state.
+// This allows restoreCheckpoint to revert failed stage attempts.
+func checkpointWorktree(dir string) error {
+	add := exec.Command("git", "add", "-A")
+	add.Dir = dir
+	if out, err := add.CombinedOutput(); err != nil {
+		return fmt.Errorf("git add: %s: %w", string(out), err)
+	}
+	commit := exec.Command("git", "commit", "--allow-empty", "-m", "quancode: stage checkpoint")
+	commit.Dir = dir
+	if out, err := commit.CombinedOutput(); err != nil {
+		// "nothing to commit" is fine
+		if !strings.Contains(string(out), "nothing to commit") {
+			return fmt.Errorf("git commit: %s: %w", string(out), err)
+		}
+	}
+	return nil
+}
+
+// restoreCheckpoint reverts the worktree to the last checkpoint commit.
+func restoreCheckpoint(dir string) error {
+	reset := exec.Command("git", "reset", "--hard", "HEAD")
+	reset.Dir = dir
+	if out, err := reset.CombinedOutput(); err != nil {
+		return fmt.Errorf("git reset: %s: %w", string(out), err)
+	}
+	clean := exec.Command("git", "clean", "-fd")
+	clean.Dir = dir
+	if out, err := clean.CombinedOutput(); err != nil {
+		return fmt.Errorf("git clean: %s: %w", string(out), err)
+	}
+	return nil
+}
+
+// validateTemplateRefs checks that stage task templates only reference
+// stages declared before them. Uses the Go template engine with
+// missingkey=error to detect invalid references.
+func validateTemplateRefs(def *config.PipelineDef) []string {
+	var problems []string
+	pctx := &pipelineContext{
+		Input:  "placeholder",
+		Stages: make(map[string]*stageResult),
+	}
+
+	for _, s := range def.Stages {
+		if s.Task == "" {
+			continue
+		}
+		_, err := renderStageTask(s.Task, pctx)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("stage %q: %v", s.Name, err))
+		}
+		// Register this stage so subsequent stages can reference it
+		pctx.Stages[s.Name] = &stageResult{}
+		pctx.Prev = pctx.Stages[s.Name]
+	}
+	return problems
 }
 
 func renderStageTask(tmplStr string, pctx *pipelineContext) (string, error) {

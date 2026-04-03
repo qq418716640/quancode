@@ -274,7 +274,7 @@ var delegateCmd = &cobra.Command{
 		}
 
 		// Run attempt with fallback loop
-		tried := map[string]bool{agentKey: true}
+		fl := newFallbackLoop(cfg, task, agentKey, 0)
 		var chain []ui.ChainLink
 		runID, err := ledger.NewRunID()
 		if err != nil {
@@ -308,9 +308,7 @@ var delegateCmd = &cobra.Command{
 			})
 
 			// Check if fallback is needed and allowed
-			shouldFallback := !noFallback &&
-				meta.Attempt < 3 &&
-				isTransientFailure(ar.failureClass)
+			shouldFallback := !noFallback && fl.shouldRetry(ar, meta.Attempt)
 
 			// For inplace mode, block fallback if files were changed
 			if shouldFallback && (isolation == "" || isolation == "inplace") {
@@ -335,42 +333,22 @@ var delegateCmd = &cobra.Command{
 			// Record this failed attempt in the chain
 			chain = append(chain, ui.ChainLink{Agent: agentKey, FailureClass: ar.failureClass})
 			fmt.Fprintf(os.Stderr, "[quancode] %s %s, looking for fallback...\n", agentKey, ar.failureClass)
-			// FallbackFrom/FallbackReason in meta describe where *this* attempt came from,
-			// so the failing attempt's entry has empty values; the next attempt records the link.
 			logAttempt(agentKey, task, workDir, isolation, meta, ar)
 
 			previousAgent := agentKey
 
-			// Find next available agent
-			found := false
-			for {
-				sel := router.SelectAgentExcluding(cfg, task, tried)
-				if sel == nil {
-					break
-				}
-				tried[sel.AgentKey] = true
-
-				nextAc := cfg.Agents[sel.AgentKey]
-				nextA := agent.FromConfig(sel.AgentKey, nextAc)
-				if ok, _ := nextA.IsAvailable(); !ok {
-					fmt.Fprintf(os.Stderr, "[quancode] fallback %s not available, skipping\n", sel.AgentKey)
-					continue
-				}
-
-				agentKey = sel.AgentKey
-				a = nextA
-				found = true
-				fmt.Fprintf(os.Stderr, "[quancode] falling back to %s (%s)\n", agentKey, sel.Reason)
-				break
-			}
-
-			if !found {
+			nextKey, nextA := fl.nextAgent()
+			if nextA == nil {
 				fmt.Fprintf(os.Stderr, "[quancode] no fallback agents available\n")
 				err := finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
 				chain = append(chain, ui.ChainLink{Agent: agentKey, FailureClass: ar.failureClass})
 				ui.FallbackChain(chain)
 				return err
 			}
+
+			agentKey = nextKey
+			a = nextA
+			fmt.Fprintf(os.Stderr, "[quancode] falling back to %s\n", agentKey)
 			meta.Attempt++
 			meta.FallbackFrom = previousAgent
 			meta.FallbackReason = ar.failureClass
