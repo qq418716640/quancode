@@ -69,7 +69,7 @@ var startCmd = &cobra.Command{
 		if promptMode == "" {
 			promptMode = "append_arg"
 		}
-		fmt.Fprintf(os.Stderr, "[quancode] session active (v%s)\n", version.Version)
+		fmt.Fprintf(os.Stderr, "[quancode] session active (%s)\n", version.Version)
 		fmt.Fprintf(os.Stderr, "[quancode] primary: %s (%s)\n", primary, ac.Name)
 		fmt.Fprintf(os.Stderr, "[quancode] prompt:  %s\n", promptMode)
 
