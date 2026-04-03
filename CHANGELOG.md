@@ -6,6 +6,10 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Fixed
+
+- Remove duplicate `v` prefix in session active version display (`vv0.7.3` → `v0.7.3`)
+
 ## [v0.7.3] - 2026-04-03
 
 ### Added
