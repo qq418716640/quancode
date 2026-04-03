@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.1] - 2026-04-03
+
+### Fixed
+
+- `logPipelineEntry` now correctly records fallback attempt number and `fallback_from`/`fallback_reason` instead of hardcoded `Attempt: 1`
+- `nextAgent` returns routing reason — fallback log messages restored to `falling back to X (reason)` format
+- Fix double chain append in delegate `no fallback available` branch (inherited from pre-v0.8.0)
+- Pipeline fallback test now verifies fallback actually triggers (rate-limited agent → ok-agent)
+
 ## [v0.8.0] - 2026-04-03
 
 ### Added
