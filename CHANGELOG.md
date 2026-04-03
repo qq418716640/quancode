@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.2] - 2026-04-04
+
+### Fixed
+
+- **Async job cancellation now terminates subprocesses**: SIGTERM/SIGINT from `job cancel` propagates through a shared `parentCtx` to kill running agent processes via context cancellation, instead of leaving orphan processes
+- **Fallback isolation filtering**: `fallbackLoop.nextAgent()` now skips agents that don't support the required isolation mode — fixes delegate, async, and pipeline paths where an inplace-only agent (e.g. Qoder) could be selected as fallback for worktree/patch jobs
+- **Async fallback inherits NonInteractiveArgs and effective timeout**: fallback agents in async jobs now get the same preparation as the primary (timeout override + non-interactive flags), preventing interactive hangs in detached processes
+- **Speculative+patch verification**: skip post-race verification in patch isolation mode since the winner's patch is not applied to the working directory — previously verified the unmodified baseline
+- **`runManagedPrimary` process group management**: file-mode primary launch now uses `Setpgid` and sends signals to the entire process group, ensuring grandchild processes are terminated on Ctrl-C/SIGTERM
+- **`DelegateWithContext` safety timeout**: applies agent's own timeout when caller's context has no deadline, preventing infinite execution
+- **`killProcessGroup` fallback**: group kill failure now falls back to single-process kill instead of returning the error
+- **Slice mutation in async delegation**: `DelegateArgs` append uses a fresh slice copy to avoid corrupting the shared config's underlying array across fallback iterations
+- **Signal vs completion semantics**: async job runner uses a dedicated `signalled` channel (only closed on SIGTERM/SIGINT) instead of overloaded `cancelled` channel, preventing fallback from being skipped after normal agent completion
+
 ## [v0.8.1] - 2026-04-03
 
 ### Fixed
