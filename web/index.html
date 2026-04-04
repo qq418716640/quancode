@@ -125,14 +125,34 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="entry in delegations" :key="entry.run_id || (entry.timestamp + entry.agent)">
+                    <template x-for="(entry, idx) in delegations" :key="idx">
                         <tr class="border-b border-surface-lighter/50 hover:bg-surface-light/50 cursor-pointer transition-colors"
-                            @click="expandedDelegation = expandedDelegation === entry.run_id ? null : entry.run_id">
+                            @click="expandedDelegation = expandedDelegation === idx ? null : idx">
                             <td class="py-2 pr-4 text-xs text-gray-500 whitespace-nowrap" x-text="formatTime(entry.timestamp)"></td>
                             <td class="py-2 pr-4">
                                 <span class="px-2 py-0.5 rounded text-xs font-medium bg-surface-lighter text-accent" x-text="entry.agent"></span>
                             </td>
-                            <td class="py-2 pr-4 max-w-md truncate" x-text="entry.task?.substring(0, 80) + (entry.task?.length > 80 ? '...' : '')"></td>
+                            <td class="py-2 pr-4">
+                                <div class="max-w-md truncate" x-text="entry.task?.substring(0, 80) + (entry.task?.length > 80 ? '...' : '')"></div>
+                                <!-- Inline expanded detail -->
+                                <div x-show="expandedDelegation === idx" x-transition @click.stop
+                                    class="mt-2 p-3 bg-surface rounded-lg border border-surface-lighter text-xs">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <div class="text-gray-500 mb-1">Full Task</div>
+                                            <div class="text-gray-300 whitespace-pre-wrap break-all max-h-60 overflow-y-auto" x-text="entry.task"></div>
+                                        </div>
+                                        <div class="space-y-2">
+                                            <div x-show="entry.run_id"><span class="text-gray-500">Run ID:</span> <span x-text="entry.run_id"></span></div>
+                                            <div x-show="entry.isolation"><span class="text-gray-500">Isolation:</span> <span x-text="entry.isolation"></span></div>
+                                            <div x-show="entry.fallback_from"><span class="text-gray-500">Fallback from:</span> <span class="text-accent-yellow" x-text="entry.fallback_from"></span></div>
+                                            <div x-show="entry.fallback_reason"><span class="text-gray-500">Reason:</span> <span x-text="entry.fallback_reason"></span></div>
+                                            <div x-show="entry.changed_files?.length"><span class="text-gray-500">Changed:</span> <span x-text="entry.changed_files?.join(', ')"></span></div>
+                                            <div x-show="entry.pipeline_name"><span class="text-gray-500">Pipeline:</span> <span x-text="entry.pipeline_name + ' / ' + entry.stage_name"></span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
                             <td class="py-2 pr-4 text-xs whitespace-nowrap" x-text="formatDuration(entry.duration_ms)"></td>
                             <td class="py-2 pr-4">
                                 <span class="px-2 py-0.5 rounded text-xs font-medium"
@@ -147,27 +167,7 @@
                         </tr>
                     </template>
                 </tbody>
-                </table>
-                <!-- Expanded detail (outside table to avoid Alpine single-root limitation) -->
-                <template x-if="expandedDelegation !== null">
-                    <div class="bg-surface-light/30 border border-surface-lighter rounded-lg p-4 mt-1 mb-3 text-xs fade-in"
-                         x-data="{ get d() { return delegations.find(e => e.run_id === expandedDelegation) } }" x-show="d">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <div class="text-gray-500 mb-1">Full Task</div>
-                                <div class="text-gray-300 whitespace-pre-wrap break-all max-h-60 overflow-y-auto" x-text="d?.task"></div>
-                            </div>
-                            <div class="space-y-2">
-                                <div x-show="d?.run_id"><span class="text-gray-500">Run ID:</span> <span x-text="d?.run_id"></span></div>
-                                <div x-show="d?.isolation"><span class="text-gray-500">Isolation:</span> <span x-text="d?.isolation"></span></div>
-                                <div x-show="d?.fallback_from"><span class="text-gray-500">Fallback from:</span> <span class="text-accent-yellow" x-text="d?.fallback_from"></span></div>
-                                <div x-show="d?.fallback_reason"><span class="text-gray-500">Reason:</span> <span x-text="d?.fallback_reason"></span></div>
-                                <div x-show="d?.changed_files?.length"><span class="text-gray-500">Changed:</span> <span x-text="d?.changed_files?.join(', ')"></span></div>
-                                <div x-show="d?.pipeline_name"><span class="text-gray-500">Pipeline:</span> <span x-text="d?.pipeline_name + ' / ' + d?.stage_name"></span></div>
-                            </div>
-                        </div>
-                    </div>
-                </template>
+            </table>
         </div>
         <div x-show="delegations.length === 0" class="text-center py-12 text-gray-500">No delegations found</div>
         <!-- Pagination -->
