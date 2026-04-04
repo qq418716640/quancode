@@ -1,6 +1,6 @@
 # QuanCode
 
-**You command, AI executes.**
+**You command, AIs execute.**
 
 [中文](README_zh.md)
 

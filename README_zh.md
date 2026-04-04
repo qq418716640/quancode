@@ -1,6 +1,6 @@
 # QuanCode
 
-**你负责指挥，AI 负责执行。**
+**你负责指挥，AI们负责执行。**
 
 [English](README.md)
 

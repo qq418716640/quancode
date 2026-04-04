@@ -2,7 +2,7 @@
 
 [English](user-guide.md)
 
-QuanCode 是一个多 agent 编排层。**你负责指挥，AI 负责执行。** 绝大部分 QuanCode 命令由 AI agent 自主调用——你只需要学会两个命令就能开始使用。
+QuanCode 是一个多 agent 编排层。**你负责指挥，AI们负责执行。** 绝大部分 QuanCode 命令由 AI agent 自主调用——你只需要学会两个命令就能开始使用。
 
 ## 工作原理
 

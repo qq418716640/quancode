@@ -1,6 +1,6 @@
 # User Guide
 
-QuanCode is a multi-agent orchestration layer. **You command, AI executes.** The vast majority of QuanCode commands are called autonomously by the AI agent — you only need to learn two commands to get started.
+QuanCode is a multi-agent orchestration layer. **You command, AIs execute.** The vast majority of QuanCode commands are called autonomously by the AI agent — you only need to learn two commands to get started.
 
 ## How It Works
 
