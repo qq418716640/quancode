@@ -199,9 +199,7 @@ func ApplyDiffToWorktree(mainRepoDir, worktreeDir, diffMode string) (string, err
 		return "", fmt.Errorf("git add (baseline): %s: %w", string(out), stageErr)
 	}
 
-	commitCmd := exec.Command("git",
-		"-c", "user.name=quancode", "-c", "user.email=quancode@localhost",
-		"commit", "-m", "quancode: context-diff baseline")
+	commitCmd := exec.Command("git", "commit", "-m", "quancode: context-diff baseline")
 	commitCmd.Dir = worktreeDir
 	if out, commitErr := commitCmd.CombinedOutput(); commitErr != nil {
 		return "", fmt.Errorf("git commit (baseline): %s: %w", string(out), commitErr)
