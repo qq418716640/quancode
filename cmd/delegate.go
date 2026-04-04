@@ -261,7 +261,7 @@ var delegateCmd = &cobra.Command{
 				return fmt.Errorf("--async does not support --verify/--verify-strict (not yet implemented)")
 			}
 			effectiveTimeout := resolveEffectiveTimeout(delegateTimeout, ac.TimeoutSecs)
-			return launchAsyncJob(agentKey, task, workDir, isolation, effectiveTimeout)
+			return launchAsyncJob(agentKey, task, workDir, isolation, delegateContextDiff, effectiveTimeout)
 		}
 
 		// Resolve fallback: CLI flag > preferences > auto
@@ -327,6 +327,7 @@ var delegateCmd = &cobra.Command{
 				Isolation:       isolation,
 				Verify:          vs,
 				TimeoutOverride: delegateTimeout,
+				ContextDiffMode: delegateContextDiff,
 			})
 
 			// Check if fallback is needed and allowed

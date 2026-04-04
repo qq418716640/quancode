@@ -19,7 +19,7 @@ type asyncResult struct {
 
 // launchAsyncJob creates a pending job and spawns a detached job-runner process.
 // Returns immediately after the runner is started.
-func launchAsyncJob(agentKey, task, workDir, isolation string, timeoutSecs int) error {
+func launchAsyncJob(agentKey, task, workDir, isolation, contextDiff string, timeoutSecs int) error {
 	jobID, err := job.NewJobID()
 	if err != nil {
 		return fmt.Errorf("generate job id: %w", err)
@@ -33,6 +33,7 @@ func launchAsyncJob(agentKey, task, workDir, isolation string, timeoutSecs int) 
 		Task:             task,
 		WorkDir:          workDir,
 		Isolation:        isolation,
+		ContextDiff:      contextDiff,
 		EffectiveTimeout: timeoutSecs,
 		Status:           job.StatusPending,
 		CreatedAt:        time.Now().UTC().Format(time.RFC3339),

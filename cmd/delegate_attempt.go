@@ -58,6 +58,9 @@ type DelegateAttemptOptions struct {
 	DeferPatchApply bool            // collect patch but don't apply to main tree
 	DeferVerify     bool            // skip verification (caller will verify the winner)
 	Async           bool            // true when called from async job-runner; skips active task registration
+	// ContextDiffMode applies the working/staged diff to the worktree before agent execution,
+	// so the agent sees files consistent with the prompt's context diff.
+	ContextDiffMode string // "working", "staged", or ""
 }
 
 // runDelegateAttempt executes one delegation attempt against a single agent,
@@ -80,6 +83,7 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 
 	execDir := opts.WorkDir
 	var cleanupWorktree func()
+	var baselineSHA string
 
 	if opts.Isolation == "worktree" || opts.Isolation == "patch" {
 		if !runner.IsGitRepo(opts.WorkDir) {
@@ -99,6 +103,23 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 		}()
 		execDir = wt
 		logf("[quancode] running in isolated worktree: %s\n", wt)
+
+		// Apply context diff to worktree so agent sees consistent file state.
+		if opts.ContextDiffMode != "" {
+			sha, applyErr := runner.ApplyDiffToWorktree(opts.WorkDir, execDir, opts.ContextDiffMode)
+			if applyErr != nil {
+				ar.err = fmt.Errorf("apply context-diff to worktree: %w", applyErr)
+				return ar
+			}
+			if sha != "" {
+				baselineSHA = sha
+				short := sha
+				if len(short) > 12 {
+					short = short[:12]
+				}
+				logf("[quancode] context-diff (%s) applied to worktree, baseline: %s\n", opts.ContextDiffMode, short)
+			}
+		}
 	}
 
 	ar.preSnapshot = gitStatusSnapshot(execDir)
@@ -151,7 +172,11 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 	// Collect patch from worktree
 	if opts.Isolation == "worktree" || opts.Isolation == "patch" {
 		var collectErr error
-		ar.patch, ar.patchFiles, collectErr = runner.CollectPatch(execDir)
+		if baselineSHA != "" {
+			ar.patch, ar.patchFiles, collectErr = runner.CollectPatchSince(execDir, baselineSHA)
+		} else {
+			ar.patch, ar.patchFiles, collectErr = runner.CollectPatch(execDir)
+		}
 		if collectErr != nil {
 			logf("[quancode] warning: patch collection failed: %v\n", collectErr)
 		}

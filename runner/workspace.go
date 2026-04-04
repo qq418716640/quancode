@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -154,6 +155,65 @@ func CreateWorktree(repoDir string) (string, func(), error) {
 	}
 
 	return tmpDir, cleanup, nil
+}
+
+// ApplyDiffToWorktree applies a working or staged diff from mainRepoDir to worktreeDir,
+// then commits it as a baseline. Returns the baseline commit SHA so that
+// CollectPatchSince can later isolate only the agent's changes.
+// If the diff is empty, returns ("", nil) without creating a commit.
+func ApplyDiffToWorktree(mainRepoDir, worktreeDir, diffMode string) (string, error) {
+	// Get the raw diff from the main repo.
+	var diffArgs []string
+	switch diffMode {
+	case "staged":
+		diffArgs = []string{"diff", "--cached", "--binary"}
+	case "working":
+		diffArgs = []string{"diff", "--binary"}
+	default:
+		return "", fmt.Errorf("unknown diff mode: %s", diffMode)
+	}
+
+	diffCmd := exec.Command("git", diffArgs...)
+	diffCmd.Dir = mainRepoDir
+	diffBytes, err := diffCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git diff (%s): %w", diffMode, err)
+	}
+
+	if len(bytes.TrimSpace(diffBytes)) == 0 {
+		return "", nil // no changes to apply
+	}
+
+	// Apply the diff to the worktree.
+	applyCmd := exec.Command("git", "apply")
+	applyCmd.Dir = worktreeDir
+	applyCmd.Stdin = bytes.NewReader(diffBytes)
+	if out, applyErr := applyCmd.CombinedOutput(); applyErr != nil {
+		return "", fmt.Errorf("git apply context-diff: %s: %w", string(out), applyErr)
+	}
+
+	// Stage and commit to establish baseline.
+	stageCmd := exec.Command("git", "add", "-A")
+	stageCmd.Dir = worktreeDir
+	if out, stageErr := stageCmd.CombinedOutput(); stageErr != nil {
+		return "", fmt.Errorf("git add (baseline): %s: %w", string(out), stageErr)
+	}
+
+	commitCmd := exec.Command("git", "commit", "-m", "quancode: context-diff baseline")
+	commitCmd.Dir = worktreeDir
+	if out, commitErr := commitCmd.CombinedOutput(); commitErr != nil {
+		return "", fmt.Errorf("git commit (baseline): %s: %w", string(out), commitErr)
+	}
+
+	// Get the baseline SHA.
+	shaCmd := exec.Command("git", "rev-parse", "HEAD")
+	shaCmd.Dir = worktreeDir
+	shaBytes, shaErr := shaCmd.Output()
+	if shaErr != nil {
+		return "", fmt.Errorf("git rev-parse HEAD: %w", shaErr)
+	}
+
+	return strings.TrimSpace(string(shaBytes)), nil
 }
 
 // CollectPatch generates a unified diff of all changes in the worktree.

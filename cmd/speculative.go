@@ -117,6 +117,7 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 			Ctx:             primaryCtx,
 			DeferPatchApply: true,
 			DeferVerify:     true,
+			ContextDiffMode: opts.contextDiff,
 		})
 		resultCh <- speculativeResult{agentKey: opts.primaryKey, ar: ar, role: "primary"}
 	}()
@@ -159,6 +160,7 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 				Ctx:             specCtx,
 				DeferPatchApply: true,
 				DeferVerify:     true,
+				ContextDiffMode: opts.contextDiff,
 			})
 			resultCh <- speculativeResult{agentKey: specSel.AgentKey, ar: ar, role: "speculative"}
 		}()
@@ -193,6 +195,7 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 			Ctx:             specCtx,
 			DeferPatchApply: true,
 			DeferVerify:     true,
+			ContextDiffMode: opts.contextDiff,
 		})
 		resultCh <- speculativeResult{agentKey: specSel.AgentKey, ar: ar, role: "speculative"}
 	}()

@@ -107,15 +107,16 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 	doneCh := make(chan attemptResult, 1)
 	go func() {
 		ar := runDelegateAttempt(DelegateAttemptOptions{
-			Agent:     a,
-			AgentKey:  agentKey,
-			Task:      state.Task,
-			CtxPrefix: ctxPrefix,
-			WorkDir:   state.WorkDir,
-			Isolation: state.Isolation,
-			Quiet:     true,
-			Async:     true,
-			Ctx:       agentCtx,
+			Agent:           a,
+			AgentKey:        agentKey,
+			Task:            state.Task,
+			CtxPrefix:       ctxPrefix,
+			WorkDir:         state.WorkDir,
+			Isolation:       state.Isolation,
+			Quiet:           true,
+			Async:           true,
+			Ctx:             agentCtx,
+			ContextDiffMode: state.ContextDiff,
 		})
 		doneCh <- ar
 	}()
@@ -174,15 +175,16 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			fbCtx, fbCancel := context.WithTimeout(parentCtx, jobTimeout)
 
 			ar = runDelegateAttempt(DelegateAttemptOptions{
-				Agent:     nextA,
-				AgentKey:  sel.AgentKey,
-				Task:      state.Task,
-				CtxPrefix: nextCtxPrefix,
-				WorkDir:   state.WorkDir,
-				Isolation: state.Isolation,
-				Quiet:     true,
-				Async:     true,
-				Ctx:       fbCtx,
+				Agent:           nextA,
+				AgentKey:        sel.AgentKey,
+				Task:            state.Task,
+				CtxPrefix:       nextCtxPrefix,
+				WorkDir:         state.WorkDir,
+				Isolation:       state.Isolation,
+				Quiet:           true,
+				Async:           true,
+				Ctx:             fbCtx,
+				ContextDiffMode: state.ContextDiff,
 			})
 			fbCancel()
 			agentKey = sel.AgentKey

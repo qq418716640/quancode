@@ -57,6 +57,7 @@ type State struct {
 	PID              int             `json:"pid,omitempty"`
 	PIDStartTime     int64           `json:"pid_start_time,omitempty"`
 	Isolation        string          `json:"isolation"`
+	ContextDiff      string          `json:"context_diff,omitempty"`
 	RequestedTimeout int             `json:"requested_timeout,omitempty"`
 	EffectiveTimeout int             `json:"effective_timeout"`
 	Status           string          `json:"status"`
