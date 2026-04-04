@@ -456,7 +456,7 @@
 
             async fetchOutput(jobId) {
                 try {
-                    const res = await fetch('/api/jobs/' + jobId + '/output');
+                    const res = await fetch('/api/jobs/' + jobId + '/output?tail=10000');
                     const text = await res.text();
                     this.jobOutputs[jobId] = text;
                 } catch (e) { console.error('fetchOutput:', e); }
@@ -465,7 +465,7 @@
             async fetchDelegationOutput(delegationId) {
                 if (!delegationId) return;
                 try {
-                    const res = await fetch('/api/delegations/' + delegationId + '/output');
+                    const res = await fetch('/api/delegations/' + delegationId + '/output?tail=10000');
                     if (!res.ok) { console.error('fetchDelegationOutput:', res.status); return; }
                     const text = await res.text();
                     this.delegationOutputs[delegationId] = text;
