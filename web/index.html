@@ -281,8 +281,17 @@
             eventSource: null,
 
             init() {
+                this.fetchAgents();
                 this.fetchData();
                 this.connectSSE();
+            },
+
+            async fetchAgents() {
+                try {
+                    const res = await fetch('/api/agents');
+                    const data = await res.json();
+                    this.agentList = (data.agents || []).map(a => a.key);
+                } catch (e) { console.error('fetchAgents:', e); }
             },
 
             sinceParam() {
@@ -312,9 +321,6 @@
                     const data = await res.json();
                     this.delegations = data.entries || [];
                     this.delegationTotal = data.total || 0;
-                    // Extract unique agents
-                    const agents = new Set(this.delegations.map(d => d.agent));
-                    this.agentList = [...agents].sort();
                     // Build pipeline groups
                     this.buildPipelines(data.entries || []);
                 } catch (e) { console.error('fetchDelegations:', e); }
