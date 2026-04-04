@@ -355,6 +355,28 @@ If no ledger data exists yet, `stats` tells you to run `quancode delegate` first
 
 No extra setup is needed beyond running `quancode init`.
 
+### `quancode dashboard` (preview)
+
+Start a local web dashboard to monitor all delegation and job activity in a browser:
+
+```bash
+quancode dashboard                # default port 8377
+quancode dashboard --port 9000    # custom port
+quancode dashboard --open         # auto-open browser
+quancode dashboard --dev          # serve from filesystem (live reload)
+```
+
+The dashboard provides:
+
+- **Stats overview**: total delegations, success rate, average duration, active jobs
+- **Delegation history**: sortable table with agent, task summary, duration, status, and fallback/speculative/pipeline indicators. Click a row to expand full details.
+- **Async jobs panel**: cards showing job status (pending/running/succeeded/failed), with expandable details and output viewer
+- **Pipeline view**: stages grouped by pipeline ID, displayed as a horizontal flow with per-stage status
+
+Filtering is available by agent, status, and time range. The dashboard connects via SSE for real-time updates.
+
+The server listens on `127.0.0.1` only (not exposed to the network) and serves read-only data. Frontend assets (Alpine.js, Tailwind CSS) are vendored and embedded in the binary — no internet connection required.
+
 ### `quancode version`
 
 Print the currently installed version:

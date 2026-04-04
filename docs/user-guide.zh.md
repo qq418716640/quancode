@@ -282,6 +282,28 @@ quancode stats --days 7
 
 除了运行 `quancode init` 之外不需要额外配置。
 
+### `quancode dashboard`（预览）
+
+启动本地 Web 仪表盘，在浏览器中监控所有委派和任务活动：
+
+```bash
+quancode dashboard                # 默认端口 8377
+quancode dashboard --port 9000    # 自定义端口
+quancode dashboard --open         # 自动打开浏览器
+quancode dashboard --dev          # 从文件系统 serve（实时刷新）
+```
+
+仪表盘提供：
+
+- **统计概览**：总委派数、成功率、平均耗时、活跃任务数
+- **委派历史**：可排序的表格，显示 agent、任务摘要、耗时、状态，以及 fallback/speculative/pipeline 标记。点击行可展开完整详情。
+- **异步任务面板**：按状态分组的卡片（pending/running/succeeded/failed），支持展开查看详情和输出内容
+- **Pipeline 视图**：按 Pipeline ID 分组，横向展示各阶段状态
+
+支持按 agent、状态、时间范围筛选。通过 SSE 实时更新。
+
+服务仅监听 `127.0.0.1`（不暴露到网络），提供只读数据。前端资源（Alpine.js、Tailwind CSS）已内嵌到二进制文件中，无需联网。
+
 ### `quancode version`
 
 查看当前安装版本：

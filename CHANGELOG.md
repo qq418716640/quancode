@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [Unreleased]
+
+### Added
+
+- **Web dashboard (preview)**: `quancode dashboard` starts a local HTTP server with a browser-based UI for monitoring all delegation activity
+  - REST API: `/api/delegations` (paginated, filterable), `/api/jobs`, `/api/jobs/{id}`, `/api/jobs/{id}/output` (tail support), `/api/stats` (cached)
+  - Real-time updates via Server-Sent Events (`/api/events`) with broadcast mode and delta-only push
+  - Single-file frontend (Alpine.js + Tailwind CSS, vendored for offline use) with dark theme
+  - Three views: delegation history table, async jobs panel, pipeline stage visualization
+  - Flags: `--port` (default 8377), `--dev` (serve from filesystem), `--open` (auto-open browser)
+  - Listens on `127.0.0.1` only, read-only APIs, no authentication required
+
 ## [v0.8.2] - 2026-04-04
 
 ### Fixed

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuanCode Dashboard</title>
+    <script src="static/tailwind.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        surface: { DEFAULT: '#1a1b26', light: '#24283b', lighter: '#414868' },
+                        accent: { DEFAULT: '#7aa2f7', green: '#9ece6a', red: '#f7768e', yellow: '#e0af68', purple: '#bb9af7' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
+        .fade-in { animation: fadeIn 0.2s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1a1b26; }
+        ::-webkit-scrollbar-thumb { background: #414868; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-surface text-gray-300 min-h-screen" x-data="dashboard()" x-init="init()">
+
+    <!-- Header -->
+    <header class="border-b border-surface-lighter px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <h1 class="text-xl font-bold text-white">QuanCode Dashboard</h1>
+            <span class="text-xs px-2 py-0.5 rounded bg-surface-light text-gray-500">MVP</span>
+        </div>
+        <div class="flex items-center gap-4 text-sm">
+            <span x-show="connected" class="flex items-center gap-1.5 text-accent-green">
+                <span class="w-2 h-2 rounded-full bg-accent-green animate-pulse"></span> Live
+            </span>
+            <span x-show="!connected" class="flex items-center gap-1.5 text-accent-red">
+                <span class="w-2 h-2 rounded-full bg-accent-red"></span> Disconnected
+            </span>
+            <span class="text-gray-500" x-text="lastUpdate"></span>
+        </div>
+    </header>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 py-4">
+        <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Total Delegations</div>
+            <div class="text-2xl font-bold text-white mt-1" x-text="stats.total || 0"></div>
+        </div>
+        <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Success Rate</div>
+            <div class="text-2xl font-bold text-accent-green mt-1" x-text="stats.success_rate || '—'"></div>
+        </div>
+        <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Avg Duration</div>
+            <div class="text-2xl font-bold text-accent mt-1" x-text="stats.avg_duration || '—'"></div>
+        </div>
+        <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Active Jobs</div>
+            <div class="text-2xl font-bold text-accent-yellow mt-1" x-text="stats.active_jobs || 0"></div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="px-6">
+        <div class="flex gap-1 border-b border-surface-lighter">
+            <template x-for="tab in ['delegations', 'jobs', 'pipelines']" :key="tab">
+                <button
+                    @click="activeTab = tab"
+                    :class="activeTab === tab ? 'text-accent border-b-2 border-accent' : 'text-gray-500 hover:text-gray-300'"
+                    class="px-4 py-2 text-sm font-medium capitalize transition-colors"
+                    x-text="tab === 'delegations' ? 'Delegations' : tab === 'jobs' ? 'Async Jobs' : 'Pipelines'">
+                </button>
+            </template>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="px-6 py-3 flex gap-3 items-center flex-wrap">
+        <select x-model="filters.agent" @change="fetchData()"
+            class="bg-surface-light border border-surface-lighter rounded px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent">
+            <option value="">All Agents</option>
+            <template x-for="a in agentList" :key="a">
+                <option :value="a" x-text="a"></option>
+            </template>
+        </select>
+        <select x-model="filters.status" @change="fetchData()"
+            class="bg-surface-light border border-surface-lighter rounded px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent">
+            <option value="">All Status</option>
+            <option value="succeeded">Succeeded</option>
+            <option value="failed">Failed</option>
+            <option value="timed_out">Timed Out</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="pending">Pending</option>
+            <option value="running">Running</option>
+        </select>
+        <select x-model="filters.since" @change="fetchData()"
+            class="bg-surface-light border border-surface-lighter rounded px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent">
+            <option value="1h">Last 1 hour</option>
+            <option value="6h">Last 6 hours</option>
+            <option value="24h" selected>Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="">All time</option>
+        </select>
+    </div>
+
+    <!-- Delegations Tab -->
+    <div x-show="activeTab === 'delegations'" class="px-6 pb-6 fade-in">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-surface-lighter">
+                        <th class="pb-2 pr-4">Time</th>
+                        <th class="pb-2 pr-4">Agent</th>
+                        <th class="pb-2 pr-4">Task</th>
+                        <th class="pb-2 pr-4">Duration</th>
+                        <th class="pb-2 pr-4">Status</th>
+                        <th class="pb-2">Info</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="entry in delegations" :key="entry.timestamp + entry.agent">
+                        <tr class="border-b border-surface-lighter/50 hover:bg-surface-light/50 cursor-pointer transition-colors"
+                            @click="entry._expanded = !entry._expanded">
+                            <td class="py-2 pr-4 text-xs text-gray-500 whitespace-nowrap" x-text="formatTime(entry.timestamp)"></td>
+                            <td class="py-2 pr-4">
+                                <span class="px-2 py-0.5 rounded text-xs font-medium bg-surface-lighter text-accent" x-text="entry.agent"></span>
+                            </td>
+                            <td class="py-2 pr-4 max-w-md truncate" x-text="entry.task?.substring(0, 80) + (entry.task?.length > 80 ? '...' : '')"></td>
+                            <td class="py-2 pr-4 text-xs whitespace-nowrap" x-text="formatDuration(entry.duration_ms)"></td>
+                            <td class="py-2 pr-4">
+                                <span class="px-2 py-0.5 rounded text-xs font-medium"
+                                    :class="statusClass(entry.exit_code === 0 ? 'succeeded' : 'failed')"
+                                    x-text="entry.exit_code === 0 ? 'OK' : 'FAIL'"></span>
+                            </td>
+                            <td class="py-2 text-xs text-gray-500">
+                                <span x-show="entry.fallback_from" class="text-accent-yellow">fallback</span>
+                                <span x-show="entry.speculative" class="text-accent-purple">speculative</span>
+                                <span x-show="entry.pipeline_id" class="text-accent">pipeline</span>
+                            </td>
+                        </tr>
+                        <!-- Expanded detail -->
+                        <tr x-show="entry._expanded" class="bg-surface-light/30">
+                            <td colspan="6" class="p-4 text-xs">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-gray-500 mb-1">Full Task</div>
+                                        <div class="text-gray-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto" x-text="entry.task"></div>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <div x-show="entry.run_id"><span class="text-gray-500">Run ID:</span> <span x-text="entry.run_id"></span></div>
+                                        <div x-show="entry.isolation"><span class="text-gray-500">Isolation:</span> <span x-text="entry.isolation"></span></div>
+                                        <div x-show="entry.fallback_from"><span class="text-gray-500">Fallback from:</span> <span class="text-accent-yellow" x-text="entry.fallback_from"></span></div>
+                                        <div x-show="entry.fallback_reason"><span class="text-gray-500">Reason:</span> <span x-text="entry.fallback_reason"></span></div>
+                                        <div x-show="entry.changed_files?.length"><span class="text-gray-500">Changed:</span> <span x-text="entry.changed_files?.join(', ')"></span></div>
+                                        <div x-show="entry.pipeline_name"><span class="text-gray-500">Pipeline:</span> <span x-text="entry.pipeline_name + ' / ' + entry.stage_name"></span></div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div x-show="delegations.length === 0" class="text-center py-12 text-gray-500">No delegations found</div>
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4" x-show="delegationTotal > filters.limit">
+            <span class="text-xs text-gray-500" x-text="'Showing ' + delegations.length + ' of ' + delegationTotal"></span>
+            <div class="flex gap-2">
+                <button @click="filters.offset = Math.max(0, filters.offset - filters.limit); fetchData()"
+                    :disabled="filters.offset === 0"
+                    class="px-3 py-1 text-xs bg-surface-light border border-surface-lighter rounded disabled:opacity-30">Prev</button>
+                <button @click="filters.offset += filters.limit; fetchData()"
+                    :disabled="filters.offset + filters.limit >= delegationTotal"
+                    class="px-3 py-1 text-xs bg-surface-light border border-surface-lighter rounded disabled:opacity-30">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jobs Tab -->
+    <div x-show="activeTab === 'jobs'" class="px-6 pb-6 fade-in">
+        <div class="grid gap-3">
+            <template x-for="j in jobs" :key="j.job_id">
+                <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter hover:border-accent/30 transition-colors cursor-pointer"
+                    @click="j._expanded = !j._expanded">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(j.status)" x-text="j.status"></span>
+                            <span class="text-xs text-gray-500" x-text="j.job_id"></span>
+                            <span class="px-2 py-0.5 rounded text-xs bg-surface-lighter text-accent" x-text="j.actual_agent || j.agent"></span>
+                        </div>
+                        <div class="text-xs text-gray-500" x-text="formatTime(j.created_at)"></div>
+                    </div>
+                    <div class="mt-2 text-sm truncate" x-text="j.task?.substring(0, 120)"></div>
+                    <!-- Expanded detail -->
+                    <div x-show="j._expanded" class="mt-3 pt-3 border-t border-surface-lighter text-xs space-y-1" @click.stop>
+                        <div><span class="text-gray-500">Isolation:</span> <span x-text="j.isolation"></span></div>
+                        <div><span class="text-gray-500">Timeout:</span> <span x-text="j.effective_timeout + 's'"></span></div>
+                        <div x-show="j.error"><span class="text-gray-500">Error:</span> <span class="text-accent-red" x-text="j.error"></span></div>
+                        <div x-show="j.changed_files?.length"><span class="text-gray-500">Changed:</span> <span x-text="j.changed_files?.join(', ')"></span></div>
+                        <div x-show="j.finished_at"><span class="text-gray-500">Finished:</span> <span x-text="formatTime(j.finished_at)"></span></div>
+                        <div class="mt-2" x-show="j.output_file">
+                            <button @click.stop="fetchOutput(j.job_id)"
+                                class="px-3 py-1 bg-surface border border-surface-lighter rounded text-accent hover:bg-surface-lighter transition-colors">
+                                View Output
+                            </button>
+                        </div>
+                        <pre x-show="j._output" class="mt-2 p-3 bg-surface rounded max-h-60 overflow-y-auto text-xs whitespace-pre-wrap" x-text="j._output"></pre>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div x-show="jobs.length === 0" class="text-center py-12 text-gray-500">No async jobs found</div>
+    </div>
+
+    <!-- Pipelines Tab -->
+    <div x-show="activeTab === 'pipelines'" class="px-6 pb-6 fade-in">
+        <div class="space-y-4">
+            <template x-for="(stages, pipelineId) in pipelines" :key="pipelineId">
+                <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="text-sm font-medium text-white" x-text="stages[0]?.pipeline_name || pipelineId"></span>
+                        <span class="text-xs text-gray-500" x-text="pipelineId"></span>
+                    </div>
+                    <div class="flex items-center gap-2 overflow-x-auto pb-2">
+                        <template x-for="(stage, idx) in stages" :key="idx">
+                            <div class="flex items-center gap-2">
+                                <div class="flex-shrink-0 px-3 py-2 rounded border text-xs text-center min-w-[100px]"
+                                    :class="stage.exit_code === 0 ? 'border-accent-green/30 bg-accent-green/10 text-accent-green' : 'border-accent-red/30 bg-accent-red/10 text-accent-red'">
+                                    <div class="font-medium" x-text="stage.stage_name"></div>
+                                    <div class="text-gray-500 mt-1" x-text="stage.agent"></div>
+                                    <div class="mt-1" x-text="formatDuration(stage.duration_ms)"></div>
+                                </div>
+                                <span x-show="idx < stages.length - 1" class="text-gray-600">&rarr;</span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div x-show="Object.keys(pipelines).length === 0" class="text-center py-12 text-gray-500">No pipeline runs found</div>
+    </div>
+
+    <!-- Output Modal -->
+    <div x-show="outputModal.visible" x-transition class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-8"
+        @click.self="outputModal.visible = false">
+        <div class="bg-surface-light rounded-lg border border-surface-lighter w-full max-w-4xl max-h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-surface-lighter">
+                <span class="text-sm font-medium text-white" x-text="'Output: ' + outputModal.jobId"></span>
+                <button @click="outputModal.visible = false" class="text-gray-500 hover:text-white">&times;</button>
+            </div>
+            <pre class="p-4 overflow-auto text-xs whitespace-pre-wrap flex-1" x-text="outputModal.content"></pre>
+        </div>
+    </div>
+
+    <script src="static/alpine.min.js" defer></script>
+    <script>
+    function dashboard() {
+        return {
+            activeTab: 'delegations',
+            connected: false,
+            lastUpdate: '',
+            stats: {},
+            delegations: [],
+            delegationTotal: 0,
+            jobs: [],
+            pipelines: {},
+            agentList: [],
+            filters: { agent: '', status: '', since: '24h', limit: 100, offset: 0 },
+            outputModal: { visible: false, jobId: '', content: '' },
+            eventSource: null,
+
+            init() {
+                this.fetchData();
+                this.connectSSE();
+            },
+
+            sinceParam() {
+                if (!this.filters.since) return '';
+                const units = { h: 3600000, d: 86400000 };
+                const match = this.filters.since.match(/^(\d+)([hd])$/);
+                if (!match) return '';
+                const ms = parseInt(match[1]) * units[match[2]];
+                return new Date(Date.now() - ms).toISOString();
+            },
+
+            async fetchData() {
+                await Promise.all([this.fetchDelegations(), this.fetchJobs(), this.fetchStats()]);
+            },
+
+            async fetchDelegations() {
+                const params = new URLSearchParams();
+                const since = this.sinceParam();
+                if (since) params.set('since', since);
+                if (this.filters.agent) params.set('agent', this.filters.agent);
+                if (this.filters.status) params.set('status', this.filters.status);
+                params.set('limit', this.filters.limit);
+                params.set('offset', this.filters.offset);
+
+                try {
+                    const res = await fetch('/api/delegations?' + params);
+                    const data = await res.json();
+                    this.delegations = (data.entries || []).map(e => ({ ...e, _expanded: false }));
+                    this.delegationTotal = data.total || 0;
+                    // Extract unique agents
+                    const agents = new Set(this.delegations.map(d => d.agent));
+                    this.agentList = [...agents].sort();
+                    // Build pipeline groups
+                    this.buildPipelines(data.entries || []);
+                } catch (e) { console.error('fetchDelegations:', e); }
+            },
+
+            async fetchJobs() {
+                try {
+                    const params = new URLSearchParams();
+                    if (this.filters.status) params.set('status', this.filters.status);
+                    const res = await fetch('/api/jobs?' + params);
+                    const data = await res.json();
+                    this.jobs = (data.jobs || []).map(j => ({ ...j, _expanded: false, _output: null }));
+                } catch (e) { console.error('fetchJobs:', e); }
+            },
+
+            async fetchStats() {
+                try {
+                    const res = await fetch('/api/stats');
+                    this.stats = await res.json();
+                } catch (e) { console.error('fetchStats:', e); }
+            },
+
+            async fetchOutput(jobId) {
+                try {
+                    const res = await fetch('/api/jobs/' + jobId + '/output');
+                    const text = await res.text();
+                    const job = this.jobs.find(j => j.job_id === jobId);
+                    if (job) job._output = text;
+                } catch (e) { console.error('fetchOutput:', e); }
+            },
+
+            buildPipelines(entries) {
+                const groups = {};
+                for (const e of entries) {
+                    if (!e.pipeline_id) continue;
+                    if (!groups[e.pipeline_id]) groups[e.pipeline_id] = [];
+                    groups[e.pipeline_id].push(e);
+                }
+                // Sort stages within each pipeline
+                for (const pid of Object.keys(groups)) {
+                    groups[pid].sort((a, b) => (a.stage_index || 0) - (b.stage_index || 0));
+                }
+                this.pipelines = groups;
+            },
+
+            connectSSE() {
+                if (this.eventSource) this.eventSource.close();
+                this.eventSource = new EventSource('/api/events');
+                this.eventSource.onopen = () => { this.connected = true; };
+                this.eventSource.onerror = () => {
+                    this.connected = false;
+                    // Auto-reconnect is built into EventSource
+                };
+                this.eventSource.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.type === 'delegation' || msg.type === 'job_update') {
+                            this.fetchData();
+                        }
+                        this.lastUpdate = new Date().toLocaleTimeString();
+                    } catch (e) { console.error('SSE parse:', e); }
+                };
+            },
+
+            formatTime(ts) {
+                if (!ts) return '';
+                const d = new Date(ts);
+                return d.toLocaleTimeString('zh-CN', { hour12: false }) + ' ' +
+                       d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+            },
+
+            formatDuration(ms) {
+                if (!ms && ms !== 0) return '—';
+                if (ms < 1000) return ms + 'ms';
+                if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+                return (ms / 60000).toFixed(1) + 'm';
+            },
+
+            statusClass(status) {
+                const map = {
+                    succeeded: 'bg-accent-green/20 text-accent-green',
+                    failed: 'bg-accent-red/20 text-accent-red',
+                    timed_out: 'bg-accent-yellow/20 text-accent-yellow',
+                    cancelled: 'bg-gray-500/20 text-gray-400',
+                    pending: 'bg-accent/20 text-accent',
+                    running: 'bg-accent-purple/20 text-accent-purple',
+                    lost: 'bg-accent-red/20 text-accent-red',
+                };
+                return map[status] || 'bg-gray-500/20 text-gray-400';
+            }
+        };
+    }
+    </script>
+</body>
+</html>
