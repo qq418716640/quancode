@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.12] - 2026-04-05
+
+### Improved
+
+- **Dashboard stats follow filters**: stats cards now dynamically update when changing agent, status, or time range filters — backend `/api/stats` accepts filter params, filtered requests bypass cache
+- **Dashboard stats follow tabs**: switching between Delegations, Async Jobs, and Pipelines tabs shows contextual statistics (total, success rate, avg duration, active count) computed from each tab's data
+
 ## [v0.8.11] - 2026-04-04
 
 ### Fixed
