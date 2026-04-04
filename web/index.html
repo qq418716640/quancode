@@ -204,7 +204,7 @@
                                                     class="px-3 py-1.5 bg-accent/10 border border-accent/20 rounded-lg text-accent hover:bg-accent/20 transition-all text-xs font-medium">
                                                     View Output
                                                 </button>
-                                                <button x-show="delegationOutputs[entry.delegation_id]" @click.stop="copyToClipboard(delegationOutputs[entry.delegation_id])"
+                                                <button x-show="delegationOutputs[entry.delegation_id]" @click.stop="copyToClipboard(delegationOutputs[entry.delegation_id], $el)"
                                                     class="px-3 py-1.5 bg-surface-light border border-white/5 rounded-lg text-gray-400 hover:text-white transition-all text-xs font-medium">
                                                     Copy
                                                 </button>
@@ -217,9 +217,9 @@
                             <td class="py-2.5 pr-4 text-xs whitespace-nowrap font-mono tabular-nums" x-text="formatDuration(entry.duration_ms)"></td>
                             <td class="py-2.5 pr-4">
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                                    :class="statusClass(entry.exit_code === 0 ? 'succeeded' : 'failed')">
-                                    <span class="w-1.5 h-1.5 rounded-full" :class="entry.exit_code === 0 ? 'bg-accent-green' : 'bg-accent-red'"></span>
-                                    <span x-text="entry.exit_code === 0 ? 'OK' : 'FAIL'"></span>
+                                    :class="statusClass(entryStatus(entry))">
+                                    <span class="w-1.5 h-1.5 rounded-full" :class="entryDotClass(entry)"></span>
+                                    <span x-text="entryStatusLabel(entry)"></span>
                                 </span>
                             </td>
                             <td class="py-2.5 text-xs text-gray-500 flex gap-1.5">
@@ -282,7 +282,7 @@
                                 class="px-3 py-1.5 bg-accent/10 border border-accent/20 rounded-lg text-accent hover:bg-accent/20 transition-all text-xs font-medium">
                                 View Output
                             </button>
-                            <button x-show="jobOutputs[j.job_id]" @click.stop="copyToClipboard(jobOutputs[j.job_id])"
+                            <button x-show="jobOutputs[j.job_id]" @click.stop="copyToClipboard(jobOutputs[j.job_id], $el)"
                                 class="px-3 py-1.5 bg-surface-light border border-white/5 rounded-lg text-gray-400 hover:text-white transition-all text-xs font-medium">
                                 Copy
                             </button>
@@ -352,7 +352,7 @@
                                     <div class="p-4">
                                         <div class="flex items-center gap-2 mb-2">
                                             <span class="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Task</span>
-                                            <button @click="copyToClipboard(attempt.task)" class="text-[10px] text-gray-600 hover:text-gray-400 transition-colors">Copy</button>
+                                            <button @click="copyToClipboard(attempt.task, $el)" class="text-[10px] text-gray-600 hover:text-gray-400 transition-colors">Copy</button>
                                         </div>
                                         <pre class="whitespace-pre-wrap text-gray-300 leading-relaxed max-h-60 overflow-y-auto" x-text="attempt.task"></pre>
                                     </div>
@@ -360,7 +360,7 @@
                                     <div class="p-4">
                                         <div class="flex items-center gap-2 mb-2">
                                             <span class="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Output</span>
-                                            <button x-show="stageDetail.output" @click="copyToClipboard(stageDetail.output)" class="text-[10px] text-gray-600 hover:text-gray-400 transition-colors">Copy</button>
+                                            <button x-show="stageDetail.output" @click="copyToClipboard(stageDetail.output, $el)" class="text-[10px] text-gray-600 hover:text-gray-400 transition-colors">Copy</button>
                                         </div>
                                         <div x-show="stageDetail.loading" class="text-gray-500 animate-pulse">Loading...</div>
                                         <div x-show="!stageDetail.loading && !stageDetail.output && !attempt.delegation_id" class="text-gray-600 italic">No output recorded (old data)</div>
@@ -387,7 +387,7 @@
             <div class="flex items-center justify-between px-5 py-3.5 border-b border-white/5">
                 <span class="text-sm font-medium text-white">Output: <span class="font-mono text-gray-400" x-text="outputModal.jobId"></span></span>
                 <div class="flex items-center gap-2">
-                    <button @click="copyToClipboard(outputModal.content)"
+                    <button @click="copyToClipboard(outputModal.content, $el)"
                         class="px-3 py-1 text-xs bg-surface border border-white/5 rounded-lg text-gray-400 hover:text-white transition-all font-medium">
                         Copy
                     </button>
@@ -430,10 +430,28 @@
                 this.connectSSE();
             },
 
-            copyToClipboard(text) {
-                navigator.clipboard.writeText(text).then(() => {
-                    // Brief visual feedback could be added here
-                }).catch(() => {});
+            copyToClipboard(text, el) {
+                const done = () => {
+                    if (!el) return;
+                    const orig = el.textContent;
+                    el.textContent = 'Copied!';
+                    el.classList.add('text-accent-green');
+                    setTimeout(() => { el.textContent = orig; el.classList.remove('text-accent-green'); }, 1500);
+                };
+                if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(text).then(done).catch(() => { this._fallbackCopy(text); done(); });
+                } else {
+                    this._fallbackCopy(text); done();
+                }
+            },
+            _fallbackCopy(text) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.cssText = 'position:fixed;left:-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
             },
 
             async fetchVersion() {
@@ -595,6 +613,19 @@
                 return (ms / 60000).toFixed(1) + 'm';
             },
 
+            entryStatus(entry) {
+                if (entry.final_status === 'cancelled') return 'cancelled';
+                if (entry.timed_out) return 'timed_out';
+                return entry.exit_code === 0 ? 'succeeded' : 'failed';
+            },
+            entryStatusLabel(entry) {
+                const s = this.entryStatus(entry);
+                return { succeeded: 'OK', failed: 'FAIL', cancelled: 'CANCEL', timed_out: 'TIMEOUT' }[s] || s.toUpperCase();
+            },
+            entryDotClass(entry) {
+                const s = this.entryStatus(entry);
+                return { succeeded: 'bg-accent-green', failed: 'bg-accent-red', cancelled: 'bg-gray-400', timed_out: 'bg-accent-yellow' }[s] || 'bg-gray-400';
+            },
             statusClass(status) {
                 const map = {
                     succeeded: 'bg-accent-green/20 text-accent-green',
