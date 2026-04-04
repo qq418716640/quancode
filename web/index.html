@@ -34,7 +34,7 @@
     <header class="border-b border-surface-lighter px-6 py-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
             <h1 class="text-xl font-bold text-white">QuanCode Dashboard</h1>
-            <span class="text-xs px-2 py-0.5 rounded bg-surface-light text-gray-500">MVP</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-surface-light text-gray-500" x-text="version || '...'"></span>
         </div>
         <div class="flex items-center gap-4 text-sm">
             <span x-show="connected" class="flex items-center gap-1.5 text-accent-green">
@@ -265,6 +265,7 @@
     function dashboard() {
         return {
             activeTab: 'delegations',
+            version: '',
             connected: false,
             lastUpdate: '',
             stats: {},
@@ -281,9 +282,18 @@
             eventSource: null,
 
             init() {
+                this.fetchVersion();
                 this.fetchAgents();
                 this.fetchData();
                 this.connectSSE();
+            },
+
+            async fetchVersion() {
+                try {
+                    const res = await fetch('/api/version');
+                    const data = await res.json();
+                    this.version = data.version || 'unknown';
+                } catch (e) { console.error('fetchVersion:', e); }
             },
 
             async fetchAgents() {

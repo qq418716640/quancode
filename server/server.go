@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/qq418716640/quancode/version"
 	"github.com/qq418716640/quancode/web"
 )
 
@@ -48,6 +49,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET /api/agents", s.handleAgents)
 	s.mux.HandleFunc("GET /api/stats", s.handleStats)
 	s.mux.HandleFunc("GET /api/events", s.handleEvents)
+	s.mux.HandleFunc("GET /api/version", handleVersion)
 
 	// Static files
 	var fileServer http.Handler
@@ -110,6 +112,10 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func handleVersion(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"version": version.Version})
 }
 
 // writeJSON writes a JSON response with the given status code.
