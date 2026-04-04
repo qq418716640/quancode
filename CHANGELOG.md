@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.10] - 2026-04-04
+
+### Changed
+
+- **Speculative execution: parallel-collect strategy** — both agents now run to completion instead of cancelling the slower one. Primary result is preferred when successful; companion result is preserved in JSON output (`speculative.companion` field) and ledger for downstream synthesis
+  - New `selected` / `selection_reason` ledger fields replace deprecated `cancelled_by`
+  - JSON output includes `SpeculativeInfo` with companion agent's full result
+  - Text mode stdout unchanged (selected output only); companion availability noted on stderr
+
+### Improved
+
+- **Dashboard pipeline view**: stages with fallback retries are now grouped under one node instead of appearing as separate stages; click any stage to expand Task/Output detail panel
+- **Dashboard copy buttons**: all copy buttons now show "Copied!" feedback for 1.5s; added `execCommand` fallback for non-HTTPS contexts
+- **Dashboard delegation status**: uses `final_status` for display — cancelled shows as grey CANCEL, timed\_out as yellow TIMEOUT instead of red FAIL
+
 ## [v0.8.9] - 2026-04-04
 
 ### Fixed
