@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.5] - 2026-04-04
+
+### Fixed
+
+- Dashboard delegation row expand now works inline (detail panel appears in the clicked row instead of at the bottom of the table)
+
+### Changed
+
+- **Copilot agent config**: updated description, added `multi-model` strength, `--yolo` and `--no-auto-update` to `DelegateArgs`, added `PrimaryArgs: ["--yolo"]`
+
 ## [v0.8.3] - 2026-04-04
 
 ### Added
