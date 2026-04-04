@@ -125,9 +125,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="entry in delegations" :key="entry.timestamp + entry.agent">
+                    <template x-for="(entry, idx) in delegations" :key="entry.timestamp + entry.agent + idx">
                         <tr class="border-b border-surface-lighter/50 hover:bg-surface-light/50 cursor-pointer transition-colors"
-                            @click="entry._expanded = !entry._expanded">
+                            @click="expandedDelegation = expandedDelegation === idx ? null : idx">
                             <td class="py-2 pr-4 text-xs text-gray-500 whitespace-nowrap" x-text="formatTime(entry.timestamp)"></td>
                             <td class="py-2 pr-4">
                                 <span class="px-2 py-0.5 rounded text-xs font-medium bg-surface-lighter text-accent" x-text="entry.agent"></span>
@@ -145,28 +145,28 @@
                                 <span x-show="entry.pipeline_id" class="text-accent">pipeline</span>
                             </td>
                         </tr>
-                        <!-- Expanded detail -->
-                        <tr x-show="entry._expanded" class="bg-surface-light/30">
-                            <td colspan="6" class="p-4 text-xs">
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <div class="text-gray-500 mb-1">Full Task</div>
-                                        <div class="text-gray-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto" x-text="entry.task"></div>
-                                    </div>
-                                    <div class="space-y-2">
-                                        <div x-show="entry.run_id"><span class="text-gray-500">Run ID:</span> <span x-text="entry.run_id"></span></div>
-                                        <div x-show="entry.isolation"><span class="text-gray-500">Isolation:</span> <span x-text="entry.isolation"></span></div>
-                                        <div x-show="entry.fallback_from"><span class="text-gray-500">Fallback from:</span> <span class="text-accent-yellow" x-text="entry.fallback_from"></span></div>
-                                        <div x-show="entry.fallback_reason"><span class="text-gray-500">Reason:</span> <span x-text="entry.fallback_reason"></span></div>
-                                        <div x-show="entry.changed_files?.length"><span class="text-gray-500">Changed:</span> <span x-text="entry.changed_files?.join(', ')"></span></div>
-                                        <div x-show="entry.pipeline_name"><span class="text-gray-500">Pipeline:</span> <span x-text="entry.pipeline_name + ' / ' + entry.stage_name"></span></div>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
                     </template>
                 </tbody>
-            </table>
+                </table>
+                <!-- Expanded detail (outside table to avoid Alpine single-root limitation) -->
+                <template x-if="expandedDelegation !== null && delegations[expandedDelegation]">
+                    <div class="bg-surface-light/30 border border-surface-lighter rounded-lg p-4 mt-1 mb-3 text-xs fade-in">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-gray-500 mb-1">Full Task</div>
+                                <div class="text-gray-300 whitespace-pre-wrap break-all max-h-60 overflow-y-auto" x-text="delegations[expandedDelegation].task"></div>
+                            </div>
+                            <div class="space-y-2">
+                                <div x-show="delegations[expandedDelegation].run_id"><span class="text-gray-500">Run ID:</span> <span x-text="delegations[expandedDelegation].run_id"></span></div>
+                                <div x-show="delegations[expandedDelegation].isolation"><span class="text-gray-500">Isolation:</span> <span x-text="delegations[expandedDelegation].isolation"></span></div>
+                                <div x-show="delegations[expandedDelegation].fallback_from"><span class="text-gray-500">Fallback from:</span> <span class="text-accent-yellow" x-text="delegations[expandedDelegation].fallback_from"></span></div>
+                                <div x-show="delegations[expandedDelegation].fallback_reason"><span class="text-gray-500">Reason:</span> <span x-text="delegations[expandedDelegation].fallback_reason"></span></div>
+                                <div x-show="delegations[expandedDelegation].changed_files?.length"><span class="text-gray-500">Changed:</span> <span x-text="delegations[expandedDelegation].changed_files?.join(', ')"></span></div>
+                                <div x-show="delegations[expandedDelegation].pipeline_name"><span class="text-gray-500">Pipeline:</span> <span x-text="delegations[expandedDelegation].pipeline_name + ' / ' + delegations[expandedDelegation].stage_name"></span></div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
         </div>
         <div x-show="delegations.length === 0" class="text-center py-12 text-gray-500">No delegations found</div>
         <!-- Pagination -->
@@ -186,9 +186,9 @@
     <!-- Jobs Tab -->
     <div x-show="activeTab === 'jobs'" class="px-6 pb-6 fade-in">
         <div class="grid gap-3">
-            <template x-for="j in jobs" :key="j.job_id">
+            <template x-for="(j, jIdx) in jobs" :key="j.job_id">
                 <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter hover:border-accent/30 transition-colors cursor-pointer"
-                    @click="j._expanded = !j._expanded">
+                    @click="expandedJob = expandedJob === jIdx ? null : jIdx">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
                             <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(j.status)" x-text="j.status"></span>
@@ -199,7 +199,7 @@
                     </div>
                     <div class="mt-2 text-sm truncate" x-text="j.task?.substring(0, 120)"></div>
                     <!-- Expanded detail -->
-                    <div x-show="j._expanded" class="mt-3 pt-3 border-t border-surface-lighter text-xs space-y-1" @click.stop>
+                    <div x-show="expandedJob === jIdx" class="mt-3 pt-3 border-t border-surface-lighter text-xs space-y-1" @click.stop>
                         <div><span class="text-gray-500">Isolation:</span> <span x-text="j.isolation"></span></div>
                         <div><span class="text-gray-500">Timeout:</span> <span x-text="j.effective_timeout + 's'"></span></div>
                         <div x-show="j.error"><span class="text-gray-500">Error:</span> <span class="text-accent-red" x-text="j.error"></span></div>
@@ -211,7 +211,7 @@
                                 View Output
                             </button>
                         </div>
-                        <pre x-show="j._output" class="mt-2 p-3 bg-surface rounded max-h-60 overflow-y-auto text-xs whitespace-pre-wrap" x-text="j._output"></pre>
+                        <pre x-show="jobOutputs[j.job_id]" class="mt-2 p-3 bg-surface rounded max-h-60 overflow-y-auto text-xs whitespace-pre-wrap" x-text="jobOutputs[j.job_id]"></pre>
                     </div>
                 </div>
             </template>
@@ -273,6 +273,9 @@
             pipelines: {},
             agentList: [],
             filters: { agent: '', status: '', since: '24h', limit: 100, offset: 0 },
+            expandedDelegation: null,
+            expandedJob: null,
+            jobOutputs: {},
             outputModal: { visible: false, jobId: '', content: '' },
             eventSource: null,
 
@@ -306,7 +309,7 @@
                 try {
                     const res = await fetch('/api/delegations?' + params);
                     const data = await res.json();
-                    this.delegations = (data.entries || []).map(e => ({ ...e, _expanded: false }));
+                    this.delegations = data.entries || [];
                     this.delegationTotal = data.total || 0;
                     // Extract unique agents
                     const agents = new Set(this.delegations.map(d => d.agent));
@@ -322,7 +325,7 @@
                     if (this.filters.status) params.set('status', this.filters.status);
                     const res = await fetch('/api/jobs?' + params);
                     const data = await res.json();
-                    this.jobs = (data.jobs || []).map(j => ({ ...j, _expanded: false, _output: null }));
+                    this.jobs = data.jobs || [];
                 } catch (e) { console.error('fetchJobs:', e); }
             },
 
@@ -337,8 +340,7 @@
                 try {
                     const res = await fetch('/api/jobs/' + jobId + '/output');
                     const text = await res.text();
-                    const job = this.jobs.find(j => j.job_id === jobId);
-                    if (job) job._output = text;
+                    this.jobOutputs[jobId] = text;
                 } catch (e) { console.error('fetchOutput:', e); }
             },
 
