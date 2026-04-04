@@ -25,6 +25,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Dashboard header now displays the QuanCode version
 - Extracted shared `serveOutputFile` helper — deduplicated output tail logic between delegation and job output handlers
 
+## [v0.8.7] - 2026-04-04
+
+### Fixed
+
+- Agent filter dropdown in Dashboard now reads available agents from config instead of ledger data, ensuring disabled or never-used agents don't appear
+
 ## [v0.8.6] - 2026-04-04
 
 ### Fixed
@@ -41,6 +47,13 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Changed
 
 - **Copilot agent config**: updated description, added `multi-model` strength, `--yolo` and `--no-auto-update` to `DelegateArgs`, added `PrimaryArgs: ["--yolo"]`
+
+## [v0.8.4] - 2026-04-04
+
+### Fixed
+
+- Dashboard delegation row expand now uses stable IDs instead of array index, preventing wrong row from expanding after data refresh
+- Updated Copilot agent config: added `multi-model` strength, `--yolo` and `--no-auto-update` to `DelegateArgs`
 
 ## [v0.8.3] - 2026-04-04
 
@@ -366,6 +379,19 @@ Completes the delegation execution loop — from context injection and verificat
 - `FallbackReason` in ledger entries now uses `FailureClass` values instead of separate constants
 - `DelegationResult` JSON output includes `conflict_files` and `patch` on apply failure
 
+## [v0.3.2] - 2026-03-28
+
+### Docs
+
+- Added `apply-patch` and parallel delegation documentation, corrected Go version references
+
+## [v0.3.1] - 2026-03-28
+
+### Fixed
+
+- Worktree auto-excludes build cache directories during patch collection
+- `.tmp/` added to `.gitignore` to prevent worktree cache pollution
+
 ## [v0.3.0] - 2026-03-28
 
 ### Theme: Parallel Delegation & Worktree Hardening
@@ -377,10 +403,16 @@ Completes the delegation execution loop — from context injection and verificat
 - Worktree auto-exclusion of build caches (`.tmp/`, `.gocache/`, `node_modules/`, etc.)
 - `PatchSummary` function for patch preview before applying
 
-### Fixed
+## [v0.2.1] - 2026-03-28
 
-- Worktree patches no longer collect build cache artifacts
-- `.tmp/` added to `.gitignore` to prevent worktree cache pollution
+### Added
+
+- `quancode skill install/uninstall` commands for Claude Desktop integration
+- Skill explicitly blocks `quancode start` usage, enforcing delegate-only mode
+
+### Docs
+
+- Updated documentation to cover v0.2.0 new features
 
 ## [v0.2.0] - 2026-03-28
 
@@ -389,8 +421,6 @@ Completes the delegation execution loop — from context injection and verificat
 ### Added
 
 - `/quancode` skill for Claude Desktop, Cowork, and Dispatch multi-agent delegation
-- `quancode skill install/uninstall` commands
-- Skill explicitly blocks `quancode start` usage, enforcing delegate-only mode
 
 ## [v0.1.0] - 2026-03-27
 
