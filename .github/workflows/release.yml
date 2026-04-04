@@ -17,6 +17,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure Git identity
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@quancode"
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
