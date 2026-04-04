@@ -1,5 +1,7 @@
 # QuanCode
 
+**You command, AI executes.**
+
 [中文](README_zh.md)
 
 QuanCode is a lightweight CLI orchestrator for terminal coding agents. It starts one AI coding CLI as the primary interface and lets it delegate bounded tasks to other coding CLIs.
@@ -30,38 +32,59 @@ Check the installed version:
 quancode version
 ```
 
-## Quick Start
+## How It Works
 
-1. Detect installed CLIs and generate a config:
+```
+You (natural language)
+    |
+Primary Agent (AI)
+    |
+quancode delegate/route/pipeline/...
+    |
+Sub-Agents (other CLIs)
+```
+
+You describe what you want in natural language. The primary AI agent autonomously decides when and how to delegate tasks to other agents — routing, isolation, verification, fallback — all handled transparently.
+
+## Quick Start — Two Commands
+
+### 1. Initialize (one-time)
 
 ```bash
 quancode init
 ```
 
-2. Verify setup:
+Scans your PATH for known coding CLIs, lets you pick a default primary, and writes `~/.config/quancode/quancode.yaml`.
 
-```bash
-quancode doctor
-```
-
-3. Start a primary agent:
+### 2. Start a session (every day)
 
 ```bash
 quancode start
+```
+
+Launches your primary AI agent with multi-agent delegation capabilities injected. From here, just talk to the AI in natural language. The AI knows how to delegate.
+
+Override the primary for a single session:
+
+```bash
 quancode start --primary codex
 ```
 
-The `--primary` and `--agent` flags support tab-completion for agent names.
+**That's it.** These two commands cover 95% of daily usage.
 
-## What It Does
+## What the AI Does Autonomously
 
-- Starts a primary coding CLI with delegation instructions injected via CLI args, env vars, or a managed file.
-- Delegates one-shot tasks to other coding CLIs and returns text or JSON output.
-- Routes tasks by keyword match and static priority. It does not do LLM-based routing.
-- Supports in-place execution, isolated git worktrees, or patch-only delegation.
-- Logs every delegation to JSONL for stats and auditing.
-- Auto-fallback: if an agent times out or hits a rate limit, QuanCode automatically retries with the next available agent. Disable with `--no-fallback`.
-- Async delegation: `delegate --async` runs tasks in the background with full lifecycle management (`job list|status|result|logs|cancel|clean`).
+Once you start a session, you never need to call `quancode delegate` yourself. The AI knows how to:
+
+- **Route tasks** to the best sub-agent based on keywords and priority
+- **Inject context** — automatically attaches project files like `CLAUDE.md` and `AGENTS.md`
+- **Isolate safely** — runs in git worktrees or patch-only mode when appropriate
+- **Fallback automatically** — if an agent times out or hits rate limits, tries the next one
+- **Verify results** — runs test commands after delegation to validate
+- **Run pipelines** — chains multi-phase tasks with per-stage verification and fallback
+- **Run async** — executes long-running tasks in the background with full lifecycle management
+
+See the [User Guide](docs/user-guide.md) for detailed walkthroughs of each capability.
 
 ## Configuration
 
@@ -94,13 +117,9 @@ agents:
     output_flag: --output-last-message
 ```
 
-For a fuller starter config without local proxy or machine-specific assumptions, copy [`quancode.example.yaml`](quancode.example.yaml).
+For a fuller starter config, copy [`quancode.example.yaml`](quancode.example.yaml).
 
 Field-by-field config documentation is available in [`docs/agent-config-schema.md`](docs/agent-config-schema.md).
-
-## Usage
-
-See the [`User Guide`](docs/user-guide.md) for command-by-command walkthroughs, isolation mode guidance, and troubleshooting.
 
 ## Supported Agents
 
@@ -110,15 +129,33 @@ Built-in defaults currently cover:
 - Codex CLI
 - Qoder CLI (code-analysis, debugging, explanation, MCP integration)
 
-Support is adapter-based rather than hardcoded per command path. Different CLIs may use different prompt injection modes such as CLI args, env vars, or a managed file like `AGENTS.md`. Adding a new CLI requires only configuration, not Go code.
+Support is adapter-based rather than hardcoded. Different CLIs may use different prompt injection modes (CLI args, env vars, or a managed file like `AGENTS.md`). Adding a new CLI requires only configuration, not Go code.
 
 A `/quancode` skill is available for Claude Desktop, Cowork, and Dispatch, enabling multi-agent delegation from those environments.
 
-QuanCode is an independent project. Compatibility may vary by CLI version.
+For compatibility expectations, see [`docs/compatibility.md`](docs/compatibility.md).
 
-For current compatibility expectations and non-goals, see [`docs/compatibility.md`](docs/compatibility.md).
+## Optional Tools for Power Users
 
-For a conservative status table of current adapter confidence, see [`docs/compatibility.md`](docs/compatibility.md).
+**Health check:**
+```bash
+quancode doctor       # verify config, agents, and PATH
+```
+
+**Observability:**
+```bash
+quancode agents       # list enabled agents and availability
+quancode stats        # delegation statistics
+quancode dashboard    # web UI for monitoring (preview)
+```
+
+**Manual delegation (rare — AI usually does this for you):**
+```bash
+quancode delegate "write unit tests for config loading"
+quancode delegate --agent codex --isolation worktree "refactor the helper"
+```
+
+Full command reference: see [User Guide](docs/user-guide.md).
 
 ## Safety Notes
 
@@ -136,7 +173,7 @@ go test ./...
 go vet ./...
 ```
 
-Release builds can override the default version string with Go ldflags. The release tag should be treated as the final source of truth.
+Release builds can override the default version string with Go ldflags.
 
 Project entry points:
 
