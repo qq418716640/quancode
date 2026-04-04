@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/qq418716640/quancode/version"
@@ -43,6 +44,12 @@ type Entry struct {
 	PipelineName string `json:"pipeline_name,omitempty"`
 	StageName    string `json:"stage_name,omitempty"`
 	StageIndex   int    `json:"stage_index,omitempty"`
+
+	// DelegationID uniquely identifies each delegation attempt.
+	DelegationID string `json:"delegation_id,omitempty"`
+
+	// OutputFile is the path to the file storing agent output for this delegation.
+	OutputFile string `json:"output_file,omitempty"`
 
 	// VerifyRaw stores the verification result as raw JSON to avoid
 	// a circular dependency between ledger and cmd packages.
@@ -141,6 +148,57 @@ func ReadSince(since time.Time) ([]Entry, error) {
 		}
 	}
 	return filtered, nil
+}
+
+// OutputDir returns the path to the delegation output directory.
+func OutputDir() string {
+	return filepath.Join(LogDir(), "outputs")
+}
+
+// OutputPath returns the output file path for a given delegation ID.
+func OutputPath(delegationID string) string {
+	return filepath.Join(OutputDir(), delegationID+".output")
+}
+
+// DefaultMaxOutputBytes is the maximum size for delegation output files (50MB).
+const DefaultMaxOutputBytes = 50 * 1024 * 1024
+
+var outputDirOnce sync.Once
+var outputDirErr error
+
+// WriteOutput writes delegation output to a file, capped at maxBytes.
+// Returns the output file path, or empty string if output is empty.
+func WriteOutput(delegationID, output string, maxBytes int64) string {
+	if output == "" || delegationID == "" {
+		return ""
+	}
+
+	dir := OutputDir()
+	outputDirOnce.Do(func() {
+		outputDirErr = os.MkdirAll(dir, 0755)
+	})
+	if outputDirErr != nil {
+		fmt.Fprintf(os.Stderr, "[quancode] warning: create output dir: %v\n", outputDirErr)
+		return ""
+	}
+
+	path := filepath.Join(dir, filepath.Base(delegationID)+".output")
+	f, err := os.Create(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[quancode] warning: create output file: %v\n", err)
+		return ""
+	}
+	defer f.Close()
+
+	data := []byte(output)
+	if maxBytes > 0 && int64(len(data)) > maxBytes {
+		data = data[:maxBytes]
+	}
+	if _, err := f.Write(data); err != nil {
+		fmt.Fprintf(os.Stderr, "[quancode] warning: write output file: %v\n", err)
+		return ""
+	}
+	return path
 }
 
 func splitNonEmpty(data []byte) []string {

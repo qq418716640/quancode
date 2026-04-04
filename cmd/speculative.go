@@ -350,11 +350,15 @@ func finalizeSpeculativeBothFailed(opts speculativeDelegationOpts, primary, spec
 
 // logSpeculativeEntry writes a ledger entry with speculative tracking fields.
 func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult, role, cancelledBy string) {
+	outputFile := ledger.WriteOutput(ar.delegationID, ar.output, ledger.DefaultMaxOutputBytes)
+
 	logEntry := &ledger.Entry{
 		Agent:           agentKey,
 		Task:            task,
 		WorkDir:         workDir,
 		Isolation:       isolation,
+		DelegationID:    ar.delegationID,
+		OutputFile:      outputFile,
 		RunID:           meta.RunID,
 		Attempt:         meta.Attempt,
 		FallbackFrom:    meta.FallbackFrom,

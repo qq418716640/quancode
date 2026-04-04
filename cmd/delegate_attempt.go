@@ -31,6 +31,7 @@ type attemptResult struct {
 	changedFiles []string
 	preSnapshot  map[string]bool
 	verify       *VerifyResult
+	delegationID string // unique ID for this attempt, used for output file naming
 	// Patch apply failure details (worktree mode only)
 	patchApplyErr error
 	conflictFiles []string
@@ -110,6 +111,7 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 		ar.err = fmt.Errorf("generate delegation id: %w", err)
 		return ar
 	}
+	ar.delegationID = delegationID
 
 	// Register as active task for Dashboard visibility (sync only).
 	if !opts.Async {
@@ -219,11 +221,15 @@ type attemptMeta struct {
 
 // logAttempt writes a ledger entry for a single attempt.
 func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult) {
+	outputFile := ledger.WriteOutput(ar.delegationID, ar.output, ledger.DefaultMaxOutputBytes)
+
 	logEntry := &ledger.Entry{
 		Agent:          agentKey,
 		Task:           task,
 		WorkDir:        workDir,
 		Isolation:      isolation,
+		DelegationID:   ar.delegationID,
+		OutputFile:     outputFile,
 		RunID:          meta.RunID,
 		Attempt:        meta.Attempt,
 		FallbackFrom:   meta.FallbackFrom,

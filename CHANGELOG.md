@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.7] - 2026-04-04
+
+### Added
+
+- **Sync delegation output recording**: agent output from synchronous delegations is now persisted to `~/.config/quancode/logs/outputs/` and viewable in the Dashboard via "View Output" button
+  - New `GET /api/delegations/{id}/output` API endpoint with delegation ID format validation and tail support
+  - Ledger entries now include `delegation_id` and `output_file` fields for traceability
+  - Covers all delegation paths: normal, fallback, speculative, and pipeline stages
+
+### Changed
+
+- **Dashboard UI refresh**: sticky header/tabs, skeleton loading states, rounded pill badges, chevron expand indicators, improved typography and spacing
+- Dashboard header now displays the QuanCode version
+- Extracted shared `serveOutputFile` helper — deduplicated output tail logic between delegation and job output handlers
+
 ## [v0.8.6] - 2026-04-04
 
 ### Fixed

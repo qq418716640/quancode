@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/qq418716640/quancode/job"
 )
@@ -69,32 +68,5 @@ func (s *Server) handleJobOutput(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing job id")
 		return
 	}
-
-	path := job.OutputPath(id)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			writeError(w, http.StatusNotFound, "output not found for job: "+id)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "read output: "+err.Error())
-		return
-	}
-
-	// Tail support: return last N lines (max 10000)
-	tail := 500
-	if t := r.URL.Query().Get("tail"); t != "" {
-		if v, err := strconv.Atoi(t); err == nil && v > 0 && v <= 10000 {
-			tail = v
-		}
-	}
-
-	content := string(data)
-	lines := strings.Split(content, "\n")
-	if len(lines) > tail {
-		lines = lines[len(lines)-tail:]
-	}
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte(strings.Join(lines, "\n")))
+	serveOutputFile(w, r, job.OutputPath(id), "output not found for job: "+id)
 }

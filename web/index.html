@@ -13,28 +13,40 @@
                     colors: {
                         surface: { DEFAULT: '#1a1b26', light: '#24283b', lighter: '#414868' },
                         accent: { DEFAULT: '#7aa2f7', green: '#9ece6a', red: '#f7768e', yellow: '#e0af68', purple: '#bb9af7' },
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        mono: ['SF Mono', 'Fira Code', 'Cascadia Code', 'monospace'],
                     }
                 }
             }
         }
     </script>
     <style>
-        body { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
+        body { font-family: Inter, system-ui, -apple-system, sans-serif; }
+        .font-mono, code, pre, .tabular-nums { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
         .fade-in { animation: fadeIn 0.2s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        /* Skeleton pulse */
+        .skeleton { background: linear-gradient(90deg, #24283b 25%, #2a2e42 50%, #24283b 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #1a1b26; }
-        ::-webkit-scrollbar-thumb { background: #414868; border-radius: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #414868; border-radius: 99px; transition: background 0.2s; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(122, 162, 247, 0.5); }
+        /* Chevron transition */
+        .chevron { transition: transform 0.2s ease; }
+        .chevron-open { transform: rotate(90deg); }
     </style>
 </head>
 <body class="bg-surface text-gray-300 min-h-screen" x-data="dashboard()" x-init="init()">
 
     <!-- Header -->
-    <header class="border-b border-surface-lighter px-6 py-4 flex items-center justify-between">
+    <header class="sticky top-0 z-20 border-b border-surface-lighter/50 px-6 py-4 flex items-center justify-between bg-surface/80 backdrop-blur-md">
         <div class="flex items-center gap-3">
-            <h1 class="text-xl font-bold text-white">QuanCode Dashboard</h1>
-            <span class="text-xs px-2 py-0.5 rounded bg-surface-light text-gray-500" x-text="version || '...'"></span>
+            <h1 class="text-xl font-bold text-white tracking-tight">QuanCode Dashboard</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-surface-light text-gray-500 font-mono" x-text="version || '...'"></span>
         </div>
         <div class="flex items-center gap-4 text-sm">
             <span x-show="connected" class="flex items-center gap-1.5 text-accent-green">
@@ -43,38 +55,56 @@
             <span x-show="!connected" class="flex items-center gap-1.5 text-accent-red">
                 <span class="w-2 h-2 rounded-full bg-accent-red"></span> Disconnected
             </span>
-            <span class="text-gray-500" x-text="lastUpdate"></span>
+            <span class="text-gray-500 font-mono text-xs" x-text="lastUpdate"></span>
         </div>
     </header>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 py-4">
-        <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
-            <div class="text-xs text-gray-500 uppercase tracking-wide">Total Delegations</div>
-            <div class="text-2xl font-bold text-white mt-1" x-text="stats.total || 0"></div>
-        </div>
-        <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
-            <div class="text-xs text-gray-500 uppercase tracking-wide">Success Rate</div>
-            <div class="text-2xl font-bold text-accent-green mt-1" x-text="stats.success_rate || '—'"></div>
-        </div>
-        <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
-            <div class="text-xs text-gray-500 uppercase tracking-wide">Avg Duration</div>
-            <div class="text-2xl font-bold text-accent mt-1" x-text="stats.avg_duration || '—'"></div>
-        </div>
-        <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
-            <div class="text-xs text-gray-500 uppercase tracking-wide">Active Tasks</div>
-            <div class="text-2xl font-bold text-accent-yellow mt-1" x-text="stats.active_tasks || 0"></div>
-        </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 py-5">
+        <!-- Skeleton loading -->
+        <template x-if="loading">
+            <template x-for="i in 4" :key="i">
+                <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20">
+                    <div class="skeleton h-3 w-24 rounded mb-3"></div>
+                    <div class="skeleton h-7 w-16 rounded"></div>
+                </div>
+            </template>
+        </template>
+        <template x-if="!loading">
+            <div class="contents">
+                <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 relative overflow-hidden">
+                    <svg class="absolute -right-2 -top-2 w-16 h-16 text-white/[0.03]" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" clip-rule="evenodd"/></svg>
+                    <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Total Delegations</div>
+                    <div class="text-2xl font-bold text-white mt-1.5 font-mono tabular-nums" x-text="stats.total || 0"></div>
+                </div>
+                <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 relative overflow-hidden">
+                    <svg class="absolute -right-2 -top-2 w-16 h-16 text-accent-green/[0.06]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                    <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Success Rate</div>
+                    <div class="text-2xl font-bold text-accent-green mt-1.5 font-mono tabular-nums" x-text="stats.success_rate || '—'"></div>
+                </div>
+                <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 relative overflow-hidden">
+                    <svg class="absolute -right-2 -top-2 w-16 h-16 text-accent/[0.06]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.828a1 1 0 101.415-1.414L11 9.586V6z" clip-rule="evenodd"/></svg>
+                    <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Avg Duration</div>
+                    <div class="text-2xl font-bold text-accent mt-1.5 font-mono tabular-nums" x-text="stats.avg_duration || '—'"></div>
+                </div>
+                <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 relative overflow-hidden">
+                    <svg class="absolute -right-2 -top-2 w-16 h-16 text-accent-yellow/[0.06]" fill="currentColor" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
+                    <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Active Tasks</div>
+                    <div class="text-2xl font-bold text-accent-yellow mt-1.5 font-mono tabular-nums" x-text="stats.active_tasks || 0"></div>
+                </div>
+            </div>
+        </template>
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs + Filters (sticky) -->
+    <div class="sticky top-[65px] z-10 bg-surface/80 backdrop-blur-md">
     <div class="px-6">
-        <div class="flex gap-1 border-b border-surface-lighter">
+        <div class="flex gap-1 border-b border-surface-lighter/50">
             <template x-for="tab in ['delegations', 'jobs', 'pipelines']" :key="tab">
                 <button
                     @click="activeTab = tab"
                     :class="activeTab === tab ? 'text-accent border-b-2 border-accent' : 'text-gray-500 hover:text-gray-300'"
-                    class="px-4 py-2 text-sm font-medium capitalize transition-colors"
+                    class="px-4 py-2.5 text-sm font-medium capitalize transition-colors"
                     x-text="tab === 'delegations' ? 'Delegations' : tab === 'jobs' ? 'Async Jobs' : 'Pipelines'">
                 </button>
             </template>
@@ -82,16 +112,16 @@
     </div>
 
     <!-- Filters -->
-    <div class="px-6 py-3 flex gap-3 items-center flex-wrap">
+    <div class="px-6 py-3 flex gap-3 items-center flex-wrap border-b border-surface-lighter/30">
         <select x-model="filters.agent" @change="fetchData()"
-            class="bg-surface-light border border-surface-lighter rounded px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent">
+            class="bg-surface-light border border-white/5 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all">
             <option value="">All Agents</option>
             <template x-for="a in agentList" :key="a">
                 <option :value="a" x-text="a"></option>
             </template>
         </select>
         <select x-model="filters.status" @change="fetchData()"
-            class="bg-surface-light border border-surface-lighter rounded px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent">
+            class="bg-surface-light border border-white/5 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all">
             <option value="">All Status</option>
             <option value="succeeded">Succeeded</option>
             <option value="failed">Failed</option>
@@ -101,7 +131,7 @@
             <option value="running">Running</option>
         </select>
         <select x-model="filters.since" @change="fetchData()"
-            class="bg-surface-light border border-surface-lighter rounded px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent">
+            class="bg-surface-light border border-white/5 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all">
             <option value="1h">Last 1 hour</option>
             <option value="6h">Last 6 hours</option>
             <option value="24h" selected>Last 24 hours</option>
@@ -109,77 +139,114 @@
             <option value="">All time</option>
         </select>
     </div>
+    </div>
 
     <!-- Delegations Tab -->
     <div x-show="activeTab === 'delegations'" class="px-6 pb-6 fade-in">
-        <div class="overflow-x-auto">
+        <!-- Skeleton loading for table -->
+        <template x-if="loading">
+            <div class="space-y-2 mt-2">
+                <template x-for="i in 5" :key="i">
+                    <div class="flex gap-4 items-center py-3">
+                        <div class="skeleton h-3 w-20 rounded"></div>
+                        <div class="skeleton h-5 w-16 rounded-full"></div>
+                        <div class="skeleton h-3 w-64 rounded flex-1"></div>
+                        <div class="skeleton h-3 w-12 rounded"></div>
+                        <div class="skeleton h-5 w-12 rounded-full"></div>
+                    </div>
+                </template>
+            </div>
+        </template>
+        <div x-show="!loading" class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
-                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-surface-lighter">
-                        <th class="pb-2 pr-4">Time</th>
-                        <th class="pb-2 pr-4">Agent</th>
-                        <th class="pb-2 pr-4">Task</th>
-                        <th class="pb-2 pr-4">Duration</th>
-                        <th class="pb-2 pr-4">Status</th>
-                        <th class="pb-2">Info</th>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-surface-lighter/50">
+                        <th class="pb-2.5 pr-2 w-6"></th>
+                        <th class="pb-2.5 pr-4 font-medium">Time</th>
+                        <th class="pb-2.5 pr-4 font-medium">Agent</th>
+                        <th class="pb-2.5 pr-4 font-medium">Task</th>
+                        <th class="pb-2.5 pr-4 font-medium">Duration</th>
+                        <th class="pb-2.5 pr-4 font-medium">Status</th>
+                        <th class="pb-2.5 font-medium">Info</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-for="(entry, idx) in delegations" :key="idx">
-                        <tr class="border-b border-surface-lighter/50 hover:bg-surface-light/50 cursor-pointer transition-colors"
+                        <tr class="border-b border-surface-lighter/30 hover:bg-surface-light/50 cursor-pointer transition-colors group"
                             @click="expandedDelegation = expandedDelegation === idx ? null : idx">
-                            <td class="py-2 pr-4 text-xs text-gray-500 whitespace-nowrap" x-text="formatTime(entry.timestamp)"></td>
-                            <td class="py-2 pr-4">
-                                <span class="px-2 py-0.5 rounded text-xs font-medium bg-surface-lighter text-accent" x-text="entry.agent"></span>
+                            <td class="py-2.5 pr-2">
+                                <svg class="w-3.5 h-3.5 text-gray-600 group-hover:text-gray-400 chevron transition-transform" :class="expandedDelegation === idx ? 'chevron-open' : ''" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
                             </td>
-                            <td class="py-2 pr-4">
+                            <td class="py-2.5 pr-4 text-xs text-gray-500 whitespace-nowrap font-mono tabular-nums" x-text="formatTime(entry.timestamp)"></td>
+                            <td class="py-2.5 pr-4">
+                                <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent" x-text="entry.agent"></span>
+                            </td>
+                            <td class="py-2.5 pr-4">
                                 <div class="max-w-md truncate" x-text="entry.task?.substring(0, 80) + (entry.task?.length > 80 ? '...' : '')"></div>
                                 <!-- Inline expanded detail -->
                                 <div x-show="expandedDelegation === idx" x-transition @click.stop
-                                    class="mt-2 p-3 bg-surface rounded-lg border border-surface-lighter text-xs">
+                                    class="mt-3 p-4 bg-surface rounded-xl border border-white/5 shadow-lg shadow-black/20 text-xs">
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <div class="text-gray-500 mb-1">Full Task</div>
                                             <div class="text-gray-300 whitespace-pre-wrap break-all max-h-60 overflow-y-auto" x-text="entry.task"></div>
                                         </div>
                                         <div class="space-y-2">
+                                            <div x-show="entry.delegation_id"><span class="text-gray-500">Delegation ID:</span> <span x-text="entry.delegation_id"></span></div>
                                             <div x-show="entry.run_id"><span class="text-gray-500">Run ID:</span> <span x-text="entry.run_id"></span></div>
                                             <div x-show="entry.isolation"><span class="text-gray-500">Isolation:</span> <span x-text="entry.isolation"></span></div>
                                             <div x-show="entry.fallback_from"><span class="text-gray-500">Fallback from:</span> <span class="text-accent-yellow" x-text="entry.fallback_from"></span></div>
                                             <div x-show="entry.fallback_reason"><span class="text-gray-500">Reason:</span> <span x-text="entry.fallback_reason"></span></div>
                                             <div x-show="entry.changed_files?.length"><span class="text-gray-500">Changed:</span> <span x-text="entry.changed_files?.join(', ')"></span></div>
                                             <div x-show="entry.pipeline_name"><span class="text-gray-500">Pipeline:</span> <span x-text="entry.pipeline_name + ' / ' + entry.stage_name"></span></div>
+                                            <div class="mt-3 flex gap-2" x-show="entry.output_file">
+                                                <button @click.stop="fetchDelegationOutput(entry.delegation_id)"
+                                                    class="px-3 py-1.5 bg-accent/10 border border-accent/20 rounded-lg text-accent hover:bg-accent/20 transition-all text-xs font-medium">
+                                                    View Output
+                                                </button>
+                                                <button x-show="delegationOutputs[entry.delegation_id]" @click.stop="copyToClipboard(delegationOutputs[entry.delegation_id])"
+                                                    class="px-3 py-1.5 bg-surface-light border border-white/5 rounded-lg text-gray-400 hover:text-white transition-all text-xs font-medium">
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <pre x-show="delegationOutputs[entry.delegation_id]" class="mt-2 p-3 bg-surface rounded-lg border border-white/5 max-h-60 overflow-y-auto text-xs font-mono whitespace-pre-wrap" x-text="delegationOutputs[entry.delegation_id]"></pre>
                                         </div>
                                     </div>
                                 </div>
                             </td>
-                            <td class="py-2 pr-4 text-xs whitespace-nowrap" x-text="formatDuration(entry.duration_ms)"></td>
-                            <td class="py-2 pr-4">
-                                <span class="px-2 py-0.5 rounded text-xs font-medium"
-                                    :class="statusClass(entry.exit_code === 0 ? 'succeeded' : 'failed')"
-                                    x-text="entry.exit_code === 0 ? 'OK' : 'FAIL'"></span>
+                            <td class="py-2.5 pr-4 text-xs whitespace-nowrap font-mono tabular-nums" x-text="formatDuration(entry.duration_ms)"></td>
+                            <td class="py-2.5 pr-4">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                                    :class="statusClass(entry.exit_code === 0 ? 'succeeded' : 'failed')">
+                                    <span class="w-1.5 h-1.5 rounded-full" :class="entry.exit_code === 0 ? 'bg-accent-green' : 'bg-accent-red'"></span>
+                                    <span x-text="entry.exit_code === 0 ? 'OK' : 'FAIL'"></span>
+                                </span>
                             </td>
-                            <td class="py-2 text-xs text-gray-500">
-                                <span x-show="entry.fallback_from" class="text-accent-yellow">fallback</span>
-                                <span x-show="entry.speculative" class="text-accent-purple">speculative</span>
-                                <span x-show="entry.pipeline_id" class="text-accent">pipeline</span>
+                            <td class="py-2.5 text-xs text-gray-500 flex gap-1.5">
+                                <span x-show="entry.fallback_from" class="px-1.5 py-0.5 rounded bg-accent-yellow/10 text-accent-yellow text-[10px]">fallback</span>
+                                <span x-show="entry.speculative" class="px-1.5 py-0.5 rounded bg-accent-purple/10 text-accent-purple text-[10px]">speculative</span>
+                                <span x-show="entry.pipeline_id" class="px-1.5 py-0.5 rounded bg-accent/10 text-accent text-[10px]">pipeline</span>
                             </td>
                         </tr>
                     </template>
                 </tbody>
             </table>
         </div>
-        <div x-show="delegations.length === 0" class="text-center py-12 text-gray-500">No delegations found</div>
+        <div x-show="!loading && delegations.length === 0" class="text-center py-16 text-gray-500">
+            <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+            <div class="text-sm">No delegations found</div>
+            <div class="text-xs mt-1 text-gray-600">Try adjusting the filters above</div>
+        </div>
         <!-- Pagination -->
         <div class="flex items-center justify-between mt-4" x-show="delegationTotal > filters.limit">
-            <span class="text-xs text-gray-500" x-text="'Showing ' + delegations.length + ' of ' + delegationTotal"></span>
+            <span class="text-xs text-gray-500 font-mono" x-text="'Showing ' + delegations.length + ' of ' + delegationTotal"></span>
             <div class="flex gap-2">
                 <button @click="filters.offset = Math.max(0, filters.offset - filters.limit); fetchData()"
                     :disabled="filters.offset === 0"
-                    class="px-3 py-1 text-xs bg-surface-light border border-surface-lighter rounded disabled:opacity-30">Prev</button>
+                    class="px-3 py-1.5 text-xs bg-surface-light border border-white/5 rounded-lg disabled:opacity-30 hover:bg-surface-lighter transition-colors">Prev</button>
                 <button @click="filters.offset += filters.limit; fetchData()"
                     :disabled="filters.offset + filters.limit >= delegationTotal"
-                    class="px-3 py-1 text-xs bg-surface-light border border-surface-lighter rounded disabled:opacity-30">Next</button>
+                    class="px-3 py-1.5 text-xs bg-surface-light border border-white/5 rounded-lg disabled:opacity-30 hover:bg-surface-lighter transition-colors">Next</button>
             </div>
         </div>
     </div>
@@ -188,75 +255,100 @@
     <div x-show="activeTab === 'jobs'" class="px-6 pb-6 fade-in">
         <div class="grid gap-3">
             <template x-for="j in jobs" :key="j.job_id">
-                <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter hover:border-accent/30 transition-colors cursor-pointer"
+                <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 hover:border-accent/20 transition-all cursor-pointer group"
                     @click="expandedJob = expandedJob === j.job_id ? null : j.job_id">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(j.status)" x-text="j.status"></span>
-                            <span class="text-xs text-gray-500" x-text="j.job_id"></span>
-                            <span class="px-2 py-0.5 rounded text-xs bg-surface-lighter text-accent" x-text="j.actual_agent || j.agent"></span>
+                            <svg class="w-3.5 h-3.5 text-gray-600 group-hover:text-gray-400 chevron" :class="expandedJob === j.job_id ? 'chevron-open' : ''" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(j.status)">
+                                <span class="w-1.5 h-1.5 rounded-full" :class="{'bg-accent-green': j.status==='succeeded', 'bg-accent-red': j.status==='failed' || j.status==='lost', 'bg-accent-yellow': j.status==='timed_out', 'bg-accent-purple': j.status==='running', 'bg-accent': j.status==='pending'}"></span>
+                                <span x-text="j.status"></span>
+                            </span>
+                            <span class="text-xs text-gray-500 font-mono" x-text="j.job_id"></span>
+                            <span class="px-2 py-0.5 rounded-full text-xs bg-accent/10 text-accent font-medium" x-text="j.actual_agent || j.agent"></span>
                         </div>
-                        <div class="text-xs text-gray-500" x-text="formatTime(j.created_at)"></div>
+                        <div class="text-xs text-gray-500 font-mono tabular-nums" x-text="formatTime(j.created_at)"></div>
                     </div>
-                    <div class="mt-2 text-sm truncate" x-text="j.task?.substring(0, 120)"></div>
+                    <div class="mt-2 text-sm truncate text-gray-300" x-text="j.task?.substring(0, 120)"></div>
                     <!-- Expanded detail -->
-                    <div x-show="expandedJob === j.job_id" class="mt-3 pt-3 border-t border-surface-lighter text-xs space-y-1" @click.stop>
-                        <div><span class="text-gray-500">Isolation:</span> <span x-text="j.isolation"></span></div>
-                        <div><span class="text-gray-500">Timeout:</span> <span x-text="j.effective_timeout + 's'"></span></div>
+                    <div x-show="expandedJob === j.job_id" class="mt-3 pt-3 border-t border-white/5 text-xs space-y-1.5" @click.stop>
+                        <div><span class="text-gray-500">Isolation:</span> <span class="font-mono" x-text="j.isolation"></span></div>
+                        <div><span class="text-gray-500">Timeout:</span> <span class="font-mono" x-text="j.effective_timeout + 's'"></span></div>
                         <div x-show="j.error"><span class="text-gray-500">Error:</span> <span class="text-accent-red" x-text="j.error"></span></div>
-                        <div x-show="j.changed_files?.length"><span class="text-gray-500">Changed:</span> <span x-text="j.changed_files?.join(', ')"></span></div>
-                        <div x-show="j.finished_at"><span class="text-gray-500">Finished:</span> <span x-text="formatTime(j.finished_at)"></span></div>
-                        <div class="mt-2" x-show="j.output_file">
+                        <div x-show="j.changed_files?.length"><span class="text-gray-500">Changed:</span> <span class="font-mono" x-text="j.changed_files?.join(', ')"></span></div>
+                        <div x-show="j.finished_at"><span class="text-gray-500">Finished:</span> <span class="font-mono tabular-nums" x-text="formatTime(j.finished_at)"></span></div>
+                        <div class="mt-3 flex gap-2" x-show="j.output_file">
                             <button @click.stop="fetchOutput(j.job_id)"
-                                class="px-3 py-1 bg-surface border border-surface-lighter rounded text-accent hover:bg-surface-lighter transition-colors">
+                                class="px-3 py-1.5 bg-accent/10 border border-accent/20 rounded-lg text-accent hover:bg-accent/20 transition-all text-xs font-medium">
                                 View Output
                             </button>
+                            <button x-show="jobOutputs[j.job_id]" @click.stop="copyToClipboard(jobOutputs[j.job_id])"
+                                class="px-3 py-1.5 bg-surface-light border border-white/5 rounded-lg text-gray-400 hover:text-white transition-all text-xs font-medium">
+                                Copy
+                            </button>
                         </div>
-                        <pre x-show="jobOutputs[j.job_id]" class="mt-2 p-3 bg-surface rounded max-h-60 overflow-y-auto text-xs whitespace-pre-wrap" x-text="jobOutputs[j.job_id]"></pre>
+                        <pre x-show="jobOutputs[j.job_id]" class="mt-2 p-3 bg-surface rounded-lg border border-white/5 max-h-60 overflow-y-auto text-xs font-mono whitespace-pre-wrap" x-text="jobOutputs[j.job_id]"></pre>
                     </div>
                 </div>
             </template>
         </div>
-        <div x-show="jobs.length === 0" class="text-center py-12 text-gray-500">No async jobs found</div>
+        <div x-show="jobs.length === 0" class="text-center py-16 text-gray-500">
+            <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            <div class="text-sm">No async jobs found</div>
+            <div class="text-xs mt-1 text-gray-600">Jobs created with --async will appear here</div>
+        </div>
     </div>
 
     <!-- Pipelines Tab -->
     <div x-show="activeTab === 'pipelines'" class="px-6 pb-6 fade-in">
         <div class="space-y-4">
             <template x-for="(stages, pipelineId) in pipelines" :key="pipelineId">
-                <div class="bg-surface-light rounded-lg p-4 border border-surface-lighter">
-                    <div class="flex items-center gap-3 mb-3">
-                        <span class="text-sm font-medium text-white" x-text="stages[0]?.pipeline_name || pipelineId"></span>
-                        <span class="text-xs text-gray-500" x-text="pipelineId"></span>
+                <div class="bg-surface-light rounded-xl p-5 border border-white/5 shadow-lg shadow-black/20">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-sm font-semibold text-white" x-text="stages[0]?.pipeline_name || pipelineId"></span>
+                        <span class="text-xs text-gray-500 font-mono" x-text="pipelineId"></span>
                     </div>
-                    <div class="flex items-center gap-2 overflow-x-auto pb-2">
+                    <div class="flex items-center gap-0 overflow-x-auto pb-2">
                         <template x-for="(stage, idx) in stages" :key="idx">
-                            <div class="flex items-center gap-2">
-                                <div class="flex-shrink-0 px-3 py-2 rounded border text-xs text-center min-w-[100px]"
-                                    :class="stage.exit_code === 0 ? 'border-accent-green/30 bg-accent-green/10 text-accent-green' : 'border-accent-red/30 bg-accent-red/10 text-accent-red'">
-                                    <div class="font-medium" x-text="stage.stage_name"></div>
-                                    <div class="text-gray-500 mt-1" x-text="stage.agent"></div>
-                                    <div class="mt-1" x-text="formatDuration(stage.duration_ms)"></div>
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 px-4 py-3 rounded-xl border text-xs text-center min-w-[110px]"
+                                    :class="stage.exit_code === 0 ? 'border-accent-green/20 bg-accent-green/5 text-accent-green' : 'border-accent-red/20 bg-accent-red/5 text-accent-red'">
+                                    <div class="font-semibold text-sm" x-text="stage.stage_name"></div>
+                                    <div class="text-gray-500 mt-1.5 text-[10px] uppercase tracking-wide" x-text="stage.agent"></div>
+                                    <div class="mt-1 font-mono tabular-nums" x-text="formatDuration(stage.duration_ms)"></div>
                                 </div>
-                                <span x-show="idx < stages.length - 1" class="text-gray-600">&rarr;</span>
+                                <div x-show="idx < stages.length - 1" class="w-8 flex items-center justify-center">
+                                    <div class="w-full h-px" :class="stage.exit_code === 0 ? 'bg-accent-green/30' : 'bg-accent-red/30'"></div>
+                                    <svg class="w-3 h-3 -ml-1 flex-shrink-0" :class="stage.exit_code === 0 ? 'text-accent-green/50' : 'text-accent-red/50'" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                                </div>
                             </div>
                         </template>
                     </div>
                 </div>
             </template>
         </div>
-        <div x-show="Object.keys(pipelines).length === 0" class="text-center py-12 text-gray-500">No pipeline runs found</div>
+        <div x-show="Object.keys(pipelines).length === 0" class="text-center py-16 text-gray-500">
+            <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+            <div class="text-sm">No pipeline runs found</div>
+            <div class="text-xs mt-1 text-gray-600">Multi-stage pipelines will appear here</div>
+        </div>
     </div>
 
     <!-- Output Modal -->
-    <div x-show="outputModal.visible" x-transition class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-8"
+    <div x-show="outputModal.visible" x-transition class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-8"
         @click.self="outputModal.visible = false">
-        <div class="bg-surface-light rounded-lg border border-surface-lighter w-full max-w-4xl max-h-[80vh] flex flex-col">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-surface-lighter">
-                <span class="text-sm font-medium text-white" x-text="'Output: ' + outputModal.jobId"></span>
-                <button @click="outputModal.visible = false" class="text-gray-500 hover:text-white">&times;</button>
+        <div class="bg-surface-light rounded-2xl border border-white/5 shadow-2xl shadow-black/40 w-full max-w-4xl max-h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-white/5">
+                <span class="text-sm font-medium text-white">Output: <span class="font-mono text-gray-400" x-text="outputModal.jobId"></span></span>
+                <div class="flex items-center gap-2">
+                    <button @click="copyToClipboard(outputModal.content)"
+                        class="px-3 py-1 text-xs bg-surface border border-white/5 rounded-lg text-gray-400 hover:text-white transition-all font-medium">
+                        Copy
+                    </button>
+                    <button @click="outputModal.visible = false" class="text-gray-500 hover:text-white text-lg leading-none transition-colors">&times;</button>
+                </div>
             </div>
-            <pre class="p-4 overflow-auto text-xs whitespace-pre-wrap flex-1" x-text="outputModal.content"></pre>
+            <pre class="p-5 overflow-auto text-xs font-mono whitespace-pre-wrap flex-1 leading-relaxed" x-text="outputModal.content"></pre>
         </div>
     </div>
 
@@ -267,6 +359,7 @@
             activeTab: 'delegations',
             version: '',
             connected: false,
+            loading: true,
             lastUpdate: '',
             stats: {},
             delegations: [],
@@ -278,6 +371,7 @@
             expandedDelegation: null,
             expandedJob: null,
             jobOutputs: {},
+            delegationOutputs: {},
             outputModal: { visible: false, jobId: '', content: '' },
             eventSource: null,
 
@@ -286,6 +380,12 @@
                 this.fetchAgents();
                 this.fetchData();
                 this.connectSSE();
+            },
+
+            copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    // Brief visual feedback could be added here
+                }).catch(() => {});
             },
 
             async fetchVersion() {
@@ -315,6 +415,7 @@
 
             async fetchData() {
                 await Promise.all([this.fetchDelegations(), this.fetchJobs(), this.fetchStats()]);
+                this.loading = false;
             },
 
             async fetchDelegations() {
@@ -359,6 +460,16 @@
                     const text = await res.text();
                     this.jobOutputs[jobId] = text;
                 } catch (e) { console.error('fetchOutput:', e); }
+            },
+
+            async fetchDelegationOutput(delegationId) {
+                if (!delegationId) return;
+                try {
+                    const res = await fetch('/api/delegations/' + delegationId + '/output');
+                    if (!res.ok) { console.error('fetchDelegationOutput:', res.status); return; }
+                    const text = await res.text();
+                    this.delegationOutputs[delegationId] = text;
+                } catch (e) { console.error('fetchDelegationOutput:', e); }
             },
 
             buildPipelines(entries) {

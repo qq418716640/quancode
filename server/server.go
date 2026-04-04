@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -43,6 +45,7 @@ func New(addr string, devMode bool) *Server {
 func (s *Server) registerRoutes() {
 	// API routes
 	s.mux.HandleFunc("GET /api/delegations", s.handleDelegations)
+	s.mux.HandleFunc("GET /api/delegations/{id}/output", s.handleDelegationOutput)
 	s.mux.HandleFunc("GET /api/jobs", s.handleJobs)
 	s.mux.HandleFunc("GET /api/jobs/{id}", s.handleJobDetail)
 	s.mux.HandleFunc("GET /api/jobs/{id}/output", s.handleJobOutput)
@@ -128,4 +131,33 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // writeError writes a JSON error response.
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// serveOutputFile reads an output file and writes its tail to the response.
+func serveOutputFile(w http.ResponseWriter, r *http.Request, path, notFoundMsg string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, notFoundMsg)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "read output: "+err.Error())
+		return
+	}
+
+	tail := 500
+	if t := r.URL.Query().Get("tail"); t != "" {
+		if v, err := strconv.Atoi(t); err == nil && v > 0 && v <= 10000 {
+			tail = v
+		}
+	}
+
+	content := string(data)
+	lines := strings.Split(content, "\n")
+	if len(lines) > tail {
+		lines = lines[len(lines)-tail:]
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(strings.Join(lines, "\n")))
 }

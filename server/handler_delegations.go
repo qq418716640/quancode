@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -84,6 +85,18 @@ func (s *Server) handleDelegations(w http.ResponseWriter, r *http.Request) {
 		"total":   total,
 		"entries": page,
 	})
+}
+
+// validDelegationID matches delegation IDs like "del_9b03d6fbacb19ba8".
+var validDelegationID = regexp.MustCompile(`^del_[a-f0-9]{16}$`)
+
+func (s *Server) handleDelegationOutput(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" || !validDelegationID.MatchString(id) {
+		writeError(w, http.StatusBadRequest, "invalid delegation id")
+		return
+	}
+	serveOutputFile(w, r, ledger.OutputPath(id), "output not found for delegation: "+id)
 }
 
 func filterEntries(entries []ledger.Entry, fn func(ledger.Entry) bool) []ledger.Entry {

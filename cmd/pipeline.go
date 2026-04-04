@@ -611,11 +611,15 @@ func renderTemplate(tmplStr string, pctx *pipelineContext, missingKeyOpt string)
 
 func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int,
 	agentKey, task, workDir string, meta attemptMeta, ar attemptResult) {
+	outputFile := ledger.WriteOutput(ar.delegationID, ar.output, ledger.DefaultMaxOutputBytes)
+
 	logEntry := &ledger.Entry{
 		Agent:          agentKey,
 		Task:           task,
 		WorkDir:        workDir,
 		Isolation:      "inplace",
+		DelegationID:   ar.delegationID,
+		OutputFile:     outputFile,
 		RunID:          meta.RunID,
 		Attempt:        meta.Attempt,
 		FallbackFrom:   meta.FallbackFrom,

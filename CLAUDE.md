@@ -27,7 +27,7 @@ cmd/pipeline.go → config/pipeline.go (LoadPipeline) → cmd/delegate_attempt.g
                                                                                              → ledger/
 cmd/delegate_async.go → job/ (write pending) → cmd/run_job.go (detached) → delegate_attempt.go
 cmd/job*.go → job/ (list/status/result/logs/cancel/clean)
-cmd/dashboard.go → server/ (HTTP server) → ledger/ + job/ (read-only)
+cmd/dashboard.go → server/ (HTTP server) → ledger/ + job/ + active/ (read-only)
                                           → web/ (embedded frontend via go:embed)
 ```
 
@@ -39,14 +39,15 @@ cmd/dashboard.go → server/ (HTTP server) → ledger/ + job/ (read-only)
 - **prompt/** — Builds the system prompt injected into the primary CLI. Uses `text/template`. Excludes the actual primary from the listed agents.
 - **router/** — `SelectAgent()` picks the best sub-agent: preferred_for keyword match > priority number > alphabetical.
 - **runner/** — Process execution with timeout, stdin piping, output file capture, env merging (`MergeEnv` replaces same-name keys, not appends). Also handles git worktree isolation and patch collection. All processes run in their own process group (`Setpgid`); timeout kills the entire group to prevent child process leaks. `RunWithContext` variants accept external contexts for speculative cancellation.
-- **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Records each delegation with agent, task, duration, exit code, changed files, and fallback chain. Also provides ID generation (NewDelegationID, NewRunID, NewPipelineID) for tracking. Pipeline entries include PipelineID, PipelineName, StageName, StageIndex for workflow-level grouping.
-- **server/** — HTTP server for the web dashboard. Provides REST API endpoints (`/api/delegations`, `/api/jobs`, `/api/stats`, `/api/events`) with pagination, filtering, SSE broadcast, and stats caching. Uses Go 1.22 enhanced `ServeMux` routing. Graceful shutdown on SIGTERM/SIGINT.
+- **ledger/** — JSONL logs at `~/.config/quancode/logs/{date}.jsonl`. Records each delegation with agent, task, duration, exit code, changed files, and fallback chain. Also provides ID generation (NewDelegationID, NewRunID, NewPipelineID) for tracking. Pipeline entries include PipelineID, PipelineName, StageName, StageIndex for workflow-level grouping. Delegation output is stored in `logs/outputs/{delegationID}.output` via `WriteOutput`.
+- **active/** — Lightweight file-based registry at `~/.config/quancode/active/` tracking currently running synchronous delegations. Each running task writes a marker file with PID and start time; `List()` scans the directory and cleans up stale entries via PID liveness checks. Only sync delegations register here; async jobs already have persistent state in `job/`.
+- **server/** — HTTP server for the web dashboard. Provides REST API endpoints (`/api/delegations`, `/api/delegations/{id}/output`, `/api/jobs`, `/api/agents`, `/api/stats`, `/api/events`, `/api/version`) with pagination, filtering, SSE broadcast, and stats caching. Uses Go 1.22 enhanced `ServeMux` routing. Graceful shutdown on SIGTERM/SIGINT.
 - **web/** — Embedded frontend assets. Single-file `index.html` with Alpine.js and Tailwind CSS (vendored in `static/`). Exported via `go:embed` as `web.Assets`. In `--dev` mode, files are served from the filesystem for live editing.
 - **job/** — Persistent async job state at `~/.config/quancode/jobs/`. Atomic writes via flock+CAS with schema versioning. Handles job lifecycle (pending→running→succeeded/failed/timed_out/cancelled/lost), TTL cleanup, PID reuse detection via `pid_start_time`, and capped output files (50MB).
 
 ### Dashboard (preview)
 
-`quancode dashboard` starts a local HTTP server providing a web UI for monitoring all delegation activity. The `server/` package implements REST API handlers backed by `ledger/` and `job/` data. The `web/` package embeds a single-file HTML frontend (Alpine.js + Tailwind CSS, vendored for offline use) via `go:embed`. The server listens on `127.0.0.1` only, serves read-only APIs, and supports SSE for real-time updates.
+`quancode dashboard` starts a local HTTP server providing a web UI for monitoring all delegation activity. The `server/` package implements REST API handlers backed by `ledger/`, `job/`, and `active/` data. The `web/` package embeds a single-file HTML frontend (Alpine.js + Tailwind CSS, vendored for offline use) via `go:embed`. The server listens on `127.0.0.1` only, serves read-only APIs, and supports SSE for real-time updates. Active sync tasks are tracked via file markers in `active/` and shown alongside async job counts.
 
 ### Prompt injection modes
 
