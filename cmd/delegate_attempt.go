@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/qq418716640/quancode/active"
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/runner"
@@ -55,6 +56,7 @@ type DelegateAttemptOptions struct {
 	Ctx             context.Context // external context for cancellation; nil = use agent's internal timeout
 	DeferPatchApply bool            // collect patch but don't apply to main tree
 	DeferVerify     bool            // skip verification (caller will verify the winner)
+	Async           bool            // true when called from async job-runner; skips active task registration
 }
 
 // runDelegateAttempt executes one delegation attempt against a single agent,
@@ -107,6 +109,12 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 	if err != nil {
 		ar.err = fmt.Errorf("generate delegation id: %w", err)
 		return ar
+	}
+
+	// Register as active task for Dashboard visibility (sync only).
+	if !opts.Async {
+		active.Register(delegationID, opts.AgentKey, opts.Task, opts.WorkDir)
+		defer active.Unregister(delegationID)
 	}
 
 	// Assemble full task with context prefix

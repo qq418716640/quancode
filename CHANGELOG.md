@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.6] - 2026-04-04
+
+### Fixed
+
+- **Dashboard "Active Tasks" now tracks running sync delegations**: new `active/` package writes marker files during synchronous delegation execution; Dashboard counts both active sync tasks and non-terminal async jobs in real time
+- Renamed card label from "Active Jobs" to "Active Tasks" to reflect combined sync + async scope
+
 ## [v0.8.5] - 2026-04-04
 
 ### Fixed

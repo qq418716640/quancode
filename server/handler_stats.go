@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/qq418716640/quancode/active"
 	"github.com/qq418716640/quancode/job"
 	"github.com/qq418716640/quancode/ledger"
 )
@@ -22,16 +23,28 @@ func newStatsCache(ttl time.Duration) *statsCache {
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
+	// Active tasks are always computed fresh (not cached).
+	activeSyncTasks := len(active.List())
+	activeAsyncJobs := 0
+	jobs, _ := job.ListJobs("", 0)
+	for _, j := range jobs {
+		if !job.IsTerminal(j.Status) {
+			activeAsyncJobs++
+		}
+	}
+	activeTasks := activeSyncTasks + activeAsyncJobs
+
+	// Ledger stats use cache.
 	s.stats.mu.Lock()
 	if s.stats.data != nil && time.Since(s.stats.updatedAt) < s.stats.ttl {
-		data := s.stats.data
+		data := copyMap(s.stats.data)
 		s.stats.mu.Unlock()
+		data["active_tasks"] = activeTasks
 		writeJSON(w, http.StatusOK, data)
 		return
 	}
 	s.stats.mu.Unlock()
 
-	// Compute stats
 	entries, err := ledger.ReadAll()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "read ledger: "+err.Error())
@@ -70,17 +83,6 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Count active jobs
-	activeJobs := 0
-	jobs, err := job.ListJobs("", 0)
-	if err == nil {
-		for _, j := range jobs {
-			if !job.IsTerminal(j.Status) {
-				activeJobs++
-			}
-		}
-	}
-
 	result := map[string]any{
 		"total":        total,
 		"succeeded":    succeeded,
@@ -88,7 +90,6 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"avg_duration": avgDuration,
 		"agents":       agentCounts,
 		"today":        todayCount,
-		"active_jobs":  activeJobs,
 	}
 
 	s.stats.mu.Lock()
@@ -96,5 +97,15 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	s.stats.updatedAt = time.Now()
 	s.stats.mu.Unlock()
 
-	writeJSON(w, http.StatusOK, result)
+	out := copyMap(result)
+	out["active_tasks"] = activeTasks
+	writeJSON(w, http.StatusOK, out)
+}
+
+func copyMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }

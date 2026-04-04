@@ -114,6 +114,7 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			WorkDir:   state.WorkDir,
 			Isolation: state.Isolation,
 			Quiet:     true,
+			Async:     true,
 			Ctx:       agentCtx,
 		})
 		doneCh <- ar
@@ -180,6 +181,7 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 				WorkDir:   state.WorkDir,
 				Isolation: state.Isolation,
 				Quiet:     true,
+				Async:     true,
 				Ctx:       fbCtx,
 			})
 			fbCancel()

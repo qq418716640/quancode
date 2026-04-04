@@ -104,7 +104,7 @@ func TestHandleStats(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
-	for _, key := range []string{"total", "succeeded", "success_rate", "avg_duration", "active_jobs"} {
+	for _, key := range []string{"total", "succeeded", "success_rate", "avg_duration", "active_tasks"} {
 		if _, ok := resp[key]; !ok {
 			t.Errorf("response missing %q field", key)
 		}
