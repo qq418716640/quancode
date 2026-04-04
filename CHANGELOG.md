@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.9] - 2026-04-04
+
+### Fixed
+
+- Dashboard "View Output" now requests up to 10,000 lines instead of the default 500, fixing truncated output display for large agent responses
+
 ## [v0.8.8] - 2026-04-04
 
 ### Added
