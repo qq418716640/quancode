@@ -85,6 +85,7 @@ var KnownAgents = map[string]AgentConfig{
 		Command:            "copilot",
 		Description:        "Full coding agent powered by GitHub Copilot, multi-model support, deep repository context",
 		Strengths:          []string{"code-generation", "github-integration", "repository-context", "multi-model"},
+		PrimaryArgs:        []string{"--yolo"},
 		DelegateArgs:       []string{"--yolo", "--no-auto-update", "-p"},
 		TimeoutSecs:        300,
 		Enabled:            true,
