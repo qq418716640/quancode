@@ -1,410 +1,208 @@
 # User Guide
 
-This guide covers the day-to-day command flow for QuanCode after installation.
+QuanCode is a multi-agent orchestration layer. **You command, AI executes.** The vast majority of QuanCode commands are called autonomously by the AI agent — you only need to learn two commands to get started.
 
-README stays focused on project overview and quick start. This guide explains how to actually use each command in a normal workflow.
+## How It Works
 
-## 1. Setup
+```
+You (natural language) → Primary Agent (AI) → quancode delegate/route/job/... → Sub-Agents
+```
 
-### `quancode init`
+1. You run `quancode start` to launch a primary AI agent (e.g. Claude Code)
+2. You describe what you want in natural language
+3. The primary agent autonomously decides when and how to delegate tasks to other agents using `quancode delegate`, `quancode pipeline`, etc.
+4. QuanCode handles routing, fallback, isolation, verification, and result collection — all transparently
 
-Use `init` the first time you install QuanCode:
+**You never need to call `quancode delegate` yourself.** The AI does it for you.
+
+## Commands You Need to Learn
+
+### `quancode init` — one-time setup
 
 ```bash
 quancode init
 ```
 
-What it does:
+Run this once after installation. It scans your `PATH` for known coding CLIs (Claude Code, Codex, Qoder, Gemini, Copilot, etc.), lets you pick a default primary agent, and writes `~/.config/quancode/quancode.yaml`.
 
-- scans `PATH` for known coding CLIs such as `claude`, `codex`, and `qodercli`
-- asks which detected CLI should be the default primary agent
-- writes a config file to `~/.config/quancode/quancode.yaml`
-
-If the config file already exists, `init` asks before overwriting it.
-
-### `quancode doctor`
-
-Run `doctor` after `init` or after changing your setup:
-
-```bash
-quancode doctor
-```
-
-It checks:
-
-- whether the config file exists
-- whether the config loads and validates
-- whether the primary agent command is available in `PATH`
-- whether each enabled agent command is available
-- whether `quancode` itself is in `PATH`
-
-If a check fails, `doctor` prints a short hint for the next step. It may also print a shell-completion setup tip for your current shell.
-
-### Shell Completion
-
-QuanCode already includes shell completion generation through Cobra:
-
-```bash
-quancode completion zsh
-quancode completion bash
-quancode completion fish
-```
-
-Quick setup examples:
-
-```bash
-# zsh
-echo 'source <(quancode completion zsh)' >> ~/.zshrc
-
-# bash
-echo 'source <(quancode completion bash)' >> ~/.bashrc
-
-# fish
-quancode completion fish > ~/.config/fish/completions/quancode.fish
-```
-
-Open a new shell after adding the command, or source the generated completion script in your current session.
-
-If you installed QuanCode through Homebrew after the tap is wired, the generated formula installs shell completions automatically.
-
-## 2. Starting a Primary Agent
-
-### `quancode start`
-
-Start the configured default primary agent:
+### `quancode start` — start a session
 
 ```bash
 quancode start
 ```
 
-Override the primary agent for a single session:
+This is the command you use every day. It launches the primary AI agent with multi-agent delegation capabilities injected. From here, just talk to the AI.
+
+Override the primary for a single session:
 
 ```bash
 quancode start --primary codex
-quancode start --primary claude
 ```
 
-What happens when `start` runs:
+**That's it.** These two commands cover 95% of daily usage. Everything below is reference for what the AI does under the hood, and optional tools for power users.
 
-- QuanCode loads your config
-- it builds delegation instructions listing the enabled non-primary agents
-- it injects those instructions using the configured prompt mode for the primary CLI
-- it launches the primary CLI
+---
 
-If the primary uses file-based prompt injection such as `AGENTS.md`, QuanCode manages that file for the session and restores the original content when the primary exits.
+## What the AI Does Autonomously
 
-## 3. Delegation
+When you give the primary agent a task, it can autonomously use any of the following QuanCode capabilities. You don't need to memorize these — the AI already knows how to use them.
 
-### `quancode delegate`
+### Delegation (`quancode delegate`)
 
-Use `delegate` for one-shot sub-agent work:
+The AI routes tasks to the best sub-agent:
+
+- **Auto-routing**: picks the best agent based on task keywords and priority
+- **Targeted delegation**: sends to a specific agent when appropriate
+- **Context injection**: automatically attaches `CLAUDE.md`, `AGENTS.md`, and relevant files
+- **Isolation modes**: `inplace` (direct edit), `worktree` (safe sandbox + auto-apply), `patch` (sandbox + manual apply)
+- **Verification**: runs test commands after delegation to validate results
+- **Parallel delegation**: splits independent tasks across multiple agents concurrently
+- **Async delegation**: runs long tasks in the background with `--async`
+
+### Fallback and Recovery
+
+- **Auto-fallback**: if an agent times out or hits rate limits, QuanCode automatically retries with the next available agent (up to 3 attempts)
+- **Speculative parallelism**: optionally races two agents in parallel — first success wins, companion result preserved for reference
+- **Isolation filtering**: agents that don't support the required isolation mode are automatically skipped
+
+### Pipeline (`quancode pipeline`)
+
+For multi-phase tasks (analyze → implement → test), the AI can run a pipeline where each stage's output flows to the next. Stages can have per-stage fallback, verification, and failure policies.
+
+### Job Management (`quancode job`)
+
+For background tasks, the AI manages the full lifecycle: launch, monitor, retrieve results, cancel, and clean up.
+
+## Optional Commands for Power Users
+
+These commands are useful for debugging, monitoring, or manual intervention. You can use QuanCode productively without ever touching them.
+
+### Health Check
 
 ```bash
-quancode delegate "write unit tests for config loading"
+quancode doctor       # verify config, agents, and PATH
 ```
 
-Target a specific agent:
+### Observability
 
 ```bash
-quancode delegate --agent claude "review this patch for regressions"
-quancode delegate --agent codex "refactor this helper and update tests"
-quancode delegate --agent qoder "review this code for issues"
+quancode agents       # list enabled agents and availability
+quancode stats        # delegation statistics (success rate, timing, etc.)
+quancode dashboard    # web UI for monitoring (preview)
+quancode version      # print installed version
 ```
-
-Change the working directory:
-
-```bash
-quancode delegate --workdir /path/to/repo "explain the runner package"
-```
-
-Choose output format:
-
-```bash
-quancode delegate --format text "summarize the repo structure"
-quancode delegate --format json "review this change"
-```
-
-Text mode is easier for direct use in the terminal. JSON mode is better for scripts and automation.
-
-### Context Injection
-
-QuanCode can attach project context automatically when it delegates a task.
-
-By default, it injects `CLAUDE.md` and `AGENTS.md` if those files exist in the target working tree.
-
-You can add more context files explicitly:
-
-```bash
-quancode delegate --context-files docs/architecture.md "explain the runner package"
-quancode delegate --context-files docs/architecture.md --context-files README.md "update the config docs"
-```
-
-You can also attach a git diff snapshot:
-
-```bash
-quancode delegate --context-diff staged "review the staged changes"
-quancode delegate --context-diff working "summarize the current uncommitted edits"
-```
-
-Override the context size budget when needed:
-
-```bash
-quancode delegate --context-max-size 65536 "analyze the current project instructions"
-```
-
-Disable automatic context injection entirely:
-
-```bash
-quancode delegate --no-context "review this patch for regressions"
-```
-
-Context rules:
-
-- automatic files are `CLAUDE.md` and `AGENTS.md` when present
-- `--context-files` may be passed multiple times
-- `--context-diff` accepts `staged` or `working`
-- `--context-max-size` overrides the total context budget
-- `--no-context` disables automatic injection
-- default total budget is 32 KB
-- default per-file limit is 16 KB
-
-### Post-Delegation Verification
-
-QuanCode can run verification commands after a successful delegation.
-
-Use `--verify` to record verification results without changing the delegation outcome:
-
-```bash
-quancode delegate --verify "go test ./..." "add tests for config loading"
-```
-
-Use `--verify-strict` when verification must pass:
-
-```bash
-quancode delegate --isolation worktree --verify-strict "go test ./..." "implement the helper and update tests"
-```
-
-Set a per-command timeout when verification may take longer or should fail faster:
-
-```bash
-quancode delegate --verify "go test ./..." --verify-timeout 300 "refactor the router package"
-```
-
-Verification rules:
-
-- `--verify` records verification results but does not block a successful delegation
-- `--verify-strict` fails the delegation when verification fails
-- `--verify-timeout` sets the timeout for each verification command and defaults to 120 seconds
-- `--verify` and `--verify-strict` are mutually exclusive
-- verification only runs when the agent task itself succeeds
-- in `worktree` mode, verification runs before the patch is applied back to the main tree
-- verification failure does not trigger fallback
-
-### Isolation Modes
-
-QuanCode supports three delegation modes:
-
-- `inplace`: runs directly in your current working tree
-- `worktree`: runs in a temporary git worktree, then applies the resulting patch back
-- `patch`: runs in a temporary git worktree and returns a patch instead of changing your main tree
-
-Examples:
-
-```bash
-quancode delegate --isolation inplace "fix this lint issue"
-quancode delegate --isolation worktree "implement the helper and update tests"
-quancode delegate --isolation patch "rewrite the README opening paragraph"
-```
-
-Use this rule of thumb:
-
-- use `inplace` for read-only tasks or low-risk edits
-- use `worktree` when you want safer execution but still want the result applied automatically
-- use `patch` when you want to inspect or apply the change yourself
-
-`worktree` and `patch` require the target directory to be a git repository.
-
-### Parallel Delegation
-
-You can run multiple delegates concurrently using `--isolation patch` mode. Each delegate works in its own isolated worktree, and patches are not auto-applied.
-
-```bash
-# Run two delegates in parallel (from a script or an agent that supports concurrent calls)
-quancode delegate --agent codex --isolation patch --format json "implement feature X in pkg/foo"
-quancode delegate --agent codex --isolation patch --format json "write tests for pkg/bar"
-```
-
-The JSON result includes a `patch` field with the unified diff. To apply a patch:
-
-```bash
-quancode apply-patch --workdir /path/to/repo --file /tmp/patch-feature.diff
-```
-
-Or pipe from stdin:
-
-```bash
-echo "$PATCH" | quancode apply-patch --workdir /path/to/repo
-```
-
-`apply-patch` prints a summary of affected files before applying, so you can review what will change. Apply patches one at a time and verify after each one.
-
-Split parallel tasks by file boundaries to avoid patch conflicts.
-
-### Async Delegation
-
-Use `--async` to run a delegation in the background:
-
-```bash
-quancode delegate --async --agent codex --isolation worktree "implement feature X"
-```
-
-This returns a `job_id` immediately. The task runs in a detached background process.
-
-Rules:
-- `--async` requires `--isolation worktree` or `--isolation patch`
-- `--async` does not support `--verify` / `--verify-strict`
-- `--timeout <seconds>` sets a per-task timeout (capped at agent config `timeout_secs`). Also works for sync delegation
-
-Manage jobs with `quancode job`:
-
-```bash
-quancode job list [--workdir /path/to/repo]   # list jobs (newest first)
-quancode job status <job_id>                   # check status
-quancode job result <job_id>                   # get result (terminal jobs only)
-quancode job logs <job_id> [--tail 50]         # view output
-quancode job cancel <job_id>                   # cancel a running job
-quancode job clean [--ttl 168h]                # remove expired job files
-```
-
-For `--isolation patch` async jobs, apply the result patch with:
-
-```bash
-quancode apply-patch --id <delegation_id>
-```
-
-The `delegation_id` is available in `quancode job result --format json` output.
-
-### End-to-End Delegation Example
-
-```bash
-quancode delegate --agent codex --isolation worktree --format text "write tests for router selection"
-```
-
-Typical flow:
-
-- QuanCode starts the selected sub-agent in the chosen execution mode
-- the sub-agent performs the one-shot task
-- QuanCode returns the result and records it in the local ledger
-- `changed_files` and timing data are available for later stats tracking
-
-## 4. Routing
-
-### `quancode route`
-
-Use `route` to preview automatic selection before delegating:
-
-```bash
-quancode route "review this Go patch"
-quancode route "implement a new command and update docs"
-```
-
-Output includes:
-
-- the original task text
-- the selected agent
-- the reason for the selection
-
-Routing is keyword and priority based. It is not an LLM planner.
-
-## 5. Observability
-
-### `quancode agents`
-
-List enabled agents and whether each command is available:
-
-```bash
-quancode agents
-```
-
-The output includes agent name, availability, command, strengths, and description.
-
-### `quancode stats`
-
-Show recent delegation statistics:
-
-```bash
-quancode stats
-quancode stats --days 7
-```
-
-The stats view includes:
-
-- total calls in the selected window
-- per-agent success rate, failures, timeouts, average time, total time, and changed file counts
-
-If no ledger data exists yet, `stats` tells you to run `quancode delegate` first.
 
 ### Statusline
 
-`quancode init` auto-configures the Claude Code statusline. Once configured, the statusline shows:
+`quancode init` auto-configures the Claude Code statusline showing context window usage, rate limits, and session cost. No extra setup needed.
 
-- QuanCode session indicator and current model
-- Context window usage percentage
-- 5-hour and 7-day rate limit consumption
-- Accumulated cost for the current session
-
-No extra setup is needed beyond running `quancode init`.
-
-### `quancode dashboard` (preview)
-
-Start a local web dashboard to monitor all delegation and job activity in a browser:
+### Dashboard (preview)
 
 ```bash
 quancode dashboard                # default port 8377
 quancode dashboard --port 9000    # custom port
 quancode dashboard --open         # auto-open browser
-quancode dashboard --dev          # serve from filesystem (live reload)
 ```
 
-The dashboard provides:
+Browser-based UI with delegation history, async job status, pipeline visualization, and real-time updates via SSE. Listens on `127.0.0.1` only, read-only, no auth required. Frontend assets are embedded — no internet needed.
 
-- **Stats overview**: total delegations, success rate, average duration, active jobs
-- **Delegation history**: sortable table with agent, task summary, duration, status, and fallback/speculative/pipeline indicators. Click a row to expand full details.
-- **Async jobs panel**: cards showing job status (pending/running/succeeded/failed), with expandable details and output viewer
-- **Pipeline view**: stages grouped by pipeline ID, displayed as a horizontal flow with per-stage status
+### Manual Delegation
 
-Filtering is available by agent, status, and time range. The dashboard connects via SSE for real-time updates.
-
-The server listens on `127.0.0.1` only (not exposed to the network) and serves read-only data. Frontend assets (Alpine.js, Tailwind CSS) are vendored and embedded in the binary — no internet connection required.
-
-### `quancode version`
-
-Print the currently installed version:
+In rare cases you may want to delegate directly from the terminal:
 
 ```bash
-quancode version
+quancode delegate "write unit tests for config loading"
+quancode delegate --agent codex --isolation worktree "refactor the helper"
+quancode delegate --async --isolation worktree "implement feature X"
 ```
 
-## 6. Auto-Fallback
+See the sections below for full flag reference.
 
-When a delegated task fails due to a **timeout** or **rate-limit** error, QuanCode automatically retries the task with the next available agent according to router priority. This is called auto-fallback.
-
-Key behaviors:
-
-- Fallback **triggers** on timeout or rate-limit errors only.
-- Fallback does **not** trigger on normal task failures (e.g., the agent ran but produced incorrect output or exited with an error).
-- Fallback does **not** trigger on verification failures.
-- The next agent is selected by the router using the same priority rules as normal routing.
-- QuanCode attempts a maximum of **3 attempts** (the original plus up to 2 fallbacks).
-- In `inplace` isolation mode, fallback is **blocked** if the failed agent already changed files in the working tree. This prevents a second agent from building on top of a partial or broken edit.
-
-To disable fallback entirely for a delegation:
+### Shell Completion
 
 ```bash
-quancode delegate --no-fallback "migrate the database schema"
+quancode completion zsh   # or bash, fish
+# Quick setup:
+echo 'source <(quancode completion zsh)' >> ~/.zshrc
 ```
 
-## 7. Configuration Recipes
+## Reference
+
+The following sections document all flags and behaviors in detail. They are primarily useful for understanding what the AI is doing, writing custom configs, or troubleshooting.
+
+### Delegation Flags
+
+| Flag | Description |
+|---|---|
+| `--agent <name>` | Target a specific agent |
+| `--isolation <mode>` | `inplace`, `worktree`, or `patch` |
+| `--format <fmt>` | `text` or `json` |
+| `--workdir <path>` | Override working directory |
+| `--async` | Run in background (requires worktree/patch) |
+| `--timeout <secs>` | Per-task timeout |
+| `--no-fallback` | Disable auto-fallback |
+| `--verify <cmd>` | Run verification after success |
+| `--verify-strict <cmd>` | Fail delegation if verification fails |
+| `--verify-timeout <secs>` | Timeout for verification (default 120s) |
+| `--context-files <path>` | Add extra context files (repeatable) |
+| `--context-diff <type>` | Attach `staged` or `working` diff |
+| `--context-max-size <bytes>` | Override context budget (default 32KB) |
+| `--no-context` | Disable automatic context injection |
+| `--dry-run` | Preview full prompt without executing |
+
+### Job Management
+
+```bash
+quancode job list [--workdir .]        # list jobs (newest first)
+quancode job status <job_id>           # check status
+quancode job result <job_id>           # get result
+quancode job logs <job_id> [--tail N]  # view output
+quancode job cancel <job_id>           # cancel running job
+quancode job clean [--ttl 168h]        # remove expired jobs
+```
+
+For patch-mode async jobs: `quancode apply-patch --id <delegation_id>`
+
+### Routing Preview
+
+```bash
+quancode route "review this Go patch"
+```
+
+Shows which agent would be selected and why. Useful for understanding routing decisions.
+
+### Context Injection Rules
+
+- Automatic files: `CLAUDE.md` and `AGENTS.md` when present
+- Default total budget: 32 KB, per-file limit: 16 KB
+- `--context-diff` accepts `staged` or `working`
+- `--no-context` disables all automatic injection
+
+### Isolation Mode Details
+
+| Mode | Behavior | Git required |
+|---|---|---|
+| `inplace` | Runs directly in working tree | No |
+| `worktree` | Temporary git worktree, auto-applies patch | Yes |
+| `patch` | Temporary git worktree, returns patch only | Yes |
+
+Rule of thumb: `inplace` for read-only/low-risk, `worktree` for safe execution with auto-apply, `patch` for manual review.
+
+### Verification Rules
+
+- `--verify` records results without blocking; `--verify-strict` fails on verification failure
+- Mutually exclusive; only runs after agent success
+- In `worktree` mode, runs before patch apply
+- Does not trigger fallback
+
+### Auto-Fallback Details
+
+- Triggers on timeout or rate-limit only (not normal failures or verification failures)
+- Max 3 attempts (original + 2 retries)
+- In `inplace` mode, blocked if the failed agent already changed files
+- Disable per-delegation with `--no-fallback`
+
+## Configuration
 
 For the full field reference, see [`agent-config-schema.md`](agent-config-schema.md).
 
@@ -414,11 +212,7 @@ For the full field reference, see [`agent-config-schema.md`](agent-config-schema
 cp quancode.example.yaml ~/.config/quancode/quancode.yaml
 ```
 
-Then edit the primary agent and enabled agents for your machine.
-
 ### Add a custom agent
-
-Add a new entry under `agents`:
 
 ```yaml
 agents:
@@ -431,98 +225,61 @@ agents:
     delegate_args: ["run"]
 ```
 
-QuanCode treats adapters as data-driven config. You do not need to change Go code just to describe another CLI shape.
+QuanCode adapters are data-driven config — no Go code needed.
 
-### Set per-agent environment variables
-
-Use the `env` field when a specific agent needs extra environment variables:
+### Per-agent environment variables
 
 ```yaml
 agents:
   codex:
-    command: codex
-    enabled: true
     env:
       HTTPS_PROXY: http://127.0.0.1:7890
 ```
 
 ### Adjust timeouts
 
-Increase or decrease the per-agent timeout with `timeout_secs`:
-
 ```yaml
 agents:
   claude:
-    command: claude
-    enabled: true
     timeout_secs: 600
 ```
 
-## 8. Troubleshooting
+## Troubleshooting
 
-### `doctor` fails on config or missing commands
+### `doctor` reports failures
 
-Run:
-
-```bash
-quancode doctor
-```
-
-Then fix the first reported failure before moving on to later ones.
+Run `quancode doctor` and fix the first reported issue before moving on.
 
 ### Delegation times out
 
-Check:
+Check: is the target CLI installed and logged in? Is the task too broad? Is the timeout too low?
 
-- whether the target CLI is installed and logged in
-- whether the task is too broad for a one-shot delegate call
-- whether the agent timeout is too low
+### File-based prompt injection not restored
 
-### File-based prompt injection did not restore cleanly
+Rare. Inspect the affected file (e.g. `AGENTS.md`), compare with your last commit, and only rerun `quancode start` after understanding the mismatch.
 
-This should be rare. If it happens:
+### "Not logged in" from third-party desktop apps
 
-- inspect the affected file such as `AGENTS.md`
-- compare it with your last committed or expected content
-- rerun `quancode start` only after understanding the mismatch
-
-### Delegating to Claude fails with "Not logged in" from third-party desktop apps
-
-Claude Code stores authentication in the macOS Keychain. Third-party desktop apps (Codex Desktop, Qoder Desktop, etc.) may not have Keychain access, causing `claude auth status` to return `loggedIn: false` even though Claude Code works fine in the terminal.
-
-This is a platform limitation, not a QuanCode issue. Workarounds:
-
+Claude Code auth uses macOS Keychain, which third-party desktop apps may not access. Workarounds:
 - From Codex/Qoder Desktop, delegate to codex or qoder instead of claude
 - From Claude Code terminal or Claude Desktop, all agents work normally
-- Alternatively, set `ANTHROPIC_API_KEY` in the claude agent's `env` config to bypass Keychain auth (uses API billing, not subscription)
+- Set `ANTHROPIC_API_KEY` in the claude agent's `env` config to bypass Keychain
 
-### Stats look wrong or empty
+### Stats empty
 
-`quancode stats` reads local JSONL ledger files under `~/.config/quancode/logs`.
+`quancode stats` reads `~/.config/quancode/logs/`. If cleared, stats start from a fresh baseline.
 
-If you recently cleared that directory, the stats view starts from a fresh baseline.
+## The `/quancode` Skill
 
-## 9. The `/quancode` Skill
-
-QuanCode ships a Claude Code skill that lets Claude Desktop (Code mode) and Dispatch orchestrate sub-agent delegation without leaving the conversation.
+QuanCode ships a Claude Code skill for Claude Desktop (Code mode) and Dispatch.
 
 ### Installation
 
-Copy or symlink the skill directory into your Claude Code skills folder:
-
 ```bash
-# symlink
 ln -s /path/to/QuanCode/skills/quancode ~/.claude/skills/quancode
-
-# or copy
-cp -r /path/to/QuanCode/skills/quancode ~/.claude/skills/quancode
 ```
-
-Once installed, Claude Code recognizes the `/quancode` slash command and can route coding tasks to any enabled QuanCode agent through `quancode delegate`.
 
 ### Usage
 
-The skill works with:
-
 - **Claude Desktop Code mode** — invoke `/quancode` in conversation to delegate a bounded coding task.
-- **Dispatch** — use the skill as part of a multi-agent workflow where Claude Code acts as the orchestrator and QuanCode agents handle implementation.
+- **Dispatch** — use as part of a multi-agent workflow where Claude Code orchestrates and QuanCode agents handle implementation.
