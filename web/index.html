@@ -74,23 +74,23 @@
             <div class="contents">
                 <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 relative overflow-hidden">
                     <svg class="absolute -right-2 -top-2 w-16 h-16 text-white/[0.03]" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" clip-rule="evenodd"/></svg>
-                    <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Total Delegations</div>
-                    <div class="text-2xl font-bold text-white mt-1.5 font-mono tabular-nums" x-text="stats.total || 0"></div>
+                    <div class="text-xs text-gray-500 uppercase tracking-wider font-medium" x-text="tabLabel('total')"></div>
+                    <div class="text-2xl font-bold text-white mt-1.5 font-mono tabular-nums" x-text="tabStats.total || 0"></div>
                 </div>
                 <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 relative overflow-hidden">
                     <svg class="absolute -right-2 -top-2 w-16 h-16 text-accent-green/[0.06]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                     <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Success Rate</div>
-                    <div class="text-2xl font-bold text-accent-green mt-1.5 font-mono tabular-nums" x-text="stats.success_rate || '—'"></div>
+                    <div class="text-2xl font-bold text-accent-green mt-1.5 font-mono tabular-nums" x-text="tabStats.success_rate || '—'"></div>
                 </div>
                 <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 relative overflow-hidden">
                     <svg class="absolute -right-2 -top-2 w-16 h-16 text-accent/[0.06]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.828a1 1 0 101.415-1.414L11 9.586V6z" clip-rule="evenodd"/></svg>
                     <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Avg Duration</div>
-                    <div class="text-2xl font-bold text-accent mt-1.5 font-mono tabular-nums" x-text="stats.avg_duration || '—'"></div>
+                    <div class="text-2xl font-bold text-accent mt-1.5 font-mono tabular-nums" x-text="tabStats.avg_duration || '—'"></div>
                 </div>
                 <div class="bg-surface-light rounded-xl p-4 border border-white/5 shadow-lg shadow-black/20 relative overflow-hidden">
                     <svg class="absolute -right-2 -top-2 w-16 h-16 text-accent-yellow/[0.06]" fill="currentColor" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
-                    <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Active Tasks</div>
-                    <div class="text-2xl font-bold text-accent-yellow mt-1.5 font-mono tabular-nums" x-text="stats.active_tasks || 0"></div>
+                    <div class="text-xs text-gray-500 uppercase tracking-wider font-medium" x-text="tabLabel('active')"></div>
+                    <div class="text-2xl font-bold text-accent-yellow mt-1.5 font-mono tabular-nums" x-text="tabStats.active_tasks || 0"></div>
                 </div>
             </div>
         </template>
@@ -515,7 +515,12 @@
 
             async fetchStats() {
                 try {
-                    const res = await fetch('/api/stats');
+                    const params = new URLSearchParams();
+                    const since = this.sinceParam();
+                    if (since) params.set('since', since);
+                    if (this.filters.agent) params.set('agent', this.filters.agent);
+                    if (this.filters.status) params.set('status', this.filters.status);
+                    const res = await fetch('/api/stats?' + params);
                     this.stats = await res.json();
                 } catch (e) { console.error('fetchStats:', e); }
             },
@@ -637,6 +642,65 @@
                     lost: 'bg-accent-red/20 text-accent-red',
                 };
                 return map[status] || 'bg-gray-500/20 text-gray-400';
+            },
+
+            get tabStats() {
+                if (this.activeTab === 'jobs') return this.computeJobStats();
+                if (this.activeTab === 'pipelines') return this.computePipelineStats();
+                return this.stats; // delegations tab uses server stats
+            },
+
+            tabLabel(key) {
+                const labels = {
+                    delegations: { total: 'Total Delegations', active: 'Active Tasks' },
+                    jobs: { total: 'Total Jobs', active: 'Active Jobs' },
+                    pipelines: { total: 'Total Pipelines', active: 'Active Pipelines' },
+                };
+                return (labels[this.activeTab] || labels.delegations)[key];
+            },
+
+            computeJobStats() {
+                const all = this.jobs;
+                const total = all.length;
+                const succeeded = all.filter(j => j.status === 'succeeded').length;
+                const active = all.filter(j => !['succeeded','failed','timed_out','cancelled','lost'].includes(j.status)).length;
+                let totalDuration = 0;
+                let durCount = 0;
+                for (const j of all) {
+                    if (j.created_at && j.finished_at) {
+                        const diff = new Date(j.finished_at) - new Date(j.created_at);
+                        if (!isNaN(diff) && diff >= 0) { totalDuration += diff; durCount++; }
+                    }
+                }
+                return {
+                    total,
+                    succeeded,
+                    success_rate: total > 0 ? Math.round(succeeded / total * 100) + '%' : '—',
+                    avg_duration: durCount > 0 ? this.formatDuration(totalDuration / durCount) : '—',
+                    active_tasks: active,
+                };
+            },
+
+            computePipelineStats() {
+                const pids = Object.keys(this.pipelines);
+                const total = pids.length;
+                let succeeded = 0;
+                let totalDuration = 0;
+                for (const pid of pids) {
+                    const stages = this.pipelines[pid];
+                    const allOk = stages.every(s => s.primary?.exit_code === 0);
+                    if (allOk) succeeded++;
+                    for (const s of stages) {
+                        totalDuration += s.primary?.duration_ms || 0;
+                    }
+                }
+                return {
+                    total,
+                    succeeded,
+                    success_rate: total > 0 ? Math.round(succeeded / total * 100) + '%' : '—',
+                    avg_duration: total > 0 ? this.formatDuration(totalDuration / total) : '—',
+                    active_tasks: 0,
+                };
             }
         };
     }

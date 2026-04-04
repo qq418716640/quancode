@@ -34,16 +34,24 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	activeTasks := activeSyncTasks + activeAsyncJobs
 
-	// Ledger stats use cache.
-	s.stats.mu.Lock()
-	if s.stats.data != nil && time.Since(s.stats.updatedAt) < s.stats.ttl {
-		data := copyMap(s.stats.data)
+	// Parse filter params.
+	agentFilter := r.URL.Query().Get("agent")
+	statusFilter := r.URL.Query().Get("status")
+	sinceFilter := r.URL.Query().Get("since")
+	filtered := agentFilter != "" || statusFilter != "" || sinceFilter != ""
+
+	// Use cache only when no filters are applied.
+	if !filtered {
+		s.stats.mu.Lock()
+		if s.stats.data != nil && time.Since(s.stats.updatedAt) < s.stats.ttl {
+			data := copyMap(s.stats.data)
+			s.stats.mu.Unlock()
+			data["active_tasks"] = activeTasks
+			writeJSON(w, http.StatusOK, data)
+			return
+		}
 		s.stats.mu.Unlock()
-		data["active_tasks"] = activeTasks
-		writeJSON(w, http.StatusOK, data)
-		return
 	}
-	s.stats.mu.Unlock()
 
 	entries, err := ledger.ReadAll()
 	if err != nil {
@@ -51,7 +59,13 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	total := len(entries)
+	// Parse since as RFC3339 timestamp.
+	var sinceTime time.Time
+	if sinceFilter != "" {
+		sinceTime, _ = time.Parse(time.RFC3339, sinceFilter)
+	}
+
+	total := 0
 	succeeded := 0
 	var totalDuration int64
 	agentCounts := map[string]int{}
@@ -59,6 +73,24 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	today := time.Now().Format("2006-01-02")
 
 	for _, e := range entries {
+		// Apply filters.
+		if agentFilter != "" && e.Agent != agentFilter {
+			continue
+		}
+		if statusFilter != "" {
+			s := entryStatus(e)
+			if s != statusFilter {
+				continue
+			}
+		}
+		if !sinceTime.IsZero() {
+			ts, err := time.Parse(time.RFC3339Nano, e.Timestamp)
+			if err == nil && ts.Before(sinceTime) {
+				continue
+			}
+		}
+
+		total++
 		if e.ExitCode == 0 {
 			succeeded++
 		}
@@ -92,14 +124,32 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"today":        todayCount,
 	}
 
-	s.stats.mu.Lock()
-	s.stats.data = result
-	s.stats.updatedAt = time.Now()
-	s.stats.mu.Unlock()
+	// Only cache unfiltered results.
+	if !filtered {
+		s.stats.mu.Lock()
+		s.stats.data = result
+		s.stats.updatedAt = time.Now()
+		s.stats.mu.Unlock()
+	}
 
 	out := copyMap(result)
 	out["active_tasks"] = activeTasks
 	writeJSON(w, http.StatusOK, out)
+}
+
+// entryStatus returns the status string for a ledger entry,
+// matching the frontend's entryStatus() logic.
+func entryStatus(e ledger.Entry) string {
+	if e.FinalStatus == "cancelled" {
+		return "cancelled"
+	}
+	if e.TimedOut {
+		return "timed_out"
+	}
+	if e.ExitCode == 0 {
+		return "succeeded"
+	}
+	return "failed"
 }
 
 func copyMap(m map[string]any) map[string]any {
