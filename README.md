@@ -125,9 +125,11 @@ Field-by-field config documentation is available in [`docs/agent-config-schema.m
 
 Built-in defaults currently cover:
 
-- Claude Code
-- Codex CLI
-- Qoder CLI (code-analysis, debugging, explanation, MCP integration)
+- Claude Code — architecture, complex reasoning, multi-file edits
+- Codex CLI — quick edits, code generation, test writing
+- GitHub Copilot CLI — multi-model support, deep repository context
+- Gemini CLI — large context window, multi-modal
+- Qoder CLI — code analysis, debugging, MCP integration
 
 Support is adapter-based rather than hardcoded. Different CLIs may use different prompt injection modes (CLI args, env vars, or a managed file like `AGENTS.md`). Adding a new CLI requires only configuration, not Go code.
 

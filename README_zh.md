@@ -125,9 +125,11 @@ agents:
 
 当前内置默认适配覆盖：
 
-- Claude Code
-- Codex CLI
-- Qoder CLI（代码分析、调试、讲解、MCP 集成）
+- Claude Code — 架构设计、复杂推理、多文件编辑
+- Codex CLI — 快速编辑、代码生成、测试编写
+- GitHub Copilot CLI — 多模型支持、深度仓库上下文
+- Gemini CLI — 大上下文窗口、多模态
+- Qoder CLI — 代码分析、调试、MCP 集成
 
 适配方式是配置驱动的，不同 CLI 可能使用不同的 prompt 注入模式（CLI 参数、环境变量或 `AGENTS.md` 托管文件）。添加新 CLI 只需配置，不需要写 Go 代码。
 
