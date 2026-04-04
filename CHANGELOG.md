@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.11] - 2026-04-04
+
+### Fixed
+
+- **Context-diff + worktree isolation consistency**: when `--context-diff working/staged` is used with worktree isolation, the diff is now applied to the worktree before agent execution so the agent sees files consistent with the prompt. Patch collection uses the post-apply baseline to isolate only agent changes
+- CI workflow now configures git identity for tests that require commits
+
 ## [v0.8.10] - 2026-04-04
 
 ### Changed
