@@ -45,19 +45,41 @@ type dryRunResult struct {
 }
 
 type DelegationResult struct {
-	Agent         string        `json:"agent"`
-	Task          string        `json:"task"`
-	DelegationID  string        `json:"delegation_id,omitempty"`
-	Status        string        `json:"status,omitempty"`
-	ExitCode      int           `json:"exit_code"`
-	TimedOut      bool          `json:"timed_out"`
-	DurationMs    int64         `json:"duration_ms"`
-	Output        string        `json:"output"`
-	ChangedFiles  []string      `json:"changed_files"`
-	Isolation     string        `json:"isolation,omitempty"`
-	Patch         string        `json:"patch,omitempty"`
-	Verify        *VerifyResult `json:"verify,omitempty"`
-	ConflictFiles []string      `json:"conflict_files,omitempty"`
+	Agent         string           `json:"agent"`
+	Task          string           `json:"task"`
+	DelegationID  string           `json:"delegation_id,omitempty"`
+	Status        string           `json:"status,omitempty"`
+	ExitCode      int              `json:"exit_code"`
+	TimedOut      bool             `json:"timed_out"`
+	DurationMs    int64            `json:"duration_ms"`
+	Output        string           `json:"output"`
+	ChangedFiles  []string         `json:"changed_files"`
+	Isolation     string           `json:"isolation,omitempty"`
+	Patch         string           `json:"patch,omitempty"`
+	Verify        *VerifyResult    `json:"verify,omitempty"`
+	ConflictFiles []string         `json:"conflict_files,omitempty"`
+	Speculative   *SpeculativeInfo `json:"speculative,omitempty"`
+}
+
+// SpeculativeInfo describes the speculative execution context when both agents completed.
+type SpeculativeInfo struct {
+	Mode            string           `json:"mode"`             // "collected"
+	Selected        string           `json:"selected"`         // "primary" or "speculative"
+	SelectionReason string           `json:"selection_reason"` // "primary_preferred" or "primary_failed"
+	Companion       *CompanionResult `json:"companion,omitempty"`
+}
+
+// CompanionResult holds the non-selected agent's result in speculative execution.
+type CompanionResult struct {
+	Agent        string   `json:"agent"`
+	DelegationID string   `json:"delegation_id,omitempty"`
+	Status       string   `json:"status"`
+	ExitCode     int      `json:"exit_code"`
+	TimedOut     bool     `json:"timed_out"`
+	Output       string   `json:"output"`
+	DurationMs   int64    `json:"duration_ms"`
+	ChangedFiles []string `json:"changed_files,omitempty"`
+	Patch        string   `json:"patch,omitempty"`
 }
 
 func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) DelegationResult {

@@ -23,6 +23,8 @@ TO DELEGATE A TASK:
 The JSON result contains:
   {"agent":"...", "task":"...", "exit_code":0, "timed_out":false, "duration_ms":1234, "output":"...", "changed_files":["file1.go","docs/guide.md"]}
 
+When speculative execution is enabled, the result may include a "speculative" field with a companion agent's output for reference. Use both outputs to synthesize a better answer.
+
 Use --format text if you only need the raw output.
 
 TO LIST AVAILABLE AGENTS:

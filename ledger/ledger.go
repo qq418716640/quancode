@@ -37,7 +37,9 @@ type Entry struct {
 	// Speculative parallelism tracking
 	Speculative     bool   `json:"speculative,omitempty"`      // true if this attempt was part of speculative execution
 	SpeculativeRole string `json:"speculative_role,omitempty"` // "primary" or "speculative"
-	CancelledBy     string `json:"cancelled_by,omitempty"`     // agent key that won, causing this one to be cancelled
+	CancelledBy     string `json:"cancelled_by,omitempty"`     // deprecated: retained for reading old data
+	Selected        bool   `json:"selected,omitempty"`         // true if this was the chosen result in speculative execution
+	SelectionReason string `json:"selection_reason,omitempty"` // "primary_preferred" or "primary_failed"
 
 	// Pipeline tracking — links stages in a pipeline execution.
 	PipelineID   string `json:"pipeline_id,omitempty"`

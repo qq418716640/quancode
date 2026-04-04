@@ -131,11 +131,11 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		primaryCancel()
 		if res.ar.failureClass == "" && res.ar.err == nil {
 			// Primary succeeded within window — no speculative needed
-			return finalizeSpeculativeWinner(opts, res, nil, runID)
+			return finalizeSpeculativeCollected(opts, &res, nil, runID)
 		}
 		if !isTransientFailure(res.ar.failureClass) {
 			// Non-transient failure (agent_failed, etc.) — no fallback
-			return finalizeSpeculativeWinner(opts, res, nil, runID)
+			return finalizeSpeculativeCollected(opts, &res, nil, runID)
 		}
 		// Transient failure within window — launch speculative immediately
 		fmt.Fprintf(os.Stderr, "[quancode] %s %s within window, launching %s immediately...\n",
@@ -165,17 +165,14 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		specRes := <-resultCh
 		spinner.Stop()
 		spec := &specRes
-		if specRes.ar.failureClass == "" && specRes.ar.err == nil {
-			return finalizeSpeculativeWinner(opts, specRes, primary, runID)
-		}
-		return finalizeSpeculativeBothFailed(opts, primary, spec, runID)
+		return finalizeSpeculativeCollected(opts, primary, spec, runID)
 
 	case <-timer.C:
 		// Window expired, primary still running — launch speculative
 		spinner.Stop()
 		fmt.Fprintf(os.Stderr, "[quancode] %s still running after %ds, launching %s in parallel...\n",
 			opts.primaryKey, opts.delaySecs, specSel.AgentKey)
-		spinner = ui.NewSpinner(fmt.Sprintf("%s + %s racing...", opts.primaryKey, specSel.AgentKey))
+		spinner = ui.NewSpinner(fmt.Sprintf("%s + %s running in parallel...", opts.primaryKey, specSel.AgentKey))
 	}
 
 	// Launch speculative agent
@@ -200,7 +197,7 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		resultCh <- speculativeResult{agentKey: specSel.AgentKey, ar: ar, role: "speculative"}
 	}()
 
-	// Wait for results — first success wins
+	// Wait for both results — no early cancellation
 	var primary, spec *speculativeResult
 	for i := 0; i < 2; i++ {
 		res := <-resultCh
@@ -209,130 +206,107 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		} else {
 			spec = &res
 		}
-
-		if res.ar.failureClass == "" && res.ar.err == nil {
-			// Winner found — cancel the other
-			spinner.Stop()
-			if res.role == "primary" {
-				specCancel()
-				fmt.Fprintf(os.Stderr, "[quancode] %s won the race, cancelling %s\n", opts.primaryKey, specSel.AgentKey)
-			} else {
-				primaryCancel()
-				fmt.Fprintf(os.Stderr, "[quancode] %s won the race, cancelling %s\n", specSel.AgentKey, opts.primaryKey)
-			}
-			// Drain the other result (goroutine will finish after cancel)
-			if i == 0 {
-				loser := <-resultCh
-				if loser.role == "primary" {
-					primary = &loser
-				} else {
-					spec = &loser
-				}
-			}
-			return finalizeSpeculativeWinner(opts, res, loserOf(primary, spec, res.role), runID)
-		}
-		// This agent failed — keep waiting for the other
+		// Show progress for first completion
 		if i == 0 {
 			spinner.Stop()
-			remaining := "speculative"
-			if res.role == "speculative" {
-				remaining = "primary"
+			status := "succeeded"
+			if res.ar.failureClass != "" || res.ar.err != nil {
+				status = "failed"
 			}
-			fmt.Fprintf(os.Stderr, "[quancode] %s %s, waiting for %s agent...\n",
-				res.agentKey, res.ar.failureClass, remaining)
-			spinner = ui.NewSpinner(fmt.Sprintf("waiting for %s agent...", remaining))
+			remaining := specSel.AgentKey
+			if res.role == "speculative" {
+				remaining = opts.primaryKey
+			}
+			fmt.Fprintf(os.Stderr, "[quancode] %s %s, waiting for %s...\n", res.agentKey, status, remaining)
+			spinner = ui.NewSpinner(fmt.Sprintf("waiting for %s...", remaining))
 		}
 	}
-
-	// Both failed
 	spinner.Stop()
-	fmt.Fprintf(os.Stderr, "[quancode] both agents failed\n")
 
-	// Log both as failed, return the speculative result (last hope)
-	return finalizeSpeculativeBothFailed(opts, primary, spec, runID)
+	return finalizeSpeculativeCollected(opts, primary, spec, runID)
 }
 
-// loserOf returns the result that didn't win.
-func loserOf(primary, spec *speculativeResult, winnerRole string) *speculativeResult {
-	if winnerRole == "primary" {
-		return spec
+// finalizeSpeculativeCollected handles the case where both agents completed.
+// It selects the preferred result (primary if successful), applies patch/verify,
+// logs both entries, and outputs the results.
+func finalizeSpeculativeCollected(opts speculativeDelegationOpts, primary, spec *speculativeResult, runID string) error {
+	primaryOk := primary != nil && primary.ar.failureClass == "" && primary.ar.err == nil
+	specOk := spec != nil && spec.ar.failureClass == "" && spec.ar.err == nil
+
+	// Select the result to apply
+	var selected, companion *speculativeResult
+	var selectionReason string
+	if primaryOk {
+		selected, companion = primary, spec
+		selectionReason = "primary_preferred"
+	} else if specOk {
+		selected, companion = spec, primary
+		selectionReason = "primary_failed"
+	} else {
+		// Both failed — log both, return the one with more useful output
+		return finalizeSpeculativeBothFailed(opts, primary, spec, runID)
 	}
-	return primary
-}
 
-// finalizeSpeculativeWinner handles the winning result: verify, apply patch, log both entries.
-func finalizeSpeculativeWinner(opts speculativeDelegationOpts, winner speculativeResult, loser *speculativeResult, runID string) error {
-	if opts.isolation == "worktree" && winner.ar.patch != "" {
-		conflicts := runner.CheckPatchConflicts(opts.workDir, winner.ar.patch)
+	// Apply patch from selected result only
+	if opts.isolation == "worktree" && selected.ar.patch != "" {
+		conflicts := runner.CheckPatchConflicts(opts.workDir, selected.ar.patch)
 		if len(conflicts) > 0 {
-			winner.ar.patchApplyErr = fmt.Errorf("patch conflicts with %d files", len(conflicts))
-			winner.ar.conflictFiles = conflicts
-		} else if applyErr := runner.ApplyPatch(opts.workDir, winner.ar.patch); applyErr != nil {
-			winner.ar.patchApplyErr = applyErr
+			selected.ar.patchApplyErr = fmt.Errorf("patch conflicts with %d files", len(conflicts))
+			selected.ar.conflictFiles = conflicts
+		} else if applyErr := runner.ApplyPatch(opts.workDir, selected.ar.patch); applyErr != nil {
+			selected.ar.patchApplyErr = applyErr
 		} else {
-			fmt.Fprintf(os.Stderr, "[quancode] changes from %s applied to working directory\n", winner.agentKey)
+			fmt.Fprintf(os.Stderr, "[quancode] changes from %s applied to working directory\n", selected.agentKey)
 		}
 	}
 
-	// Run verification on the winner (in working directory after patch apply).
-	// Skip for patch mode: the patch is not applied to workDir, so verifying
-	// the baseline tree would be meaningless.
-	if winner.ar.failureClass == "" && winner.ar.err == nil && opts.verify != nil && opts.isolation != "patch" {
-		winner.ar.verify = runAndLogVerification(opts.workDir, opts.verify)
+	// Run verification on selected result only
+	if selected.ar.failureClass == "" && selected.ar.err == nil && opts.verify != nil && opts.isolation != "patch" {
+		selected.ar.verify = runAndLogVerification(opts.workDir, opts.verify)
+	}
+	selected.ar.failureClass = classifyFailure(selected.ar)
+
+	// Log selected entry
+	selectedMeta := attemptMeta{RunID: runID, Attempt: 1}
+	logSpeculativeEntry(selected.agentKey, opts.task, opts.workDir, opts.isolation,
+		selectedMeta, selected.ar, selected.role, true, selectionReason)
+
+	// Log companion entry
+	if companion != nil {
+		companionMeta := attemptMeta{RunID: runID, Attempt: 2}
+		logSpeculativeEntry(companion.agentKey, opts.task, opts.workDir, opts.isolation,
+			companionMeta, companion.ar, companion.role, false, selectionReason)
 	}
 
-	// Reclassify after verify
-	winner.ar.failureClass = classifyFailure(winner.ar)
-
-	// Log winner
-	winnerMeta := attemptMeta{
-		RunID:   runID,
-		Attempt: 1,
-	}
-	logSpeculativeEntry(winner.agentKey, opts.task, opts.workDir, opts.isolation, winnerMeta, winner.ar, winner.role, "")
-
-	// Log loser (if speculative was launched)
-	if loser != nil {
-		loserMeta := attemptMeta{
-			RunID:   runID,
-			Attempt: 2,
-		}
-		logSpeculativeEntry(loser.agentKey, opts.task, opts.workDir, opts.isolation, loserMeta, loser.ar, loser.role, winner.agentKey)
-	}
-
-	// UI ceremony
-	if winner.ar.failureClass == "" && winner.ar.err == nil && winner.ar.patchApplyErr == nil {
+	// UI
+	if selected.ar.failureClass == "" && selected.ar.err == nil && selected.ar.patchApplyErr == nil {
 		var durationMs int64
-		if winner.ar.result != nil {
-			durationMs = winner.ar.result.DurationMs
+		if selected.ar.result != nil {
+			durationMs = selected.ar.result.DurationMs
 		}
-		ui.DelegationSuccess(winner.agentKey, durationMs, len(winner.ar.changedFiles))
+		ui.DelegationSuccess(selected.agentKey, durationMs, len(selected.ar.changedFiles))
 	}
 
-	// Show speculative chain (primary always listed first)
-	if loser != nil {
-		primaryKey, specKey := winner.agentKey, loser.agentKey
-		if loser.role == "primary" {
-			primaryKey, specKey = loser.agentKey, winner.agentKey
-		}
-		fmt.Fprintf(os.Stderr, "[quancode] Speculative: %s + %s → %s won\n",
-			primaryKey, specKey, winner.agentKey)
+	// Show summary
+	if companion != nil {
+		fmt.Fprintf(os.Stderr, "[quancode] Speculative: %s + %s → selected %s (%s)\n",
+			primary.agentKey, spec.agentKey, selected.agentKey, selectionReason)
 	}
 
-	// Finalize output
-	return finalizeSpeculativeOutput(winner, opts.isolation)
+	return finalizeSpeculativeOutput(*selected, companion, opts.isolation, selectionReason)
 }
 
 // finalizeSpeculativeBothFailed handles the case where both agents failed.
 func finalizeSpeculativeBothFailed(opts speculativeDelegationOpts, primary, spec *speculativeResult, runID string) error {
-	// Log both
 	if primary != nil {
 		meta := attemptMeta{RunID: runID, Attempt: 1}
-		logSpeculativeEntry(primary.agentKey, opts.task, opts.workDir, opts.isolation, meta, primary.ar, "primary", "")
+		logSpeculativeEntry(primary.agentKey, opts.task, opts.workDir, opts.isolation,
+			meta, primary.ar, "primary", false, "")
 	}
 	if spec != nil {
 		meta := attemptMeta{RunID: runID, Attempt: 2}
-		logSpeculativeEntry(spec.agentKey, opts.task, opts.workDir, opts.isolation, meta, spec.ar, "speculative", "")
+		logSpeculativeEntry(spec.agentKey, opts.task, opts.workDir, opts.isolation,
+			meta, spec.ar, "speculative", false, "")
 	}
 
 	// Use whichever has more useful output
@@ -345,11 +319,11 @@ func finalizeSpeculativeBothFailed(opts speculativeDelegationOpts, primary, spec
 		ui.DelegationFailure(final.agentKey, final.ar.result.DurationMs, final.ar.failureClass)
 	}
 
-	return finalizeSpeculativeOutput(*final, opts.isolation)
+	return finalizeSpeculativeOutput(*final, nil, opts.isolation, "")
 }
 
 // logSpeculativeEntry writes a ledger entry with speculative tracking fields.
-func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult, role, cancelledBy string) {
+func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult, role string, selected bool, selectionReason string) {
 	outputFile := ledger.WriteOutput(ar.delegationID, ar.output, ledger.DefaultMaxOutputBytes)
 
 	logEntry := &ledger.Entry{
@@ -365,7 +339,8 @@ func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attempt
 		FallbackReason:  meta.FallbackReason,
 		Speculative:     true,
 		SpeculativeRole: role,
-		CancelledBy:     cancelledBy,
+		Selected:        selected,
+		SelectionReason: selectionReason,
 	}
 	if ar.result != nil {
 		logEntry.ExitCode = ar.result.ExitCode
@@ -374,13 +349,19 @@ func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attempt
 		logEntry.ChangedFiles = ar.changedFiles
 	}
 	logEntry.FailureClass = ar.failureClass
-	if cancelledBy != "" {
-		logEntry.FailureClass = FailureClassSpeculativeCancelled
+	logEntry.ConflictFiles = ar.conflictFiles
+	if ar.patchApplyErr != nil {
+		logEntry.ChangedFiles = nil
+	}
+	if (ar.err != nil || ar.patchApplyErr != nil) && logEntry.ExitCode == 0 {
+		logEntry.ExitCode = 1
+	}
+	if ar.verify != nil && ar.verify.Enabled {
+		if data, err := json.Marshal(ar.verify); err == nil {
+			logEntry.VerifyRaw = data
+		}
 	}
 	logEntry.FinalStatus = determineFinalStatus(logEntry.ExitCode, logEntry.TimedOut, ar.verify)
-	if cancelledBy != "" {
-		logEntry.FinalStatus = "cancelled"
-	}
 
 	if logErr := ledger.Append(logEntry); logErr != nil {
 		fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write ledger: %v\n", logErr)
@@ -388,48 +369,76 @@ func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attempt
 }
 
 // finalizeSpeculativeOutput handles the output formatting for speculative delegation.
-func finalizeSpeculativeOutput(res speculativeResult, isolation string) error {
-	verifyStrictFailed := res.ar.verify.IsStrictFailure()
-	hasPatchApplyErr := res.ar.patchApplyErr != nil
+// companion may be nil when only one agent ran or both failed.
+func finalizeSpeculativeOutput(selected speculativeResult, companion *speculativeResult, isolation, selectionReason string) error {
+	verifyStrictFailed := selected.ar.verify.IsStrictFailure()
+	hasPatchApplyErr := selected.ar.patchApplyErr != nil
 
 	if delegateFormat == "json" {
-		dr := buildDelegationResult(res.agentKey, "", isolation, res.ar)
+		dr := buildDelegationResult(selected.agentKey, "", isolation, selected.ar)
+		// Attach companion info when available
+		if companion != nil {
+			cdr := buildDelegationResult(companion.agentKey, "", isolation, companion.ar)
+			cr := &CompanionResult{
+				Agent:        companion.agentKey,
+				DelegationID: companion.ar.delegationID,
+				Status:       cdr.Status,
+				ExitCode:     cdr.ExitCode,
+				TimedOut:     cdr.TimedOut,
+				Output:       cdr.Output,
+				DurationMs:   cdr.DurationMs,
+				ChangedFiles: cdr.ChangedFiles,
+				Patch:        cdr.Patch,
+			}
+			dr.Speculative = &SpeculativeInfo{
+				Mode:            "collected",
+				Selected:        selected.role,
+				SelectionReason: selectionReason,
+				Companion:       cr,
+			}
+		}
 		data, _ := json.MarshalIndent(dr, "", "  ")
 		fmt.Println(string(data))
-		if res.ar.err != nil || verifyStrictFailed || hasPatchApplyErr {
+		if selected.ar.err != nil || verifyStrictFailed || hasPatchApplyErr {
 			return &agent.ExitStatusError{Code: 1}
 		}
 		return nil
 	}
 
-	// Text format
-	if res.ar.err != nil {
-		fmt.Fprintf(os.Stderr, "[quancode] delegation error: %v\n", res.ar.err)
-		if res.ar.output != "" {
-			fmt.Print(res.ar.output)
+	// Text format — stdout only has selected output; companion info goes to stderr
+	if selected.ar.err != nil {
+		fmt.Fprintf(os.Stderr, "[quancode] delegation error: %v\n", selected.ar.err)
+		if selected.ar.output != "" {
+			fmt.Print(selected.ar.output)
 		}
 		return &agent.ExitStatusError{Code: 1}
 	}
 	if hasPatchApplyErr {
-		fmt.Fprintf(os.Stderr, "[quancode] patch apply failed: %v\n", res.ar.patchApplyErr)
-		if res.ar.output != "" {
-			fmt.Print(res.ar.output)
+		fmt.Fprintf(os.Stderr, "[quancode] patch apply failed: %v\n", selected.ar.patchApplyErr)
+		if selected.ar.output != "" {
+			fmt.Print(selected.ar.output)
 		}
 		return &agent.ExitStatusError{Code: 1}
 	}
 	if verifyStrictFailed {
 		fmt.Fprintf(os.Stderr, "[quancode] delegation failed: verify-strict failed\n")
-		if res.ar.output != "" {
-			fmt.Print(res.ar.output)
+		if selected.ar.output != "" {
+			fmt.Print(selected.ar.output)
 		}
 		return &agent.ExitStatusError{Code: 1}
 	}
-	if isolation == "patch" && res.ar.patch != "" {
-		fmt.Fprintf(os.Stderr, "[quancode] patch (%d files changed, not applied):\n", len(res.ar.patchFiles))
-		fmt.Print(res.ar.patch)
+	if isolation == "patch" && selected.ar.patch != "" {
+		fmt.Fprintf(os.Stderr, "[quancode] patch (%d files changed, not applied):\n", len(selected.ar.patchFiles))
+		fmt.Print(selected.ar.patch)
 		return nil
 	}
-	fmt.Print(res.ar.output)
+	// Print selected output to stdout
+	fmt.Print(selected.ar.output)
+	// Note companion availability on stderr
+	if companion != nil && companion.ar.output != "" && companion.ar.failureClass == "" {
+		fmt.Fprintf(os.Stderr, "[quancode] companion output from %s available in ledger (delegation %s)\n",
+			companion.agentKey, companion.ar.delegationID)
+	}
 	return nil
 }
 

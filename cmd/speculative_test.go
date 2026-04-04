@@ -62,24 +62,29 @@ func TestSpeculativeNoBackupAgent(t *testing.T) {
 	}
 }
 
-func TestLoserOf(t *testing.T) {
-	primary := &speculativeResult{agentKey: "claude", role: "primary"}
-	spec := &speculativeResult{agentKey: "codex", role: "speculative"}
-
-	loser := loserOf(primary, spec, "primary")
-	if loser.agentKey != "codex" {
-		t.Fatalf("expected codex as loser when primary wins, got %s", loser.agentKey)
-	}
-
-	loser = loserOf(primary, spec, "speculative")
-	if loser.agentKey != "claude" {
-		t.Fatalf("expected claude as loser when speculative wins, got %s", loser.agentKey)
+// TestClassifyFailureSpeculativeCancelled verifies the constant exists for backward compat.
+func TestClassifyFailureSpeculativeCancelled(t *testing.T) {
+	if FailureClassSpeculativeCancelled != "speculative_cancelled" {
+		t.Fatalf("unexpected failure class: %s", FailureClassSpeculativeCancelled)
 	}
 }
 
-func TestClassifyFailureSpeculativeCancelled(t *testing.T) {
-	// Verify the new failure class constant exists and is a string
-	if FailureClassSpeculativeCancelled != "speculative_cancelled" {
-		t.Fatalf("unexpected failure class: %s", FailureClassSpeculativeCancelled)
+func TestSpeculativeInfoJSON(t *testing.T) {
+	info := &SpeculativeInfo{
+		Mode:            "collected",
+		Selected:        "primary",
+		SelectionReason: "primary_preferred",
+		Companion: &CompanionResult{
+			Agent:      "copilot",
+			Status:     "completed",
+			Output:     "test output",
+			DurationMs: 5000,
+		},
+	}
+	if info.Mode != "collected" {
+		t.Fatalf("unexpected mode: %s", info.Mode)
+	}
+	if info.Companion.Agent != "copilot" {
+		t.Fatalf("unexpected companion agent: %s", info.Companion.Agent)
 	}
 }
