@@ -23,6 +23,7 @@ type Preferences struct {
 	DefaultIsolation     string `yaml:"default_isolation"`      // "inplace" (default), "worktree", "patch"
 	FallbackMode         string `yaml:"fallback_mode"`          // "auto" (default), "off"
 	SpeculativeDelaySecs int    `yaml:"speculative_delay_secs"` // seconds before launching speculative agent; 0 = disabled (default)
+	MinTimeoutSecs       int    `yaml:"min_timeout_secs"`       // floor for effective delegation timeout; 0 = disabled (default)
 }
 
 type AgentConfig struct {

@@ -104,13 +104,13 @@ TASK TYPES — match your task description to the type:
 - Code modification: specify files, functions, constraints, acceptance criteria. Add --verify when a reliable automated check exists.
 - Research/analysis (e.g., "review this code", "evaluate this design", "compare approaches"): clearly state WHAT to analyze, WHAT output format you expect, and explicitly say "DO NOT write code" if the task is analysis-only.
 - Documentation/writing (e.g., "draft an RFC", "write release notes", "update the migration guide"): specify target audience, structure, tone, and whether to write into a file or return as output.
-- Code review: provide the diff or changed files via --context-diff, state what aspects to review (correctness, security, performance, style). Do NOT use --isolation worktree — review is read-only. For large diffs (>300 lines), split by file or module into multiple review delegations rather than one large review.
+- Code review: provide the diff or changed files via --context-diff, state what aspects to review (correctness, security, performance, style). Use --isolation inplace — review is read-only. For large diffs (>300 lines), split by file or module into multiple review delegations rather than one large review.
 - Keep all delegated tasks well-scoped. Broad, underspecified tasks tend to produce unfocused output or time out.
 
 ISOLATION MODES:
 - Code modification (single task): use --isolation worktree for safe isolated execution with automatic patch application.
 - Code modification (parallel): use --isolation patch --format json to collect patches without auto-applying.
-- Read-only tasks (code review, research, analysis, explanation): do NOT use --isolation worktree or --isolation patch. Omit the flag entirely so the default (inplace) is used. Worktree isolation adds overhead and can exclude agents that only support inplace from speculative execution.
+- Read-only tasks (code review, research, analysis, explanation): always pass --isolation inplace explicitly. Omitting the flag inherits the configured default (which may be worktree or patch), causing unnecessary overhead and speculative execution.
 
 VERIFICATION:
 - For code modification tasks, add --verify to run a check after the sub-agent finishes:

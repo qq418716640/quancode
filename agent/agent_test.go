@@ -179,6 +179,48 @@ func TestDelegateNoDelegateArgsReturnsError(t *testing.T) {
 	}
 }
 
+func TestDelegatePrepMinTimeout(t *testing.T) {
+	tests := []struct {
+		name        string
+		configSecs  int
+		override    int
+		minTimeout  int
+		wantTimeout int
+	}{
+		{name: "no min, use config", configSecs: 300, override: 0, minTimeout: 0, wantTimeout: 300},
+		{name: "override below config", configSecs: 300, override: 120, minTimeout: 0, wantTimeout: 120},
+		{name: "min raises low override", configSecs: 300, override: 60, minTimeout: 120, wantTimeout: 120},
+		{name: "min raises low config", configSecs: 90, override: 0, minTimeout: 120, wantTimeout: 120},
+		{name: "min does not lower higher", configSecs: 300, override: 0, minTimeout: 120, wantTimeout: 300},
+		{name: "min zero means disabled", configSecs: 300, override: 60, minTimeout: 0, wantTimeout: 60},
+		{name: "min negative means disabled", configSecs: 300, override: 60, minTimeout: -1, wantTimeout: 60},
+		{name: "config zero defaults to 300 then floor", configSecs: 0, override: 0, minTimeout: 500, wantTimeout: 500},
+		{name: "min equal to effective no raise", configSecs: 120, override: 0, minTimeout: 120, wantTimeout: 120},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &genericAgent{
+				key: "test",
+				cfg: config.AgentConfig{
+					Command:      "/bin/sh",
+					DelegateArgs: []string{"-c", "echo ok"},
+					TimeoutSecs:  tt.configSecs,
+				},
+			}
+			_, _, timeout, _, err := a.delegatePrep(DelegateOptions{
+				TimeoutOverride: tt.override,
+				MinTimeout:      tt.minTimeout,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if timeout != tt.wantTimeout {
+				t.Fatalf("got timeout %d, want %d", timeout, tt.wantTimeout)
+			}
+		})
+	}
+}
+
 func TestDelegateDefaultTimeout(t *testing.T) {
 	dir := t.TempDir()
 	a := FromConfig("test", config.AgentConfig{

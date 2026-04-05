@@ -113,18 +113,21 @@ func failAsync(state *job.State, errCode, context string, err error) error {
 	return fmt.Errorf("%s: %w", context, err)
 }
 
-// resolveEffectiveTimeout returns the effective timeout for an async job.
-// It takes the minimum of the user-provided --timeout and the agent's config timeout.
-func resolveEffectiveTimeout(flagTimeout, configTimeout int) int {
+// resolveEffectiveTimeout returns the effective timeout given the user flag,
+// agent config, and global minimum. It takes the minimum of flag and config,
+// then enforces the minTimeout floor. The second return value indicates
+// whether the floor was applied (so callers can emit a warning).
+func resolveEffectiveTimeout(flagTimeout, configTimeout, minTimeout int) (int, bool) {
 	if configTimeout <= 0 {
 		configTimeout = 1800 // default hard cap
 	}
-	if flagTimeout <= 0 {
-		return configTimeout
+	effective := configTimeout
+	if flagTimeout > 0 && flagTimeout < configTimeout {
+		effective = flagTimeout
 	}
-	if flagTimeout < configTimeout {
-		return flagTimeout
+	if minTimeout > 0 && effective < minTimeout {
+		return minTimeout, true
 	}
-	return configTimeout
+	return effective, false
 }
 

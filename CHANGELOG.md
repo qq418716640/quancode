@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.13] - 2026-04-05
+
+### Added
+
+- **Global minimum delegation timeout** (`min_timeout_secs`): new preference that sets a floor on effective delegation timeout — prevents tasks from being killed prematurely when `--timeout` or agent `timeout_secs` is set too low. Applies to all execution paths: sync, async, speculative, and pipeline
+
+### Improved
+
+- **Prompt: explicit inplace for read-only tasks**: delegation instructions now tell the primary agent to always pass `--isolation inplace` for read-only delegations (code review, research, analysis), preventing unnecessary worktree creation and speculative execution when the user has configured `default_isolation: worktree`
+- **Single warning site for timeout floor**: timeout-raised warnings are emitted only once per delegation path, eliminating duplicate stderr messages in speculative and async modes
+
 ## [v0.8.12] - 2026-04-05
 
 ### Improved

@@ -50,6 +50,7 @@ type DelegateAttemptOptions struct {
 	Isolation       string
 	Verify          *verifySpec
 	TimeoutOverride int // per-task timeout override in seconds; 0 means use agent default
+	MinTimeout      int // floor for effective timeout; 0 means no floor
 	// Quiet suppresses UI output (spinner, stderr messages).
 	// Used by async job-runner where there is no terminal.
 	Quiet bool
@@ -155,6 +156,7 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 	delegateOpts := agent.DelegateOptions{
 		DelegationID:    delegationID,
 		TimeoutOverride: opts.TimeoutOverride,
+		MinTimeout:      opts.MinTimeout,
 	}
 	var result *runner.Result
 	var delegateErr error

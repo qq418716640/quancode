@@ -260,7 +260,10 @@ var delegateCmd = &cobra.Command{
 			if vs != nil {
 				return fmt.Errorf("--async does not support --verify/--verify-strict (not yet implemented)")
 			}
-			effectiveTimeout := resolveEffectiveTimeout(delegateTimeout, ac.TimeoutSecs)
+			effectiveTimeout, raised := resolveEffectiveTimeout(delegateTimeout, ac.TimeoutSecs, cfg.Preferences.MinTimeoutSecs)
+			if raised {
+				fmt.Fprintf(os.Stderr, "[quancode] effective timeout raised to min_timeout_secs %ds\n", effectiveTimeout)
+			}
 			return launchAsyncJob(agentKey, task, workDir, isolation, delegateContextDiff, effectiveTimeout)
 		}
 
@@ -327,6 +330,7 @@ var delegateCmd = &cobra.Command{
 				Isolation:       isolation,
 				Verify:          vs,
 				TimeoutOverride: delegateTimeout,
+				MinTimeout:      cfg.Preferences.MinTimeoutSecs,
 				ContextDiffMode: delegateContextDiff,
 			})
 

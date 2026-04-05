@@ -327,6 +327,7 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 				Isolation:       "inplace",
 				Verify:          vs,
 				TimeoutOverride: stageDef.TimeoutSecs,
+				MinTimeout:      cfg.Preferences.MinTimeoutSecs,
 			})
 
 			// Log each attempt to ledger

@@ -35,6 +35,7 @@ type Agent interface {
 type DelegateOptions struct {
 	DelegationID    string
 	TimeoutOverride int // per-task timeout in seconds; 0 means use agent default
+	MinTimeout      int // floor for effective timeout; 0 means no floor
 }
 
 type ExitStatusError struct {
@@ -128,6 +129,10 @@ func (a *genericAgent) delegatePrep(opts DelegateOptions) (args []string, env []
 	}
 	if opts.TimeoutOverride > 0 && opts.TimeoutOverride < timeout {
 		timeout = opts.TimeoutOverride
+	}
+	if opts.MinTimeout > 0 && timeout < opts.MinTimeout {
+		fmt.Fprintf(os.Stderr, "[quancode] effective timeout %ds raised to min_timeout_secs %ds\n", timeout, opts.MinTimeout)
+		timeout = opts.MinTimeout
 	}
 
 	env = runner.BuildEnv(a.cfg.Env)

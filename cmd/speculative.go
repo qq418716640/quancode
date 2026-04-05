@@ -89,8 +89,15 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 
 	// Resolve timeouts
 	primaryAc := opts.cfg.Agents[opts.primaryKey]
-	primaryTimeout := resolveEffectiveTimeout(opts.timeoutOverride, primaryAc.TimeoutSecs)
-	specTimeout := resolveEffectiveTimeout(opts.timeoutOverride, specAc.TimeoutSecs)
+	minTimeout := opts.cfg.Preferences.MinTimeoutSecs
+	primaryTimeout, primaryRaised := resolveEffectiveTimeout(opts.timeoutOverride, primaryAc.TimeoutSecs, minTimeout)
+	if primaryRaised {
+		fmt.Fprintf(os.Stderr, "[quancode] %s effective timeout raised to min_timeout_secs %ds\n", opts.primaryKey, primaryTimeout)
+	}
+	specTimeout, specRaised := resolveEffectiveTimeout(opts.timeoutOverride, specAc.TimeoutSecs, minTimeout)
+	if specRaised {
+		fmt.Fprintf(os.Stderr, "[quancode] %s effective timeout raised to min_timeout_secs %ds\n", specSel.AgentKey, specTimeout)
+	}
 
 	resultCh := make(chan speculativeResult, 2)
 
@@ -113,6 +120,7 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 			Isolation:       opts.isolation,
 			Verify:          opts.verify,
 			TimeoutOverride: opts.timeoutOverride,
+			MinTimeout:      minTimeout,
 			Quiet:           true, // orchestrator manages UI
 			Ctx:             primaryCtx,
 			DeferPatchApply: true,
@@ -156,6 +164,7 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 				Isolation:       opts.isolation,
 				Verify:          opts.verify,
 				TimeoutOverride: opts.timeoutOverride,
+				MinTimeout:      minTimeout,
 				Quiet:           true,
 				Ctx:             specCtx,
 				DeferPatchApply: true,
@@ -191,6 +200,7 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 			Isolation:       opts.isolation,
 			Verify:          opts.verify,
 			TimeoutOverride: opts.timeoutOverride,
+			MinTimeout:      minTimeout,
 			Quiet:           true,
 			Ctx:             specCtx,
 			DeferPatchApply: true,

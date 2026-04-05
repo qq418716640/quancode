@@ -105,6 +105,7 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 	// Run the delegation attempt (quiet mode — no UI output).
 	// The agent subprocess is controlled by agentCtx for both timeout and cancellation.
 	doneCh := make(chan attemptResult, 1)
+	minTimeout := cfg.Preferences.MinTimeoutSecs
 	go func() {
 		ar := runDelegateAttempt(DelegateAttemptOptions{
 			Agent:           a,
@@ -113,6 +114,7 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			CtxPrefix:       ctxPrefix,
 			WorkDir:         state.WorkDir,
 			Isolation:       state.Isolation,
+			MinTimeout:      minTimeout,
 			Quiet:           true,
 			Async:           true,
 			Ctx:             agentCtx,
@@ -181,6 +183,7 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 				CtxPrefix:       nextCtxPrefix,
 				WorkDir:         state.WorkDir,
 				Isolation:       state.Isolation,
+				MinTimeout:      minTimeout,
 				Quiet:           true,
 				Async:           true,
 				Ctx:             fbCtx,
