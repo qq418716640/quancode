@@ -16,6 +16,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   - Respects `--config` flag for config writes; validates `dashboard_port` range (1-65535)
   - Interactive terminals see a one-time tip when dashboard_mode is unconfigured
 
+## [v0.8.14] - 2026-04-05
+
+### Improved
+
+- **Dashboard manual refresh button**: refresh data without losing current tab selection or active filters
+
 ## [v0.8.13] - 2026-04-05
 
 ### Added
@@ -24,7 +30,6 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Improved
 
-- **Dashboard manual refresh button**: refresh data without losing current tab selection or active filters
 - **Prompt: explicit inplace for read-only tasks**: delegation instructions now tell the primary agent to always pass `--isolation inplace` for read-only delegations (code review, research, analysis), preventing unnecessary worktree creation and speculative execution when the user has configured `default_isolation: worktree`
 - **Single warning site for timeout floor**: timeout-raised warnings are emitted only once per delegation path, eliminating duplicate stderr messages in speculative and async modes
 
