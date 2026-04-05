@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
-## [v0.8.14] - 2026-04-05
+## [v0.8.15] - 2026-04-05
 
 ### Added
 
