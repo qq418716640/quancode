@@ -8,7 +8,9 @@ import (
 
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
+	"github.com/qq418716640/quancode/dashboard"
 	"github.com/qq418716640/quancode/prompt"
+	"github.com/qq418716640/quancode/ui"
 	"github.com/qq418716640/quancode/version"
 	"github.com/spf13/cobra"
 )
@@ -73,6 +75,9 @@ var startCmd = &cobra.Command{
 		fmt.Fprintf(os.Stderr, "[quancode] primary: %s (%s)\n", primary, ac.Name)
 		fmt.Fprintf(os.Stderr, "[quancode] prompt:  %s\n", promptMode)
 
+		// Dashboard auto-start / tip
+		handleDashboard(cfg)
+
 		// Use the agent's LaunchAsPrimary which handles prompt_mode
 		return a.LaunchAsPrimary(workDir, systemPrompt)
 	},
@@ -91,6 +96,32 @@ func completeAgentKeys(cmd *cobra.Command, args []string, toComplete string) ([]
 		}
 	}
 	return keys, cobra.ShellCompDirectiveNoFileComp
+}
+
+// handleDashboard manages dashboard auto-start and first-use tips.
+func handleDashboard(cfg *config.Config) {
+	port := cfg.Preferences.EffectiveDashboardPort()
+
+	switch cfg.Preferences.DashboardMode {
+	case "auto":
+		url, started, err := dashboard.EnsureRunning(port)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[quancode] warning: dashboard auto-start failed: %v\n", err)
+			return
+		}
+		if started {
+			fmt.Fprintf(os.Stderr, "[quancode] dashboard started: %s\n", url)
+		} else {
+			fmt.Fprintf(os.Stderr, "[quancode] dashboard: %s\n", url)
+		}
+	case "off":
+		// User explicitly disabled — do nothing.
+	default:
+		// Undecided — show a one-time tip (only in interactive terminals).
+		if ui.IsTTY() {
+			fmt.Fprintf(os.Stderr, "[quancode] tip: run \"quancode dashboard enable\" to auto-start the web dashboard\n")
+		}
+	}
 }
 
 func init() {

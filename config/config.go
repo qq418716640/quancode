@@ -24,6 +24,8 @@ type Preferences struct {
 	FallbackMode         string `yaml:"fallback_mode"`          // "auto" (default), "off"
 	SpeculativeDelaySecs int    `yaml:"speculative_delay_secs"` // seconds before launching speculative agent; 0 = disabled (default)
 	MinTimeoutSecs       int    `yaml:"min_timeout_secs"`       // floor for effective delegation timeout; 0 = disabled (default)
+	DashboardMode        string `yaml:"dashboard_mode"`         // "" = undecided (show tip), "auto" = auto-start on start, "off" = disabled
+	DashboardPort        int    `yaml:"dashboard_port"`         // port for dashboard server; 0 or unset = 8377
 }
 
 type AgentConfig struct {
@@ -92,7 +94,8 @@ var (
 	validTaskModes     = map[string]bool{"": true, "arg": true, "stdin": true}
 	validOutputModes   = map[string]bool{"": true, "stdout": true, "file": true}
 	validIsolationModes = map[string]bool{"": true, "inplace": true, "worktree": true, "patch": true}
-	validFallbackModes  = map[string]bool{"": true, "auto": true, "off": true}
+	validFallbackModes   = map[string]bool{"": true, "auto": true, "off": true}
+	validDashboardModes  = map[string]bool{"": true, "auto": true, "off": true}
 )
 
 // Load loads config from the first available source:
@@ -203,6 +206,17 @@ func applyKnownAgentDefaults(cfg *Config) {
 	}
 }
 
+// DefaultDashboardPort is the default port for the dashboard server.
+const DefaultDashboardPort = 8377
+
+// EffectiveDashboardPort returns the configured dashboard port, falling back to DefaultDashboardPort.
+func (p *Preferences) EffectiveDashboardPort() int {
+	if p.DashboardPort > 0 {
+		return p.DashboardPort
+	}
+	return DefaultDashboardPort
+}
+
 // ConfigPath returns the default user config file path.
 func ConfigPath() string {
 	if home, err := os.UserHomeDir(); err == nil {
@@ -273,6 +287,56 @@ func (c *Config) Validate() []string {
 	if !validFallbackModes[c.Preferences.FallbackMode] {
 		problems = append(problems, fmt.Sprintf("preferences: invalid fallback_mode %q", c.Preferences.FallbackMode))
 	}
+	if !validDashboardModes[c.Preferences.DashboardMode] {
+		problems = append(problems, fmt.Sprintf("preferences: invalid dashboard_mode %q", c.Preferences.DashboardMode))
+	}
+	if p := c.Preferences.DashboardPort; p != 0 && (p < 1 || p > 65535) {
+		problems = append(problems, fmt.Sprintf("preferences: dashboard_port %d out of range (1-65535)", p))
+	}
 
 	return problems
+}
+
+// UpdateDashboardMode loads the config from the given explicit path (or default
+// search order if empty), sets dashboard_mode, and writes it back to the same
+// path. If no config file exists, writes to ConfigPath() with defaults.
+func UpdateDashboardMode(explicit, mode string) error {
+	if !validDashboardModes[mode] {
+		return fmt.Errorf("invalid dashboard_mode %q (valid: auto, off)", mode)
+	}
+
+	cfg, err := Load(explicit)
+	if err != nil {
+		return err
+	}
+	cfg.Preferences.DashboardMode = mode
+
+	// Determine write target: explicit > first found > default user config.
+	cfgPath := explicit
+	if cfgPath == "" {
+		cfgPath = resolveWritePath()
+	}
+
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	return os.WriteFile(cfgPath, data, 0644)
+}
+
+// resolveWritePath returns the first existing config path, or ConfigPath() as fallback.
+func resolveWritePath() string {
+	paths := []string{"quancode.yaml"}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".config", "quancode", "quancode.yaml"))
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ConfigPath()
 }

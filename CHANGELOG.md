@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.14] - 2026-04-05
+
+### Added
+
+- **Dashboard auto-start**: new `dashboard_mode` preference (`auto`/`off`) enables the web dashboard to launch automatically as a background process when running `quancode start`
+  - `quancode dashboard enable` — enable auto-start and launch immediately
+  - `quancode dashboard disable` — disable auto-start and suppress tips
+  - `quancode dashboard status` — show current preference and running state
+  - Health check via `/api/version` distinguishes QuanCode from other services on the same port
+  - Respects `--config` flag for config writes; validates `dashboard_port` range (1-65535)
+  - Interactive terminals see a one-time tip when dashboard_mode is unconfigured
+
 ## [v0.8.13] - 2026-04-05
 
 ### Added
@@ -12,6 +24,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Improved
 
+- **Dashboard manual refresh button**: refresh data without losing current tab selection or active filters
 - **Prompt: explicit inplace for read-only tasks**: delegation instructions now tell the primary agent to always pass `--isolation inplace` for read-only delegations (code review, research, analysis), preventing unnecessary worktree creation and speculative execution when the user has configured `default_isolation: worktree`
 - **Single warning site for timeout floor**: timeout-raised warnings are emitted only once per delegation path, eliminating duplicate stderr messages in speculative and async modes
 

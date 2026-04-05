@@ -482,8 +482,9 @@ func TestValidateInvalidPreferences(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Preferences.DefaultIsolation = "bad"
 	cfg.Preferences.FallbackMode = "bad"
+	cfg.Preferences.DashboardMode = "bad"
 	problems := cfg.Validate()
-	foundIso, foundFb := false, false
+	foundIso, foundFb, foundDash := false, false, false
 	for _, p := range problems {
 		if strings.Contains(p, "invalid default_isolation") {
 			foundIso = true
@@ -491,12 +492,29 @@ func TestValidateInvalidPreferences(t *testing.T) {
 		if strings.Contains(p, "invalid fallback_mode") {
 			foundFb = true
 		}
+		if strings.Contains(p, "invalid dashboard_mode") {
+			foundDash = true
+		}
 	}
 	if !foundIso {
 		t.Fatalf("expected invalid default_isolation problem, got %v", problems)
 	}
 	if !foundFb {
 		t.Fatalf("expected invalid fallback_mode problem, got %v", problems)
+	}
+	if !foundDash {
+		t.Fatalf("expected invalid dashboard_mode problem, got %v", problems)
+	}
+}
+
+func TestEffectiveDashboardPort(t *testing.T) {
+	p := &Preferences{}
+	if got := p.EffectiveDashboardPort(); got != DefaultDashboardPort {
+		t.Fatalf("expected %d, got %d", DefaultDashboardPort, got)
+	}
+	p.DashboardPort = 9999
+	if got := p.EffectiveDashboardPort(); got != 9999 {
+		t.Fatalf("expected 9999, got %d", got)
 	}
 }
 
