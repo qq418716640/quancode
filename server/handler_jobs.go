@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/qq418716640/quancode/job"
 )
@@ -30,6 +31,37 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		var filtered []*job.State
 		for _, j := range jobs {
 			if j.Status == status {
+				filtered = append(filtered, j)
+			}
+		}
+		jobs = filtered
+	}
+
+	// Filter by agent
+	if agent := q.Get("agent"); agent != "" {
+		var filtered []*job.State
+		for _, j := range jobs {
+			actual := j.ActualAgent
+			if actual == "" {
+				actual = j.Agent
+			}
+			if actual == agent {
+				filtered = append(filtered, j)
+			}
+		}
+		jobs = filtered
+	}
+
+	// Filter by since (ISO 8601 timestamp)
+	if since := q.Get("since"); since != "" {
+		sinceTime, err := time.Parse(time.RFC3339, since)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid 'since' parameter: "+err.Error())
+			return
+		}
+		var filtered []*job.State
+		for _, j := range jobs {
+			if t, err := time.Parse(time.RFC3339, j.CreatedAt); err == nil && !t.Before(sinceTime) {
 				filtered = append(filtered, j)
 			}
 		}

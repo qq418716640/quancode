@@ -502,10 +502,35 @@
                 params.set('offset', this.filters.offset);
 
                 try {
-                    const res = await fetch('/api/delegations?' + params);
-                    const data = await res.json();
-                    this.delegations = data.entries || [];
+                    const showActive = this.filters.offset === 0 &&
+                        (!this.filters.status || this.filters.status === 'running');
+                    const fetches = [fetch('/api/delegations?' + params)];
+                    if (showActive) fetches.push(fetch('/api/active'));
+
+                    const responses = await Promise.all(fetches);
+                    const data = await responses[0].json();
+                    let entries = data.entries || [];
                     this.delegationTotal = data.total || 0;
+
+                    // Prepend active (running) sync tasks on first page
+                    if (showActive && responses[1]) {
+                        const activeData = await responses[1].json();
+                        const since = this.sinceParam();
+                        const activeTasks = (activeData.tasks || [])
+                            .filter(t => !this.filters.agent || t.agent === this.filters.agent)
+                            .filter(t => !since || t.started_at >= since)
+                            .map(t => ({
+                                timestamp: t.started_at,
+                                agent: t.agent,
+                                task: t.task,
+                                delegation_id: t.delegation_id,
+                                _active: true,
+                            }));
+                        this.delegationTotal += activeTasks.length;
+                        entries = [...activeTasks, ...entries];
+                    }
+
+                    this.delegations = entries;
                     // Build pipeline groups
                     this.buildPipelines(data.entries || []);
                 } catch (e) { console.error('fetchDelegations:', e); }
@@ -514,6 +539,9 @@
             async fetchJobs() {
                 try {
                     const params = new URLSearchParams();
+                    const since = this.sinceParam();
+                    if (since) params.set('since', since);
+                    if (this.filters.agent) params.set('agent', this.filters.agent);
                     if (this.filters.status) params.set('status', this.filters.status);
                     const res = await fetch('/api/jobs?' + params);
                     const data = await res.json();
@@ -627,17 +655,18 @@
             },
 
             entryStatus(entry) {
+                if (entry._active) return 'running';
                 if (entry.final_status === 'cancelled') return 'cancelled';
                 if (entry.timed_out) return 'timed_out';
                 return entry.exit_code === 0 ? 'succeeded' : 'failed';
             },
             entryStatusLabel(entry) {
                 const s = this.entryStatus(entry);
-                return { succeeded: 'OK', failed: 'FAIL', cancelled: 'CANCEL', timed_out: 'TIMEOUT' }[s] || s.toUpperCase();
+                return { succeeded: 'OK', failed: 'FAIL', cancelled: 'CANCEL', timed_out: 'TIMEOUT', running: 'RUNNING' }[s] || s.toUpperCase();
             },
             entryDotClass(entry) {
                 const s = this.entryStatus(entry);
-                return { succeeded: 'bg-accent-green', failed: 'bg-accent-red', cancelled: 'bg-gray-400', timed_out: 'bg-accent-yellow' }[s] || 'bg-gray-400';
+                return { succeeded: 'bg-accent-green', failed: 'bg-accent-red', cancelled: 'bg-gray-400', timed_out: 'bg-accent-yellow', running: 'bg-accent-purple animate-pulse' }[s] || 'bg-gray-400';
             },
             statusClass(status) {
                 const map = {

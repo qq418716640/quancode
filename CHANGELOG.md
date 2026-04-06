@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.16] - 2026-04-06
+
+### Fixed
+
+- **Dashboard: async jobs filtering broken**: time range and agent filters on the Async Jobs tab had no effect — frontend `fetchJobs()` was not passing `since`/`agent` params, and backend `/api/jobs` handler did not support them. Both sides now filter consistently with the Delegations tab.
+- **Dashboard: active sync tasks not shown in list**: running synchronous delegations only appeared in the stats card count but were missing from the Delegations list. Added `/api/active` endpoint and frontend merge logic to display them as "RUNNING" entries at the top of the list.
+
 ## [v0.8.15] - 2026-04-05
 
 ### Added
