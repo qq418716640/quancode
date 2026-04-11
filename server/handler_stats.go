@@ -23,16 +23,18 @@ func newStatsCache(ttl time.Duration) *statsCache {
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	// Active tasks are always computed fresh (not cached).
-	activeSyncTasks := len(active.List())
-	activeAsyncJobs := 0
-	jobs, _ := job.ListJobs("", 0)
-	for _, j := range jobs {
-		if !job.IsTerminal(j.Status) {
-			activeAsyncJobs++
+	var activeTasks int
+	if !s.demoMode {
+		activeSyncTasks := len(active.List())
+		activeAsyncJobs := 0
+		jobs, _ := job.ListJobs("", 0)
+		for _, j := range jobs {
+			if !job.IsTerminal(j.Status) {
+				activeAsyncJobs++
+			}
 		}
+		activeTasks = activeSyncTasks + activeAsyncJobs
 	}
-	activeTasks := activeSyncTasks + activeAsyncJobs
 
 	// Parse filter params.
 	agentFilter := r.URL.Query().Get("agent")
@@ -53,7 +55,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		s.stats.mu.Unlock()
 	}
 
-	entries, err := ledger.ReadAll()
+	entries, err := s.readAllEntries()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "read ledger: "+err.Error())
 		return

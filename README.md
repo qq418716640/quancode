@@ -1,10 +1,15 @@
 # QuanCode
 
-**You command, AIs execute.**
+**Orchestrate your terminal coding agents.**
+
+<p align="center">
+  <img src="docs/dashboard-demo.png" alt="QuanCode Dashboard — 538 delegations, five agents, one local dashboard" width="800">
+</p>
+<p align="center"><em>538 delegations, five agents, one local dashboard — all running under your shell.</em></p>
 
 [中文](README_zh.md)
 
-QuanCode is a lightweight CLI orchestrator for terminal coding agents. It starts one AI coding CLI as the primary interface and lets it delegate bounded tasks to other coding CLIs.
+QuanCode starts one AI coding agent as your primary and lets it delegate bounded tasks to the others — Claude Code, Codex, Gemini, Copilot, Qoder. Routing, git worktree isolation, verification, and fallback all handled locally. A single Go binary. No daemon, no hosted service, no vendor lock-in.
 
 It is an orchestration layer, not an agent itself.
 

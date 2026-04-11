@@ -21,9 +21,9 @@ func (s *Server) handleDelegations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid 'since' parameter: "+parseErr.Error())
 			return
 		}
-		entries, err = ledger.ReadSince(since)
+		entries, err = s.readEntriesSince(since)
 	} else {
-		entries, err = ledger.ReadAll()
+		entries, err = s.readAllEntries()
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "read ledger: "+err.Error())
@@ -91,6 +91,10 @@ func (s *Server) handleDelegations(w http.ResponseWriter, r *http.Request) {
 var validDelegationID = regexp.MustCompile(`^del_[a-f0-9]{16}$`)
 
 func (s *Server) handleDelegationOutput(w http.ResponseWriter, r *http.Request) {
+	if s.demoMode {
+		writeError(w, http.StatusNotFound, "output not available in demo mode")
+		return
+	}
 	id := r.PathValue("id")
 	if id == "" || !validDelegationID.MatchString(id) {
 		writeError(w, http.StatusBadRequest, "invalid delegation id")

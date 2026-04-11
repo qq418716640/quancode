@@ -10,6 +10,10 @@ import (
 )
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
+	if s.demoMode {
+		writeJSON(w, http.StatusOK, map[string]any{"jobs": []any{}})
+		return
+	}
 	q := r.URL.Query()
 
 	limit := 50
@@ -74,6 +78,10 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleJobDetail(w http.ResponseWriter, r *http.Request) {
+	if s.demoMode {
+		writeError(w, http.StatusNotFound, "jobs not available in demo mode")
+		return
+	}
 	id := r.PathValue("id")
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "missing job id")
@@ -95,6 +103,10 @@ func (s *Server) handleJobDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleJobOutput(w http.ResponseWriter, r *http.Request) {
+	if s.demoMode {
+		writeError(w, http.StatusNotFound, "jobs not available in demo mode")
+		return
+	}
 	id := r.PathValue("id")
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "missing job id")

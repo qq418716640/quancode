@@ -15,17 +15,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/version"
 	"github.com/qq418716640/quancode/web"
 )
 
 // Server is the dashboard HTTP server.
 type Server struct {
-	addr    string
-	devMode bool
-	mux     *http.ServeMux
-	hub     *sseHub
-	stats   *statsCache
+	addr        string
+	devMode     bool
+	demoMode    bool
+	demoEntries []ledger.Entry
+	mux         *http.ServeMux
+	hub         *sseHub
+	stats       *statsCache
 }
 
 // New creates a new Server. If devMode is true, static files are served from
@@ -35,11 +38,51 @@ func New(addr string, devMode bool) *Server {
 		addr:    addr,
 		devMode: devMode,
 		mux:     http.NewServeMux(),
-		hub:     newSSEHub(),
+		hub:     newSSEHub(false),
 		stats:   newStatsCache(30 * time.Second),
 	}
 	s.registerRoutes()
 	return s
+}
+
+// NewDemo creates a server with built-in demo data for screenshots and previews.
+func NewDemo(addr string) *Server {
+	s := &Server{
+		addr:        addr,
+		demoMode:    true,
+		demoEntries: generateDemoEntries(),
+		mux:         http.NewServeMux(),
+		hub:         newSSEHub(true),
+		stats:       newStatsCache(30 * time.Second),
+	}
+	s.registerRoutes()
+	return s
+}
+
+func (s *Server) readAllEntries() ([]ledger.Entry, error) {
+	if s.demoMode {
+		cp := make([]ledger.Entry, len(s.demoEntries))
+		copy(cp, s.demoEntries)
+		return cp, nil
+	}
+	return ledger.ReadAll()
+}
+
+func (s *Server) readEntriesSince(since time.Time) ([]ledger.Entry, error) {
+	if s.demoMode {
+		var filtered []ledger.Entry
+		for _, e := range s.demoEntries {
+			t, err := time.Parse(time.RFC3339, e.Timestamp)
+			if err != nil {
+				continue
+			}
+			if !t.Before(since) {
+				filtered = append(filtered, e)
+			}
+		}
+		return filtered, nil
+	}
+	return ledger.ReadSince(since)
 }
 
 func (s *Server) registerRoutes() {

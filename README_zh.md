@@ -1,10 +1,15 @@
 # QuanCode
 
-**你负责指挥，AI们负责执行。**
+**编排你的终端编程智能体。**
+
+<p align="center">
+  <img src="docs/dashboard-demo.png" alt="QuanCode Dashboard — 538 次委派，五个 agent，一个本地仪表盘" width="800">
+</p>
+<p align="center"><em>538 次委派，五个 agent，一个本地仪表盘 —— 全部在你的 shell 中运行。</em></p>
 
 [English](README.md)
 
-QuanCode 是一个轻量级的终端编程智能体编排层。它负责启动一个 AI coding CLI 作为主交互入口，并让它把明确、边界清晰的任务委派给其他 coding CLI。
+QuanCode 启动一个 AI coding CLI 作为主 agent，让它把边界清晰的任务委派给其他 agent —— Claude Code、Codex、Gemini、Copilot、Qoder。路由、git worktree 隔离、验证、降级全部在本地完成。单个 Go 二进制。无守护进程、无托管服务、无厂商锁定。
 
 它是一个编排层，不是一个 agent 本身。
 

@@ -7,19 +7,24 @@ import (
 	"github.com/qq418716640/quancode/config"
 )
 
+type agentInfo struct {
+	Key         string   `json:"key"`
+	Name        string   `json:"name"`
+	Enabled     bool     `json:"enabled"`
+	Description string   `json:"description,omitempty"`
+	Strengths   []string `json:"strengths,omitempty"`
+}
+
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
+	if s.demoMode {
+		writeJSON(w, http.StatusOK, map[string]any{"agents": demoAgentInfoList})
+		return
+	}
+
 	cfg, err := config.Load("")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "load config: "+err.Error())
 		return
-	}
-
-	type agentInfo struct {
-		Key         string   `json:"key"`
-		Name        string   `json:"name"`
-		Enabled     bool     `json:"enabled"`
-		Description string   `json:"description,omitempty"`
-		Strengths   []string `json:"strengths,omitempty"`
 	}
 
 	var agents []agentInfo

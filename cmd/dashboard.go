@@ -16,6 +16,7 @@ var (
 	dashboardPort int
 	dashboardDev  bool
 	dashboardOpen bool
+	dashboardDemo bool
 )
 
 var dashboardCmd = &cobra.Command{
@@ -23,12 +24,20 @@ var dashboardCmd = &cobra.Command{
 	Short: "Start the web dashboard for monitoring delegations and jobs",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		addr := fmt.Sprintf("127.0.0.1:%d", dashboardPort)
-		srv := server.New(addr, dashboardDev)
+		var srv *server.Server
+		if dashboardDemo {
+			srv = server.NewDemo(addr)
+		} else {
+			srv = server.New(addr, dashboardDev)
+		}
 
 		url := fmt.Sprintf("http://%s", addr)
-		if dashboardDev {
+		switch {
+		case dashboardDemo:
+			fmt.Fprintf(os.Stderr, "Dashboard (demo): %s\n", url)
+		case dashboardDev:
 			fmt.Fprintf(os.Stderr, "Dashboard (dev mode): %s\n", url)
-		} else {
+		default:
 			fmt.Fprintf(os.Stderr, "Dashboard: %s\n", url)
 		}
 
@@ -128,6 +137,7 @@ func init() {
 	dashboardCmd.Flags().IntVar(&dashboardPort, "port", config.DefaultDashboardPort, "port to listen on")
 	dashboardCmd.Flags().BoolVar(&dashboardDev, "dev", false, "serve static files from filesystem instead of embedded assets")
 	dashboardCmd.Flags().BoolVar(&dashboardOpen, "open", false, "open browser automatically after starting")
+	dashboardCmd.Flags().BoolVar(&dashboardDemo, "demo", false, "use built-in demo data instead of real logs")
 	dashboardCmd.AddCommand(dashboardEnableCmd)
 	dashboardCmd.AddCommand(dashboardDisableCmd)
 	dashboardCmd.AddCommand(dashboardStatusCmd)

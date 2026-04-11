@@ -19,13 +19,14 @@ const (
 
 // sseHub manages a single polling goroutine that broadcasts to all SSE clients.
 type sseHub struct {
-	mu      sync.Mutex
-	clients map[chan []byte]struct{}
-	started bool
+	mu       sync.Mutex
+	clients  map[chan []byte]struct{}
+	started  bool
+	demoMode bool
 }
 
-func newSSEHub() *sseHub {
-	return &sseHub{clients: make(map[chan []byte]struct{})}
+func newSSEHub(demoMode bool) *sseHub {
+	return &sseHub{clients: make(map[chan []byte]struct{}), demoMode: demoMode}
 }
 
 func (h *sseHub) addClient(ch chan []byte) bool {
@@ -35,7 +36,7 @@ func (h *sseHub) addClient(ch chan []byte) bool {
 		return false
 	}
 	h.clients[ch] = struct{}{}
-	if !h.started {
+	if !h.started && !h.demoMode {
 		h.started = true
 		go h.poll()
 	}

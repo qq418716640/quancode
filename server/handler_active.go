@@ -7,6 +7,10 @@ import (
 )
 
 func (s *Server) handleActive(w http.ResponseWriter, r *http.Request) {
+	if s.demoMode {
+		writeJSON(w, http.StatusOK, map[string]any{"tasks": []any{}})
+		return
+	}
 	entries := active.List()
 	if entries == nil {
 		entries = []active.Entry{}
