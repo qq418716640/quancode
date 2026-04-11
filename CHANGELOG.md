@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.17] - 2026-04-11
+
+### Added
+
+- **Dashboard demo mode**: `quancode dashboard --demo` starts the dashboard with 538 built-in sample delegation entries across five agents, without reading real logs. Useful for screenshots, onboarding, and previews.
+- **README hero section**: new tagline, dashboard screenshot, and agent-specific positioning text (English and Chinese).
+
 ## [v0.8.16] - 2026-04-06
 
 ### Fixed
