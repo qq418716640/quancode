@@ -87,7 +87,7 @@ var KnownAgents = map[string]AgentConfig{
 		Strengths:          []string{"code-generation", "github-integration", "repository-context", "multi-model"},
 		PrimaryArgs:        []string{"--yolo"},
 		DelegateArgs:       []string{"--yolo", "--no-auto-update", "-p"},
-		TimeoutSecs:        300,
+		TimeoutSecs:        420,
 		Enabled:            true,
 		PreferredFor:       []string{"generate", "github", "suggest"},
 		Priority:           30,
