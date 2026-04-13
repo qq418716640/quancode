@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.18] - 2026-04-13
+
+### Fixed
+
+- **UTF-8 safety for context injection**: files with invalid UTF-8 bytes (e.g. mixed encodings) no longer crash downstream CLIs like Codex. Invalid bytes are replaced with U+FFFD and a warning is emitted via `bundle.Warnings`.
+- **Truncation splitting multi-byte characters**: byte-level truncation of context files and git diffs now respects UTF-8 character boundaries, preventing artificial creation of invalid sequences when cutting Chinese or other multi-byte text.
+- **Agent-level UTF-8 safety net**: `Delegate` and `DelegateWithContext` sanitize the task string as a final defense before passing it to any CLI subprocess.
+
 ## [v0.8.17] - 2026-04-11
 
 ### Added

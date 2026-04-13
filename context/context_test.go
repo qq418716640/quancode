@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestNewBuilder_Defaults(t *testing.T) {
@@ -318,6 +319,122 @@ func TestFormat_WithDiff(t *testing.T) {
 	if !strings.Contains(result, "+func foo() {}") {
 		t.Error("missing diff content")
 	}
+}
+
+func TestSanitizeUTF8(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		want     string
+		changed  bool
+	}{
+		{"valid ascii", "hello world", "hello world", false},
+		{"valid chinese", "你好世界", "你好世界", false},
+		{"invalid byte", "hello\x80world", "hello\uFFFDworld", true},
+		{"invalid sequence", "abc\xff\xfedef", "abc\uFFFDdef", true},
+		{"empty", "", "", false},
+		{"mixed valid and invalid", "你好\x80世界", "你好\uFFFD世界", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, changed := sanitizeUTF8(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeUTF8(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+			if changed != tt.changed {
+				t.Errorf("sanitizeUTF8(%q) changed = %v, want %v", tt.input, changed, tt.changed)
+			}
+		})
+	}
+}
+
+func TestTruncateUTF8(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxBytes int
+		want     string
+	}{
+		{"no truncation needed", "hello", 10, "hello"},
+		{"exact fit", "hello", 5, "hello"},
+		{"ascii truncation", "hello world", 5, "hello"},
+		{"chinese no split", "你好世界", 6, "你好"},       // 2 chars × 3 bytes = 6
+		{"chinese avoid split", "你好世界", 7, "你好"},     // 7 bytes would split 3rd char, back to 6
+		{"chinese avoid split 2", "你好世界", 8, "你好"},   // 8 bytes would also split, back to 6
+		{"mixed boundary", "a你好", 2, "a"},               // 2 bytes would split "你", back to 1
+		{"zero max", "hello", 0, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateUTF8(tt.input, tt.maxBytes)
+			if got != tt.want {
+				t.Errorf("truncateUTF8(%q, %d) = %q, want %q", tt.input, tt.maxBytes, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuild_InvalidUTF8File(t *testing.T) {
+	dir := t.TempDir()
+	// Write a file with invalid UTF-8 bytes
+	os.WriteFile(filepath.Join(dir, "bad.md"), []byte("hello\x80\xffworld"), 0644)
+
+	b := NewBuilder(nil, nil)
+	bundle := b.Build(dir, []string{"bad.md"}, "", 0)
+
+	if len(bundle.Files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(bundle.Files))
+	}
+	if !bundle.Files[0].Sanitized {
+		t.Error("expected file to be marked as sanitized")
+	}
+	// Should have a warning about sanitization
+	found := false
+	for _, w := range bundle.Warnings {
+		if strings.Contains(w, "sanitized") && strings.Contains(w, "bad.md") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected sanitization warning, got: %v", bundle.Warnings)
+	}
+	// Content should not contain invalid UTF-8
+	if !isValidUTF8(bundle.Files[0].Content) {
+		t.Error("content should be valid UTF-8 after sanitization")
+	}
+}
+
+func TestBuild_TruncationPreservesUTF8(t *testing.T) {
+	dir := t.TempDir()
+	// Create content with Chinese chars that will be truncated.
+	// maxFileBytes default is 16KB; fill with 3-byte Chinese chars.
+	content := strings.Repeat("你", 6000) // 18000 bytes > 16KB
+	os.WriteFile(filepath.Join(dir, "big.txt"), []byte(content), 0644)
+
+	b := NewBuilder(nil, nil)
+	bundle := b.Build(dir, []string{"big.txt"}, "", 0)
+
+	if len(bundle.Files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(bundle.Files))
+	}
+	if !bundle.Files[0].Truncated {
+		t.Error("expected file to be truncated")
+	}
+	if !isValidUTF8(bundle.Files[0].Content) {
+		t.Error("truncated content should still be valid UTF-8")
+	}
+}
+
+func isValidUTF8(s string) bool {
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size <= 1 {
+			return false
+		}
+		i += size
+	}
+	return true
 }
 
 func TestDedupeFiles(t *testing.T) {

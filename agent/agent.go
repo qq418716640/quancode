@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/qq418716640/quancode/config"
 	"github.com/qq418716640/quancode/ledger"
@@ -153,11 +154,23 @@ func (a *genericAgent) delegatePrep(opts DelegateOptions) (args []string, env []
 	return args, env, timeout, delegationID, nil
 }
 
+// sanitizeTaskUTF8 ensures task text is valid UTF-8 before passing to a CLI.
+// Returns the (possibly sanitized) task string.
+func sanitizeTaskUTF8(task string) string {
+	if utf8.ValidString(task) {
+		return task
+	}
+	fmt.Fprintf(os.Stderr, "[quancode] warning: task text contained invalid UTF-8 (sanitized)\n")
+	return strings.ToValidUTF8(task, "\uFFFD")
+}
+
 func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*runner.Result, error) {
 	args, env, timeout, delegationID, err := a.delegatePrep(opts)
 	if err != nil {
 		return nil, err
 	}
+
+	task = sanitizeTaskUTF8(task)
 
 	taskMode := a.cfg.TaskMode
 	if taskMode == "" {
@@ -207,6 +220,8 @@ func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task st
 	if err != nil {
 		return nil, err
 	}
+
+	task = sanitizeTaskUTF8(task)
 
 	// Safety net: if the caller's context has no deadline, apply the agent's
 	// own timeout to prevent infinite execution.

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"unicode/utf8"
 )
 
 const (
@@ -38,6 +39,7 @@ type FileEntry struct {
 	Content   string
 	Size      int
 	Truncated bool
+	Sanitized bool // true if invalid UTF-8 bytes were replaced
 }
 
 // ContextBundle is the assembled context package.
@@ -140,10 +142,14 @@ func (b *Builder) Build(workDir string, extraFiles []string, diffMode string, ma
 	var kept []FileEntry
 	used := 0
 	for _, f := range files {
+		if f.Sanitized {
+			bundle.Warnings = append(bundle.Warnings, fmt.Sprintf("sanitized %s: invalid UTF-8 bytes replaced", f.Path))
+		}
+
 		content := f.Content
 		// readFile already limits to maxFileBytes+1; apply exact truncation here
 		if len(content) > b.maxFileBytes {
-			content = content[:b.maxFileBytes] + "\n... [truncated, original " + strconv.Itoa(f.Size) + " bytes]\n"
+			content = truncateUTF8(content, b.maxFileBytes) + "\n... [truncated, original " + strconv.Itoa(f.Size) + " bytes]\n"
 			f.Content = content
 			f.Truncated = true
 		}
@@ -160,9 +166,12 @@ func (b *Builder) Build(workDir string, extraFiles []string, diffMode string, ma
 
 	// Git diff (optional)
 	if diffMode != "" {
-		diff := b.getGitDiff(workDir, diffMode)
+		diff, diffSanitized := b.getGitDiff(workDir, diffMode)
+		if diffSanitized {
+			bundle.Warnings = append(bundle.Warnings, "sanitized git diff: invalid UTF-8 bytes replaced")
+		}
 		if len(diff) > diffBudget {
-			diff = diff[:diffBudget] + "\n... [diff truncated]\n"
+			diff = truncateUTF8(diff, diffBudget) + "\n... [diff truncated]\n"
 		}
 		if diff != "" {
 			bundle.GitDiff = diff
@@ -255,15 +264,25 @@ func (b *Builder) readFile(absWorkDir, relPath string) (FileEntry, error) {
 		actualSize = int(info.Size())
 	}
 
+	// Trim any trailing incomplete UTF-8 sequence caused by LimitReader
+	// cutting mid-character. This prevents false-positive sanitization
+	// warnings on files that are actually valid UTF-8.
+	content := truncateUTF8(string(data), len(data))
+
+	// Sanitize truly invalid UTF-8 sequences to prevent downstream CLI
+	// failures (e.g. Rust-based CLIs like Codex reject non-UTF-8 arguments).
+	content, sanitized := sanitizeUTF8(content)
+
 	return FileEntry{
 		Path:      relPath,
-		Content:   string(data),
+		Content:   content,
 		Size:      actualSize,
 		Truncated: len(data) > b.maxFileBytes,
+		Sanitized: sanitized,
 	}, nil
 }
 
-func (b *Builder) getGitDiff(workDir, mode string) string {
+func (b *Builder) getGitDiff(workDir, mode string) (string, bool) {
 	var args []string
 	switch mode {
 	case "staged":
@@ -271,16 +290,41 @@ func (b *Builder) getGitDiff(workDir, mode string) string {
 	case "working":
 		args = []string{"diff"}
 	default:
-		return ""
+		return "", false
 	}
 
 	cmd := exec.Command("git", args...)
 	cmd.Dir = workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		return "", false
 	}
-	return strings.TrimSpace(string(out))
+	s := strings.TrimSpace(string(out))
+	sanitized, changed := sanitizeUTF8(s)
+	return sanitized, changed
+}
+
+// sanitizeUTF8 replaces invalid UTF-8 bytes with U+FFFD if needed.
+// Returns the sanitized string and whether any replacement was made.
+func sanitizeUTF8(s string) (string, bool) {
+	if utf8.ValidString(s) {
+		return s, false
+	}
+	return strings.ToValidUTF8(s, "\uFFFD"), true
+}
+
+// truncateUTF8 truncates s to at most maxBytes without splitting a multi-byte
+// UTF-8 character. It walks backwards from the cut point to find a valid boundary.
+func truncateUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// Walk backwards to find a valid UTF-8 start boundary.
+	// A UTF-8 continuation byte has the form 10xxxxxx (0x80..0xBF).
+	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
+		maxBytes--
+	}
+	return s[:maxBytes]
 }
 
 func dedupeFiles(files []FileEntry) []FileEntry {
