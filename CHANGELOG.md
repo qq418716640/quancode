@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.19] - 2026-04-13
+
+### Changed
+
+- **Copilot timeout raised to 420s**: log analysis (4/7–4/13) showed 11.5% timeout rate at 300s, now aligned with Gemini's 420s limit.
+
 ## [v0.8.18] - 2026-04-13
 
 ### Fixed
