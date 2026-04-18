@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.20] - 2026-04-19
+
+### Fixed
+
+- **Speculative backup kept running after primary succeeded**: when speculative parallelism fired both agents, the backup would run to its full timeout even after the primary had succeeded — wasting compute and polluting the `timed_out` metric with what were actually winners' losers. The window-expired path now cancels the spec agent as soon as primary succeeds. `primary_preferred` semantics are preserved: if spec finishes first, primary is *not* cancelled (it may still succeed and take precedence).
+- **`timed_out` status conflated real timeouts with cancellations**: `runner.Result` now distinguishes `Cancelled` (caller-initiated) from `TimedOut` (deadline reached) via `errors.Is(ctx.Err(), context.DeadlineExceeded)`. Introduces `StatusCancelled` final status, `FailureClassSpeculativeCancelled`, and a `cancelled` field on `ledger.Entry`. Dashboard `/api/delegations?status=cancelled` filter added; succeeded/failed/timed_out buckets now explicitly exclude cancelled for mutual exclusivity.
+
+### Added
+
+- **Diagnostic hints for failed delegations**: new `diagnostic_hints` config on each agent lets QuanCode print actionable recovery messages to stderr when a sub-agent's output matches a configured substring. First shipped hint: Copilot's `Access denied by policy` → suggests `copilot logout && copilot login` (a recurring issue in production logs). Scanned in an `agent.Delegate`/`DelegateWithContext` defer so all failure paths are covered (exit != 0, timeout, cancellation, launch error).
+
 ## [v0.8.19] - 2026-04-13
 
 ### Changed
