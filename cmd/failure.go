@@ -35,6 +35,11 @@ func classifyFailure(ar attemptResult) string {
 		return ""
 	}
 
+	// Cancelled (e.g. speculative loser). Mutually exclusive with TimedOut.
+	if ar.result.Cancelled {
+		return FailureClassSpeculativeCancelled
+	}
+
 	// Timeout
 	if ar.result.TimedOut {
 		return FailureClassTimedOut

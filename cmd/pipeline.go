@@ -633,6 +633,7 @@ func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int
 	if ar.result != nil {
 		logEntry.ExitCode = ar.result.ExitCode
 		logEntry.TimedOut = ar.result.TimedOut
+		logEntry.Cancelled = ar.result.Cancelled
 		logEntry.DurationMs = ar.result.DurationMs
 		logEntry.ChangedFiles = ar.changedFiles
 	}
@@ -645,7 +646,7 @@ func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int
 			logEntry.VerifyRaw = data
 		}
 	}
-	logEntry.FinalStatus = determineFinalStatus(logEntry.ExitCode, logEntry.TimedOut, ar.verify)
+	logEntry.FinalStatus = determineFinalStatus(logEntry.ExitCode, logEntry.TimedOut, logEntry.Cancelled, ar.verify)
 
 	if logErr := ledger.Append(logEntry); logErr != nil {
 		fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write ledger: %v\n", logErr)
@@ -656,7 +657,7 @@ func stageStatus(sr stageResult) string {
 	if sr.Skipped {
 		return StatusSkipped
 	}
-	return determineFinalStatus(sr.ExitCode, sr.TimedOut, sr.Verify)
+	return determineFinalStatus(sr.ExitCode, sr.TimedOut, false, sr.Verify)
 }
 
 func appendUnique(base, items []string) []string {

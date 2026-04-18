@@ -20,6 +20,9 @@ import (
 // errNoSpeculativeAgent is returned when no backup agent is available for speculative execution.
 var errNoSpeculativeAgent = errors.New("no speculative agent available")
 
+// agentFromConfig is a seam allowing tests to substitute fake agents.
+var agentFromConfig = agent.FromConfig
+
 // speculativeResult wraps an attemptResult with agent identification.
 type speculativeResult struct {
 	agentKey string
@@ -67,7 +70,7 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 				sel.AgentKey, opts.isolation)
 			continue
 		}
-		a := agent.FromConfig(sel.AgentKey, ac)
+		a := agentFromConfig(sel.AgentKey, ac)
 		if ok, _ := a.IsAvailable(); !ok {
 			continue
 		}
@@ -210,29 +213,43 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		resultCh <- speculativeResult{agentKey: specSel.AgentKey, ar: ar, role: "speculative"}
 	}()
 
-	// Wait for both results — no early cancellation
+	// Wait for first result. When primary succeeds we cancel the speculative
+	// backup to stop wasting compute; any other outcome (primary transient
+	// failure, or speculative finishing first) preserves primary_preferred
+	// semantics by letting primary finish its natural course.
 	var primary, spec *speculativeResult
-	for i := 0; i < 2; i++ {
-		res := <-resultCh
-		if res.role == "primary" {
-			primary = &res
-		} else {
-			spec = &res
-		}
-		// Show progress for first completion
-		if i == 0 {
-			spinner.Stop()
-			status := "succeeded"
-			if res.ar.failureClass != "" || res.ar.err != nil {
-				status = "failed"
-			}
-			remaining := specSel.AgentKey
-			if res.role == "speculative" {
-				remaining = opts.primaryKey
-			}
-			fmt.Fprintf(os.Stderr, "[quancode] %s %s, waiting for %s...\n", res.agentKey, status, remaining)
-			spinner = ui.NewSpinner(fmt.Sprintf("waiting for %s...", remaining))
-		}
+	first := <-resultCh
+	if first.role == "primary" {
+		primary = &first
+	} else {
+		spec = &first
+	}
+	spinner.Stop()
+
+	firstOk := first.ar.failureClass == "" && first.ar.err == nil
+	remaining := specSel.AgentKey
+	if first.role == "speculative" {
+		remaining = opts.primaryKey
+	}
+	status := "succeeded"
+	if !firstOk {
+		status = "failed"
+	}
+
+	if first.role == "primary" && firstOk {
+		specCancel()
+		fmt.Fprintf(os.Stderr, "[quancode] %s %s, cancelling %s...\n", first.agentKey, status, remaining)
+		spinner = ui.NewSpinner(fmt.Sprintf("cancelling %s...", remaining))
+	} else {
+		fmt.Fprintf(os.Stderr, "[quancode] %s %s, waiting for %s...\n", first.agentKey, status, remaining)
+		spinner = ui.NewSpinner(fmt.Sprintf("waiting for %s...", remaining))
+	}
+
+	second := <-resultCh
+	if second.role == "primary" {
+		primary = &second
+	} else {
+		spec = &second
 	}
 	spinner.Stop()
 
@@ -358,6 +375,7 @@ func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attempt
 	if ar.result != nil {
 		logEntry.ExitCode = ar.result.ExitCode
 		logEntry.TimedOut = ar.result.TimedOut
+		logEntry.Cancelled = ar.result.Cancelled
 		logEntry.DurationMs = ar.result.DurationMs
 		logEntry.ChangedFiles = ar.changedFiles
 	}
@@ -374,7 +392,7 @@ func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attempt
 			logEntry.VerifyRaw = data
 		}
 	}
-	logEntry.FinalStatus = determineFinalStatus(logEntry.ExitCode, logEntry.TimedOut, ar.verify)
+	logEntry.FinalStatus = determineFinalStatus(logEntry.ExitCode, logEntry.TimedOut, logEntry.Cancelled, ar.verify)
 
 	if logErr := ledger.Append(logEntry); logErr != nil {
 		fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write ledger: %v\n", logErr)
@@ -398,6 +416,7 @@ func finalizeSpeculativeOutput(selected speculativeResult, companion *speculativ
 				Status:       cdr.Status,
 				ExitCode:     cdr.ExitCode,
 				TimedOut:     cdr.TimedOut,
+				Cancelled:    cdr.Cancelled,
 				Output:       cdr.Output,
 				DurationMs:   cdr.DurationMs,
 				ChangedFiles: cdr.ChangedFiles,

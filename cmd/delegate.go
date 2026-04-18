@@ -51,6 +51,7 @@ type DelegationResult struct {
 	Status        string           `json:"status,omitempty"`
 	ExitCode      int              `json:"exit_code"`
 	TimedOut      bool             `json:"timed_out"`
+	Cancelled     bool             `json:"cancelled,omitempty"`
 	DurationMs    int64            `json:"duration_ms"`
 	Output        string           `json:"output"`
 	ChangedFiles  []string         `json:"changed_files"`
@@ -76,6 +77,7 @@ type CompanionResult struct {
 	Status       string   `json:"status"`
 	ExitCode     int      `json:"exit_code"`
 	TimedOut     bool     `json:"timed_out"`
+	Cancelled    bool     `json:"cancelled,omitempty"`
 	Output       string   `json:"output"`
 	DurationMs   int64    `json:"duration_ms"`
 	ChangedFiles []string `json:"changed_files,omitempty"`
@@ -93,6 +95,7 @@ func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) D
 		dr.DelegationID = ar.result.DelegationID
 		dr.ExitCode = ar.result.ExitCode
 		dr.TimedOut = ar.result.TimedOut
+		dr.Cancelled = ar.result.Cancelled
 		dr.DurationMs = ar.result.DurationMs
 		dr.Output = ar.output
 		dr.ChangedFiles = ar.changedFiles
@@ -114,7 +117,7 @@ func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) D
 			dr.ExitCode = 1
 		}
 	}
-	dr.Status = determineFinalStatus(dr.ExitCode, dr.TimedOut, ar.verify)
+	dr.Status = determineFinalStatus(dr.ExitCode, dr.TimedOut, dr.Cancelled, ar.verify)
 	return dr
 }
 

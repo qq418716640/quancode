@@ -64,8 +64,11 @@ func TestRunWithContextCancellation(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
-	if !result.TimedOut {
-		t.Fatal("expected TimedOut=true after context cancel")
+	if !result.Cancelled {
+		t.Fatal("expected Cancelled=true after context cancel (caller-initiated)")
+	}
+	if result.TimedOut {
+		t.Fatal("expected TimedOut=false — this cancellation was not a deadline")
 	}
 	_ = err
 }

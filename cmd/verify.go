@@ -21,6 +21,7 @@ const (
 	StatusCompleted                      = "completed"
 	StatusFailed                         = "failed"
 	StatusTimedOut                       = "timed_out"
+	StatusCancelled                      = "cancelled"
 	StatusSkipped                        = "skipped"
 	StatusCompletedWithVerifyFailures    = "completed_with_verification_failures"
 )
@@ -113,9 +114,12 @@ func runAndLogVerification(execDir string, vs *verifySpec) *VerifyResult {
 }
 
 // determineFinalStatus computes the final status string from agent result and verification.
-// Agent execution result takes priority: timeout/failure are reported as-is.
+// Agent execution result takes priority: cancelled/timeout/failure are reported as-is.
 // Verification only affects status when the agent itself succeeded.
-func determineFinalStatus(exitCode int, timedOut bool, verify *VerifyResult) string {
+func determineFinalStatus(exitCode int, timedOut, cancelled bool, verify *VerifyResult) string {
+	if cancelled {
+		return StatusCancelled
+	}
 	if timedOut {
 		return StatusTimedOut
 	}

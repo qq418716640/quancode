@@ -18,6 +18,7 @@ type Entry struct {
 	Task           string          `json:"task"`
 	ExitCode       int             `json:"exit_code"`
 	TimedOut       bool            `json:"timed_out"`
+	Cancelled      bool            `json:"cancelled,omitempty"`
 	DurationMs     int64           `json:"duration_ms"`
 	ChangedFiles   []string        `json:"changed_files,omitempty"`
 	Isolation string `json:"isolation,omitempty"`

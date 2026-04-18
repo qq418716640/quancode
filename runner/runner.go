@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,7 +18,12 @@ type Result struct {
 	Stderr       string
 	ExitCode     int
 	DurationMs   int64
-	TimedOut     bool
+	// TimedOut is set when the context hit its deadline.
+	// Cancelled is set when the context was cancelled by the caller
+	// (e.g. speculative execution cancelling the losing agent).
+	// The two are mutually exclusive.
+	TimedOut  bool
+	Cancelled bool
 }
 
 // MergeEnv replaces env vars in base with values from extra (case-insensitive key match).
@@ -112,8 +118,12 @@ func runCmd(ctx context.Context, cmd *exec.Cmd) (*Result, error) {
 
 	if ctx.Err() != nil {
 		result.ExitCode = 124
-		result.TimedOut = true
-		return result, fmt.Errorf("command timed out or cancelled")
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			result.TimedOut = true
+			return result, fmt.Errorf("command timed out")
+		}
+		result.Cancelled = true
+		return result, fmt.Errorf("command cancelled")
 	}
 
 	if exitErr, ok := err.(*exec.ExitError); ok {

@@ -35,17 +35,22 @@ func (s *Server) handleDelegations(w http.ResponseWriter, r *http.Request) {
 		entries = filterEntries(entries, func(e ledger.Entry) bool { return e.Agent == agent })
 	}
 
-	// Filter by status
+	// Filter by status. Buckets are mutually exclusive by explicit exclusion
+	// rather than relying on runner invariants: cancelled > timed_out >
+	// failed/succeeded. An entry falls into exactly one bucket.
 	if status := q.Get("status"); status != "" {
 		entries = filterEntries(entries, func(e ledger.Entry) bool {
-			if status == "succeeded" {
-				return e.ExitCode == 0
-			}
-			if status == "failed" {
-				return e.ExitCode != 0 && !e.TimedOut
+			if status == "cancelled" {
+				return e.Cancelled
 			}
 			if status == "timed_out" {
-				return e.TimedOut
+				return e.TimedOut && !e.Cancelled
+			}
+			if status == "succeeded" {
+				return e.ExitCode == 0 && !e.TimedOut && !e.Cancelled
+			}
+			if status == "failed" {
+				return e.ExitCode != 0 && !e.TimedOut && !e.Cancelled
 			}
 			return e.FinalStatus == status
 		})

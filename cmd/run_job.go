@@ -316,12 +316,13 @@ func writeLedger(state *job.State, ar attemptResult, verifyJSON json.RawMessage)
 	if ar.result != nil {
 		entry.ExitCode = ar.result.ExitCode
 		entry.TimedOut = ar.result.TimedOut
+		entry.Cancelled = ar.result.Cancelled
 		entry.DurationMs = ar.result.DurationMs
 		entry.ChangedFiles = ar.changedFiles
 	}
 	// Map job status to ledger status for consistency.
 	// Job uses "succeeded"; ledger uses "completed".
-	entry.FinalStatus = determineFinalStatus(entry.ExitCode, entry.TimedOut, ar.verify)
+	entry.FinalStatus = determineFinalStatus(entry.ExitCode, entry.TimedOut, entry.Cancelled, ar.verify)
 	entry.FailureClass = ar.failureClass
 	entry.VerifyRaw = verifyJSON
 

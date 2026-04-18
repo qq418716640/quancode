@@ -265,6 +265,7 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 	if ar.result != nil {
 		logEntry.ExitCode = ar.result.ExitCode
 		logEntry.TimedOut = ar.result.TimedOut
+		logEntry.Cancelled = ar.result.Cancelled
 		logEntry.DurationMs = ar.result.DurationMs
 		logEntry.ChangedFiles = ar.changedFiles
 	}
@@ -283,7 +284,7 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 			logEntry.VerifyRaw = data
 		}
 	}
-	logEntry.FinalStatus = determineFinalStatus(logEntry.ExitCode, logEntry.TimedOut, ar.verify)
+	logEntry.FinalStatus = determineFinalStatus(logEntry.ExitCode, logEntry.TimedOut, logEntry.Cancelled, ar.verify)
 
 	if logErr := ledger.Append(logEntry); logErr != nil {
 		fmt.Fprintf(os.Stderr, "[quancode] warning: failed to write ledger: %v\n", logErr)
