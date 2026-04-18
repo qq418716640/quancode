@@ -30,6 +30,51 @@ func TestApplyKnownAgentDefaultsBackfillsPromptFields(t *testing.T) {
 	}
 }
 
+func TestApplyKnownAgentDefaultsBackfillsDiagnosticHints(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "copilot",
+		Agents: map[string]AgentConfig{
+			"copilot": {Name: "Copilot", Command: "copilot", Enabled: true},
+		},
+	}
+	applyKnownAgentDefaults(cfg)
+
+	hints := cfg.Agents["copilot"].DiagnosticHints
+	if len(hints) == 0 {
+		t.Fatalf("expected copilot DiagnosticHints to be backfilled, got empty")
+	}
+	found := false
+	for _, h := range hints {
+		if strings.Contains(h.Pattern, "Access denied") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected 'Access denied' pattern in backfilled hints, got %+v", hints)
+	}
+}
+
+func TestApplyKnownAgentDefaultsKeepsExplicitDiagnosticHints(t *testing.T) {
+	cfg := &Config{
+		DefaultPrimary: "copilot",
+		Agents: map[string]AgentConfig{
+			"copilot": {
+				Name:            "Copilot",
+				Command:         "copilot",
+				Enabled:         true,
+				DiagnosticHints: []DiagnosticHint{{Pattern: "custom", Hint: "user hint"}},
+			},
+		},
+	}
+	applyKnownAgentDefaults(cfg)
+
+	hints := cfg.Agents["copilot"].DiagnosticHints
+	if len(hints) != 1 || hints[0].Pattern != "custom" {
+		t.Fatalf("expected user DiagnosticHints preserved, got %+v", hints)
+	}
+}
+
 func TestApplyKnownAgentDefaultsKeepsExplicitValues(t *testing.T) {
 	cfg := &Config{
 		DefaultPrimary: "codex",

@@ -1,14 +1,38 @@
 package agent
 
 import (
+	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/qq418716640/quancode/config"
+	"github.com/qq418716640/quancode/runner"
 )
+
+// captureStderr runs fn with os.Stderr redirected to a pipe and returns
+// everything written. Restores os.Stderr before returning.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	oldStderr := os.Stderr
+	os.Stderr = w
+	done := make(chan string, 1)
+	go func() {
+		data, _ := io.ReadAll(r)
+		done <- string(data)
+	}()
+	fn()
+	w.Close()
+	os.Stderr = oldStderr
+	return <-done
+}
 
 func TestInjectPromptFileRestoresOriginalContent(t *testing.T) {
 	dir := t.TempDir()
@@ -338,5 +362,96 @@ func TestRunManagedPrimarySuccess(t *testing.T) {
 	err := runManagedPrimary("/bin/sh", []string{"sh", "-c", "true"}, os.Environ(), t.TempDir())
 	if err != nil {
 		t.Fatalf("expected nil error for success, got %v", err)
+	}
+}
+
+// TestDiagnosticHintsPrintedOnFailure verifies hints fire when the output
+// matches a configured pattern and the delegation failed.
+func TestDiagnosticHintsPrintedOnFailure(t *testing.T) {
+	a := FromConfig("fake", config.AgentConfig{
+		Command:      "/bin/sh",
+		DelegateArgs: []string{"-c", "echo 'Access denied by policy' >&2; exit 1"},
+		Enabled:      true,
+		DiagnosticHints: []config.DiagnosticHint{
+			{Pattern: "Access denied by policy", Hint: "login again"},
+		},
+	})
+
+	var result *runner.Result
+	var err error
+	stderr := captureStderr(t, func() {
+		result, err = a.Delegate(t.TempDir(), "ignored", DelegateOptions{})
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.ExitCode == 0 {
+		t.Fatalf("expected non-zero exit, got result=%+v", result)
+	}
+	if !strings.Contains(stderr, "[quancode hint] login again") {
+		t.Errorf("expected hint in stderr, got %q", stderr)
+	}
+}
+
+// TestDiagnosticHintsSkippedOnSuccess verifies hints do NOT fire on
+// successful delegations even if the output happens to match a pattern.
+func TestDiagnosticHintsSkippedOnSuccess(t *testing.T) {
+	a := FromConfig("fake", config.AgentConfig{
+		Command:      "/bin/sh",
+		DelegateArgs: []string{"-c", "echo 'Access denied by policy'; exit 0"},
+		Enabled:      true,
+		DiagnosticHints: []config.DiagnosticHint{
+			{Pattern: "Access denied by policy", Hint: "login again"},
+		},
+	})
+
+	stderr := captureStderr(t, func() {
+		_, _ = a.Delegate(t.TempDir(), "ignored", DelegateOptions{})
+	})
+
+	if strings.Contains(stderr, "[quancode hint]") {
+		t.Errorf("hint should not fire on success, got %q", stderr)
+	}
+}
+
+// TestDiagnosticHintsNoMatch verifies no hint when output doesn't match.
+func TestDiagnosticHintsNoMatch(t *testing.T) {
+	a := FromConfig("fake", config.AgentConfig{
+		Command:      "/bin/sh",
+		DelegateArgs: []string{"-c", "echo 'some other error' >&2; exit 1"},
+		Enabled:      true,
+		DiagnosticHints: []config.DiagnosticHint{
+			{Pattern: "Access denied by policy", Hint: "login again"},
+		},
+	})
+
+	stderr := captureStderr(t, func() {
+		_, _ = a.Delegate(t.TempDir(), "ignored", DelegateOptions{})
+	})
+
+	if strings.Contains(stderr, "[quancode hint]") {
+		t.Errorf("hint should not fire when pattern does not match, got %q", stderr)
+	}
+}
+
+// TestDiagnosticHintsFireInDelegateWithContext verifies hints also fire on
+// the context-aware code path (used by speculative parallelism).
+func TestDiagnosticHintsFireInDelegateWithContext(t *testing.T) {
+	a := FromConfig("fake", config.AgentConfig{
+		Command:      "/bin/sh",
+		DelegateArgs: []string{"-c", "echo 'Access denied by policy' >&2; exit 1"},
+		Enabled:      true,
+		DiagnosticHints: []config.DiagnosticHint{
+			{Pattern: "Access denied by policy", Hint: "login again"},
+		},
+	})
+
+	stderr := captureStderr(t, func() {
+		_, _ = a.DelegateWithContext(context.Background(), t.TempDir(), "ignored", DelegateOptions{})
+	})
+
+	if !strings.Contains(stderr, "[quancode hint] login again") {
+		t.Errorf("expected hint via DelegateWithContext, got %q", stderr)
 	}
 }

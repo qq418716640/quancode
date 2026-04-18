@@ -91,6 +91,12 @@ var KnownAgents = map[string]AgentConfig{
 		Enabled:            true,
 		PreferredFor:       []string{"generate", "github", "suggest"},
 		Priority:           30,
+		DiagnosticHints: []DiagnosticHint{
+			{
+				Pattern: "Access denied by policy",
+				Hint:    "Copilot token may be expired or subscription restricted. Try: copilot logout && copilot login. Check ~/.copilot/logs/ for details.",
+			},
+		},
 	},
 	"amp": {
 		Name:         "Amp",

@@ -164,11 +164,20 @@ func sanitizeTaskUTF8(task string) string {
 	return strings.ToValidUTF8(task, "\uFFFD")
 }
 
-func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*runner.Result, error) {
-	args, env, timeout, delegationID, err := a.delegatePrep(opts)
+func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (result *runner.Result, err error) {
+	var args, env []string
+	var timeout int
+	var delegationID string
+	args, env, timeout, delegationID, err = a.delegatePrep(opts)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if result != nil {
+			result.DelegationID = delegationID
+		}
+		a.applyDiagnosticHints(result, err)
+	}()
 
 	task = sanitizeTaskUTF8(task)
 
@@ -184,42 +193,34 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (*ru
 
 	if taskMode == "stdin" {
 		if outputMode == "file" && a.cfg.OutputFlag != "" {
-			result, err := runner.RunWithOutputFile(workDir, timeout, env, a.cfg.OutputFlag, a.cfg.Command, args, "")
-			if result != nil {
-				result.DelegationID = delegationID
-			}
-			return result, err
+			return runner.RunWithOutputFile(workDir, timeout, env, a.cfg.OutputFlag, a.cfg.Command, args, "")
 		}
-		result, err := runner.RunWithStdin(workDir, timeout, env, task, a.cfg.Command, args...)
-		if result != nil {
-			result.DelegationID = delegationID
-		}
-		return result, err
+		return runner.RunWithStdin(workDir, timeout, env, task, a.cfg.Command, args...)
 	}
 
 	// taskMode == "arg"
 	if outputMode == "file" && a.cfg.OutputFlag != "" {
-		result, err := runner.RunWithOutputFile(workDir, timeout, env, a.cfg.OutputFlag, a.cfg.Command, args, task)
-		if result != nil {
-			result.DelegationID = delegationID
-		}
-		return result, err
+		return runner.RunWithOutputFile(workDir, timeout, env, a.cfg.OutputFlag, a.cfg.Command, args, task)
 	}
 
 	args = append(args, task)
-
-	result, err := runner.Run(workDir, timeout, env, a.cfg.Command, args...)
-	if result != nil {
-		result.DelegationID = delegationID
-	}
-	return result, err
+	return runner.Run(workDir, timeout, env, a.cfg.Command, args...)
 }
 
-func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task string, opts DelegateOptions) (*runner.Result, error) {
-	args, env, timeout, delegationID, err := a.delegatePrep(opts)
+func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task string, opts DelegateOptions) (result *runner.Result, err error) {
+	var args, env []string
+	var timeout int
+	var delegationID string
+	args, env, timeout, delegationID, err = a.delegatePrep(opts)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if result != nil {
+			result.DelegationID = delegationID
+		}
+		a.applyDiagnosticHints(result, err)
+	}()
 
 	task = sanitizeTaskUTF8(task)
 
@@ -243,35 +244,44 @@ func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task st
 
 	if taskMode == "stdin" {
 		if outputMode == "file" && a.cfg.OutputFlag != "" {
-			result, err := runner.RunWithOutputFileContext(ctx, workDir, env, a.cfg.OutputFlag, a.cfg.Command, args, "")
-			if result != nil {
-				result.DelegationID = delegationID
-			}
-			return result, err
+			return runner.RunWithOutputFileContext(ctx, workDir, env, a.cfg.OutputFlag, a.cfg.Command, args, "")
 		}
-		result, err := runner.RunWithStdinContext(ctx, workDir, env, task, a.cfg.Command, args...)
-		if result != nil {
-			result.DelegationID = delegationID
-		}
-		return result, err
+		return runner.RunWithStdinContext(ctx, workDir, env, task, a.cfg.Command, args...)
 	}
 
 	// taskMode == "arg"
 	if outputMode == "file" && a.cfg.OutputFlag != "" {
-		result, err := runner.RunWithOutputFileContext(ctx, workDir, env, a.cfg.OutputFlag, a.cfg.Command, args, task)
-		if result != nil {
-			result.DelegationID = delegationID
-		}
-		return result, err
+		return runner.RunWithOutputFileContext(ctx, workDir, env, a.cfg.OutputFlag, a.cfg.Command, args, task)
 	}
 
 	args = append(args, task)
+	return runner.RunWithContext(ctx, workDir, env, a.cfg.Command, args...)
+}
 
-	result, err := runner.RunWithContext(ctx, workDir, env, a.cfg.Command, args...)
-	if result != nil {
-		result.DelegationID = delegationID
+// applyDiagnosticHints scans the combined stderr+stdout of a failed
+// delegation against the agent's configured hints and prints matching
+// recovery messages to stderr. Called from Delegate/DelegateWithContext
+// defers so all code paths are covered.
+//
+// Only scans on failure signals (non-zero exit, timeout, cancellation, or
+// launch error). Successful runs produce no hints.
+func (a *genericAgent) applyDiagnosticHints(result *runner.Result, runErr error) {
+	if len(a.cfg.DiagnosticHints) == 0 {
+		return
 	}
-	return result, err
+	failed := runErr != nil || (result != nil && (result.ExitCode != 0 || result.TimedOut || result.Cancelled))
+	if !failed || result == nil {
+		return
+	}
+	combined := result.Stderr + "\n" + result.Stdout
+	for _, h := range a.cfg.DiagnosticHints {
+		if h.Pattern == "" {
+			continue
+		}
+		if strings.Contains(combined, h.Pattern) {
+			fmt.Fprintf(os.Stderr, "[quancode hint] %s\n", h.Hint)
+		}
+	}
 }
 
 func (a *genericAgent) IsAvailable() (bool, string) {

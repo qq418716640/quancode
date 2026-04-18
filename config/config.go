@@ -59,6 +59,17 @@ type AgentConfig struct {
 	SupportedIsolations []string `yaml:"supported_isolations,omitempty"`
 	// Context injection config (overrides global ContextDefaults)
 	Context *qcontext.ContextSpec `yaml:"context,omitempty"`
+	// DiagnosticHints are per-CLI substring→message mappings scanned against
+	// stderr+stdout when a delegation fails. Matched hints are printed to
+	// stderr to give the user an actionable recovery step (e.g. "copilot
+	// logout && login").
+	DiagnosticHints []DiagnosticHint `yaml:"diagnostic_hints,omitempty"`
+}
+
+// DiagnosticHint is a per-CLI failure pattern and recovery message.
+type DiagnosticHint struct {
+	Pattern string `yaml:"pattern"` // substring match on stderr+stdout (case-sensitive)
+	Hint    string `yaml:"hint"`    // message printed to stderr when matched
 }
 
 // SupportsIsolation reports whether the agent supports the given isolation mode.
@@ -201,6 +212,9 @@ func applyKnownAgentDefaults(cfg *Config) {
 		}
 		if len(ac.NonInteractiveArgs) == 0 && len(def.NonInteractiveArgs) > 0 {
 			ac.NonInteractiveArgs = def.NonInteractiveArgs
+		}
+		if len(ac.DiagnosticHints) == 0 && len(def.DiagnosticHints) > 0 {
+			ac.DiagnosticHints = def.DiagnosticHints
 		}
 		cfg.Agents[key] = ac
 	}
