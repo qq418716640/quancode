@@ -43,6 +43,16 @@ var KnownAgents = map[string]AgentConfig{
 		Priority:         25,
 		DefaultIsolation:    "inplace",                // Qoder ignores worktree cwd; see feedback_qoder_worktree.md
 		SupportedIsolations: []string{"inplace"},      // worktree/patch unsupported (upstream cwd issue)
+		DiagnosticHints: []DiagnosticHint{
+			{
+				Pattern: "Not logged in",
+				Hint:    "Qoder login expired. Run: qodercli login",
+			},
+			{
+				Pattern: "Execution error",
+				Hint:    "Qoder execution failed with a generic internal error. Try retrying once. If the task scans many files, consider splitting it or routing to codex.",
+			},
+		},
 	},
 	"aider": {
 		Name:         "Aider",
