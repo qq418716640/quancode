@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.21] - 2026-04-27
+
+### Added
+
+- **Qoder diagnostic hints for login expiry and internal errors**: post-v0.8.20 log analysis (9 days, 268 delegations) showed 2 of 12 Qoder failures were silent — `Not logged in · Please run /login` (5s exit-1) and bare `Execution error` (103s exit-1) gave users no clue what went wrong. Added two hints in `config/defaults.go`: `Not logged in` → suggest `qodercli login` (the CLI subcommand, not the in-app `/login` slash command); `Execution error` → suggest retrying once or splitting/routing scan-heavy tasks to codex.
+
 ## [v0.8.20] - 2026-04-19
 
 ### Fixed
