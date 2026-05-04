@@ -48,6 +48,42 @@ func TestAppendAndReadAll(t *testing.T) {
 	}
 }
 
+// TestMatchedHintsJSONRoundTrip verifies MatchedHints survives JSON round-trip
+// when populated, and is omitted from JSON when empty (omitempty contract).
+func TestMatchedHintsJSONRoundTrip(t *testing.T) {
+	t.Run("present-survives-roundtrip", func(t *testing.T) {
+		original := Entry{
+			Agent:        "copilot",
+			Task:         "do thing",
+			MatchedHints: []string{"login again", "check token"},
+		}
+		raw, err := json.Marshal(&original)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if !strings.Contains(string(raw), `"matched_hints":["login again","check token"]`) {
+			t.Errorf("expected matched_hints key in JSON, got %s", raw)
+		}
+		var decoded Entry
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(decoded.MatchedHints) != 2 || decoded.MatchedHints[0] != "login again" {
+			t.Errorf("roundtrip lost MatchedHints: %v", decoded.MatchedHints)
+		}
+	})
+
+	t.Run("empty-omitted", func(t *testing.T) {
+		raw, err := json.Marshal(&Entry{Agent: "codex"})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if strings.Contains(string(raw), "matched_hints") {
+			t.Errorf("expected matched_hints absent when empty (omitempty), got %s", raw)
+		}
+	})
+}
+
 func TestAppendAutoFillsTimestamp(t *testing.T) {
 	oldHome := os.Getenv("HOME")
 	home := t.TempDir()

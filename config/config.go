@@ -26,6 +26,14 @@ type Preferences struct {
 	MinTimeoutSecs       int    `yaml:"min_timeout_secs"`       // floor for effective delegation timeout; 0 = disabled (default)
 	DashboardMode        string `yaml:"dashboard_mode"`         // "" = undecided (show tip), "auto" = auto-start on start, "off" = disabled
 	DashboardPort        int    `yaml:"dashboard_port"`         // port for dashboard server; 0 or unset = 8377
+	// EnablePipelinePrompt controls whether the PIPELINE section is injected
+	// into the primary agent's system prompt. Default false because pipeline
+	// usage is rare; the `quancode pipeline` command itself always works.
+	EnablePipelinePrompt bool `yaml:"enable_pipeline_prompt"`
+	// EnableAsyncPrompt controls whether the ASYNC DELEGATION section is
+	// injected into the primary agent's system prompt. Default false because
+	// async usage is rare; `delegate --async` itself always works.
+	EnableAsyncPrompt bool `yaml:"enable_async_prompt"`
 }
 
 type AgentConfig struct {

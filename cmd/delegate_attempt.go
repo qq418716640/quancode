@@ -268,6 +268,7 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 		logEntry.Cancelled = ar.result.Cancelled
 		logEntry.DurationMs = ar.result.DurationMs
 		logEntry.ChangedFiles = ar.changedFiles
+		logEntry.MatchedHints = ar.result.MatchedHints
 	}
 	logEntry.FailureClass = ar.failureClass
 	logEntry.ConflictFiles = ar.conflictFiles

@@ -636,6 +636,7 @@ func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int
 		logEntry.Cancelled = ar.result.Cancelled
 		logEntry.DurationMs = ar.result.DurationMs
 		logEntry.ChangedFiles = ar.changedFiles
+		logEntry.MatchedHints = ar.result.MatchedHints
 	}
 	logEntry.FailureClass = ar.failureClass
 	if (ar.err != nil) && logEntry.ExitCode == 0 {

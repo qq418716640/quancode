@@ -319,6 +319,7 @@ func writeLedger(state *job.State, ar attemptResult, verifyJSON json.RawMessage)
 		entry.Cancelled = ar.result.Cancelled
 		entry.DurationMs = ar.result.DurationMs
 		entry.ChangedFiles = ar.changedFiles
+		entry.MatchedHints = ar.result.MatchedHints
 	}
 	// Map job status to ledger status for consistency.
 	// Job uses "succeeded"; ledger uses "completed".

@@ -280,6 +280,7 @@ func (a *genericAgent) applyDiagnosticHints(result *runner.Result, runErr error)
 		}
 		if strings.Contains(combined, h.Pattern) {
 			fmt.Fprintf(os.Stderr, "[quancode hint] %s\n", h.Hint)
+			result.MatchedHints = append(result.MatchedHints, h.Hint)
 		}
 	}
 }

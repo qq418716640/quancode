@@ -60,6 +60,11 @@ type Entry struct {
 
 	// Version records the quancode version that produced this entry.
 	Version string `json:"version,omitempty"`
+
+	// MatchedHints lists diagnostic hint messages that matched the failure
+	// output of this attempt. Populated from runner.Result.MatchedHints.
+	// Empty/omitted on success or when no patterns matched.
+	MatchedHints []string `json:"matched_hints,omitempty"`
 }
 
 // LogDir returns the path to the ledger log directory.

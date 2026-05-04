@@ -392,6 +392,9 @@ func TestDiagnosticHintsPrintedOnFailure(t *testing.T) {
 	if !strings.Contains(stderr, "[quancode hint] login again") {
 		t.Errorf("expected hint in stderr, got %q", stderr)
 	}
+	if result == nil || len(result.MatchedHints) != 1 || result.MatchedHints[0] != "login again" {
+		t.Errorf("expected MatchedHints=[login again], got %+v", result)
+	}
 }
 
 // TestDiagnosticHintsSkippedOnSuccess verifies hints do NOT fire on
@@ -406,12 +409,16 @@ func TestDiagnosticHintsSkippedOnSuccess(t *testing.T) {
 		},
 	})
 
+	var result *runner.Result
 	stderr := captureStderr(t, func() {
-		_, _ = a.Delegate(t.TempDir(), "ignored", DelegateOptions{})
+		result, _ = a.Delegate(t.TempDir(), "ignored", DelegateOptions{})
 	})
 
 	if strings.Contains(stderr, "[quancode hint]") {
 		t.Errorf("hint should not fire on success, got %q", stderr)
+	}
+	if result != nil && len(result.MatchedHints) > 0 {
+		t.Errorf("MatchedHints should be empty on success, got %v", result.MatchedHints)
 	}
 }
 
@@ -426,12 +433,16 @@ func TestDiagnosticHintsNoMatch(t *testing.T) {
 		},
 	})
 
+	var result *runner.Result
 	stderr := captureStderr(t, func() {
-		_, _ = a.Delegate(t.TempDir(), "ignored", DelegateOptions{})
+		result, _ = a.Delegate(t.TempDir(), "ignored", DelegateOptions{})
 	})
 
 	if strings.Contains(stderr, "[quancode hint]") {
 		t.Errorf("hint should not fire when pattern does not match, got %q", stderr)
+	}
+	if result != nil && len(result.MatchedHints) > 0 {
+		t.Errorf("MatchedHints should be empty when no pattern matched, got %v", result.MatchedHints)
 	}
 }
 
@@ -447,11 +458,15 @@ func TestDiagnosticHintsFireInDelegateWithContext(t *testing.T) {
 		},
 	})
 
+	var result *runner.Result
 	stderr := captureStderr(t, func() {
-		_, _ = a.DelegateWithContext(context.Background(), t.TempDir(), "ignored", DelegateOptions{})
+		result, _ = a.DelegateWithContext(context.Background(), t.TempDir(), "ignored", DelegateOptions{})
 	})
 
 	if !strings.Contains(stderr, "[quancode hint] login again") {
 		t.Errorf("expected hint via DelegateWithContext, got %q", stderr)
+	}
+	if result == nil || len(result.MatchedHints) != 1 || result.MatchedHints[0] != "login again" {
+		t.Errorf("expected MatchedHints=[login again] via DelegateWithContext, got %+v", result)
 	}
 }

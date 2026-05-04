@@ -67,6 +67,7 @@ BEFORE DELEGATING — assess task size:
 TIMEOUT CONTROL:
 - Use --timeout <seconds> to set a shorter deadline for tasks you expect to finish quickly (capped at the agent's configured timeout).
 - If a task genuinely needs more time, split it rather than increasing the timeout.
+{{- if .EnablePipeline}}
 
 PIPELINE (multi-stage delegation):
 Use pipeline when the task has sequential phase dependencies — later steps need earlier outputs.
@@ -99,6 +100,7 @@ Guidelines:
 - Always include verify on implementation stages when a reliable check exists.
 - Do NOT use pipeline when user clarification is needed between stages — use interactive delegate calls instead.
 - Clean up temporary pipeline files after use.
+{{- end}}
 
 TASK TYPES — match your task description to the type:
 - Code modification: specify files, functions, constraints, acceptance criteria. Add --verify when a reliable automated check exists.
@@ -125,6 +127,7 @@ You can run multiple delegate calls concurrently for independent tasks.
     {{.Binary}} apply-patch --id <delegation_id>
 - Split tasks by file boundaries — avoid two delegates modifying the same file.
 - Apply patches one at a time. If a patch conflicts, resolve before applying the next one.
+{{- if .EnableAsync}}
 
 ASYNC DELEGATION:
 For tasks expected to take longer than a few minutes, use --async to run them in the background:
@@ -143,7 +146,8 @@ This returns immediately with a job_id. The task runs in a detached background p
 - For async+patch mode, apply the result with: {{.Binary}} apply-patch --id <delegation_id> (get delegation_id from job result --format json).
 - Do NOT rely on remembering job_ids — use "job list --workdir ." to find them.
 - Prefer sync delegation for quick tasks. Use async only when the task is expected to take long or you want to continue working on other things while it runs.
-- Long-running analysis, documentation, and non-diff-dependent review tasks are good candidates for async delegation.`
+- Long-running analysis, documentation, and non-diff-dependent review tasks are good candidates for async delegation.
+{{- end}}`
 
 type agentInfo struct {
 	Key         string
@@ -182,7 +186,12 @@ func Build(cfg *config.Config, primaryKey, binaryPath string) (string, error) {
 	}
 
 	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, map[string]any{"Agents": agents, "Binary": binaryPath})
+	err = tmpl.Execute(&buf, map[string]any{
+		"Agents":         agents,
+		"Binary":         binaryPath,
+		"EnablePipeline": cfg.Preferences.EnablePipelinePrompt,
+		"EnableAsync":    cfg.Preferences.EnableAsyncPrompt,
+	})
 	if err != nil {
 		return "", err
 	}

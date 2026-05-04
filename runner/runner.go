@@ -24,6 +24,10 @@ type Result struct {
 	// The two are mutually exclusive.
 	TimedOut  bool
 	Cancelled bool
+	// MatchedHints holds diagnostic hint messages that matched the
+	// failure output (set by agent.applyDiagnosticHints). Empty on
+	// success or when no patterns matched.
+	MatchedHints []string
 }
 
 // MergeEnv replaces env vars in base with values from extra (case-insensitive key match).

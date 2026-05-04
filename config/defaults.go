@@ -91,16 +91,19 @@ var KnownAgents = map[string]AgentConfig{
 		Priority:     30,
 	},
 	"copilot": {
-		Name:               "GitHub Copilot CLI",
-		Command:            "copilot",
-		Description:        "Full coding agent powered by GitHub Copilot, multi-model support, deep repository context",
-		Strengths:          []string{"code-generation", "github-integration", "repository-context", "multi-model"},
-		PrimaryArgs:        []string{"--yolo"},
-		DelegateArgs:       []string{"--yolo", "--no-auto-update", "-p"},
-		TimeoutSecs:        420,
-		Enabled:            true,
-		PreferredFor:       []string{"generate", "github", "suggest"},
-		Priority:           30,
+		Name:        "GitHub Copilot CLI",
+		Command:     "copilot",
+		Description: "Full coding agent powered by GitHub Copilot, multi-model support, deep repository context",
+		Strengths:   []string{"code-generation", "github-integration", "repository-context", "multi-model"},
+		PrimaryArgs: []string{"--yolo"},
+		DelegateArgs: []string{"--yolo", "--no-auto-update", "-p"},
+		TimeoutSecs:  420,
+		// Disabled by default: usage-data review showed lowest success rate (76.7%)
+		// and highest timeout rate (13.3%). Users can opt in by setting `enabled: true`
+		// in quancode.yaml.
+		Enabled:      false,
+		PreferredFor: []string{"generate", "github", "suggest"},
+		Priority:     30,
 		DiagnosticHints: []DiagnosticHint{
 			{
 				Pattern: "Access denied by policy",
