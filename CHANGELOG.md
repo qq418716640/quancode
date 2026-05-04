@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.24] - 2026-05-05
+
+### Fixed
+
+- **Worktree ignore rules silently no-op for 5+ weeks**: `ensureWorktreeIgnore` was writing the build-artifact patterns (`.gocache/`, `node_modules/`, `__pycache__/`, `.cache/`, `.venv/`, `*.pyc`) to the **worktree-specific** `.git/worktrees/wt-xxx/info/exclude`, but `git` only honors the **common** repo's `.git/info/exclude` — verified via `git rev-parse --git-path info/exclude` returning the main path even from inside a worktree. The 5-week ledger contained one delegation with **2473 changed_files** (2468 of them were Go build cache entries) and ~2875 (no_ext) noise total, almost all attributable to this bug. Fix: write to the common gitdir (`git rev-parse --git-common-dir`), with an idempotent `# quancode worktree exclusions` marker so re-creating worktrees doesn't duplicate the block. User-supplied rules already in `.git/info/exclude` are preserved.
+
+  **User cleanup tip**: `worktree`/`patch` mode in v0.8.22 and earlier may have applied stray build artifacts (`.gocache/`, `node_modules/`, etc.) into your main working tree on patch apply. Run `git clean -fdX .gocache/ node_modules/ .cache/ __pycache__/` in affected repos to reclaim disk space and tidy `git status`. (Tracked-file noise in past ledger entries is left in place — historical logs are append-only.)
+
 ## [v0.8.23] - 2026-05-05
 
 ### Added
