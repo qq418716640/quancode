@@ -244,6 +244,7 @@ type attemptMeta struct {
 	Attempt        int
 	FallbackFrom   string
 	FallbackReason string
+	ReviewSetID    string // set by review-set; groups sibling delegations
 }
 
 // logAttempt writes a ledger entry for a single attempt.
@@ -261,6 +262,7 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 		Attempt:        meta.Attempt,
 		FallbackFrom:   meta.FallbackFrom,
 		FallbackReason: meta.FallbackReason,
+		ReviewSetID:    meta.ReviewSetID,
 	}
 	if ar.result != nil {
 		logEntry.ExitCode = ar.result.ExitCode

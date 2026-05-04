@@ -48,6 +48,11 @@ type Entry struct {
 	StageName    string `json:"stage_name,omitempty"`
 	StageIndex   int    `json:"stage_index,omitempty"`
 
+	// ReviewSetID links sibling delegations from a single `review-set`
+	// invocation (fan-out to N agents over the same task). Each agent's
+	// delegation gets its own RunID/DelegationID; ReviewSetID groups them.
+	ReviewSetID string `json:"review_set_id,omitempty"`
+
 	// DelegationID uniquely identifies each delegation attempt.
 	DelegationID string `json:"delegation_id,omitempty"`
 

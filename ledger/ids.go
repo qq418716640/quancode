@@ -34,6 +34,16 @@ func NewPipelineID() (string, error) {
 	return "pipe_" + suffix, nil
 }
 
+// NewReviewSetID generates a unique identifier for a review-set execution
+// (one user invocation that fans out to N agents in parallel).
+func NewReviewSetID() (string, error) {
+	suffix, err := randomHex(8)
+	if err != nil {
+		return "", err
+	}
+	return "rs_" + suffix, nil
+}
+
 func randomHex(n int) (string, error) {
 	buf := make([]byte, n)
 	if _, err := rand.Read(buf); err != nil {
