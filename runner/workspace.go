@@ -11,8 +11,9 @@ import (
 )
 
 // worktreeIgnoreRules contains patterns that should never appear in a
-// collected patch. These are appended to the worktree's .gitignore so
-// git add -A skips them automatically.
+// collected patch. They are appended to the **main repo's**
+// .git/info/exclude (a per-clone, never-committed file) so `git add -A`
+// inside any worktree skips build artifacts during patch collection.
 var worktreeIgnoreRules = []string{
 	".tmp/",
 	".gocache/",
@@ -23,29 +24,46 @@ var worktreeIgnoreRules = []string{
 	"*.pyc",
 }
 
-// ensureWorktreeIgnore writes build artifact exclusions to the worktree's
-// .git/info/exclude file. Unlike .gitignore, this is a local-only config
-// that won't be picked up by CollectPatch (git add -A).
+// quancodeExcludeMarker tags rules written by ensureWorktreeIgnore so we can
+// detect prior writes and stay idempotent across worktree creations.
+const quancodeExcludeMarker = "# quancode worktree exclusions"
+
+// ensureWorktreeIgnore appends build-artifact patterns (.gocache/,
+// node_modules/, etc.) to the **main** repo's .git/info/exclude so that
+// `git add -A` inside any worktree skips them when CollectPatch runs.
+//
+// History note: an earlier version wrote to the worktree-specific
+// gitdir/info/exclude (under .git/worktrees/wt-xxx/info/), but git only
+// honors the common gitdir's info/exclude — those writes were silent
+// no-ops and let .gocache/* leak into patches. Writing to the common
+// gitdir is the only path git actually consults.
 func ensureWorktreeIgnore(worktreeDir string) {
-	// In a worktree, .git is a file pointing to the real gitdir.
-	// Read it to find the actual git directory.
-	gitPath := filepath.Join(worktreeDir, ".git")
-	data, err := os.ReadFile(gitPath)
+	cmd := exec.Command("git", "rev-parse", "--git-common-dir")
+	cmd.Dir = worktreeDir
+	out, err := cmd.Output()
 	if err != nil {
 		return
 	}
-	// Format: "gitdir: /path/to/main/.git/worktrees/wt-xxx"
-	content := strings.TrimSpace(string(data))
-	if !strings.HasPrefix(content, "gitdir: ") {
+	commonDir := strings.TrimSpace(string(out))
+	if commonDir == "" {
 		return
 	}
-	gitDir := strings.TrimPrefix(content, "gitdir: ")
+	if !filepath.IsAbs(commonDir) {
+		commonDir = filepath.Join(worktreeDir, commonDir)
+	}
 
-	infoDir := filepath.Join(gitDir, "info")
-	os.MkdirAll(infoDir, 0755)
+	infoDir := filepath.Join(commonDir, "info")
+	if err := os.MkdirAll(infoDir, 0755); err != nil {
+		return
+	}
 	excludePath := filepath.Join(infoDir, "exclude")
 
-	rules := "\n# quancode worktree exclusions\n" + strings.Join(worktreeIgnoreRules, "\n") + "\n"
+	if existing, err := os.ReadFile(excludePath); err == nil &&
+		bytes.Contains(existing, []byte(quancodeExcludeMarker)) {
+		return // already installed; don't duplicate
+	}
+
+	rules := "\n" + quancodeExcludeMarker + "\n" + strings.Join(worktreeIgnoreRules, "\n") + "\n"
 	f, err := os.OpenFile(excludePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return

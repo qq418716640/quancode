@@ -31,6 +31,128 @@ func initTestRepo(t *testing.T) string {
 	return dir
 }
 
+// TestEnsureWorktreeIgnoreSkipsBuildArtifacts is a regression test for the
+// bug where ensureWorktreeIgnore wrote to the worktree-specific gitdir's
+// info/exclude (which git ignores), letting .gocache/* and node_modules/*
+// pollute collected patches. The fix writes to the common gitdir instead.
+func TestEnsureWorktreeIgnoreSkipsBuildArtifacts(t *testing.T) {
+	repo := initTestRepo(t)
+	wt, cleanup, err := CreateWorktree(repo)
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	defer cleanup()
+
+	// Drop a file into each ignore pattern.
+	for _, dir := range []string{".gocache/00", "node_modules/leaf", ".cache/x"} {
+		full := filepath.Join(wt, dir)
+		if err := os.MkdirAll(full, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", full, err)
+		}
+		if err := os.WriteFile(filepath.Join(full, "junk"), []byte("x"), 0644); err != nil {
+			t.Fatalf("write %s/junk: %v", full, err)
+		}
+	}
+	// Plus one real file we DO want to see in the patch.
+	if err := os.WriteFile(filepath.Join(wt, "real.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, files, err := CollectPatch(wt)
+	if err != nil {
+		t.Fatalf("CollectPatch: %v", err)
+	}
+
+	for _, f := range files {
+		if strings.HasPrefix(f, ".gocache/") || strings.HasPrefix(f, "node_modules/") || strings.HasPrefix(f, ".cache/") {
+			t.Errorf("build artifact leaked into patch: %s", f)
+		}
+	}
+	var sawReal bool
+	for _, f := range files {
+		if f == "real.go" {
+			sawReal = true
+		}
+	}
+	if !sawReal {
+		t.Errorf("expected real.go in patch, got %v", files)
+	}
+}
+
+// TestEnsureWorktreeIgnorePreservesUserRules — appending the quancode
+// block must not corrupt or drop user-supplied rules already present in
+// .git/info/exclude.
+func TestEnsureWorktreeIgnorePreservesUserRules(t *testing.T) {
+	repo := initTestRepo(t)
+	excludePath := filepath.Join(repo, ".git", "info", "exclude")
+	if err := os.MkdirAll(filepath.Dir(excludePath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	userRules := "# user rules\nmy-private-notes/\n*.user.json\n"
+	if err := os.WriteFile(excludePath, []byte(userRules), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	wt, cleanup, err := CreateWorktree(repo)
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	defer cleanup()
+
+	got, err := os.ReadFile(excludePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "my-private-notes/") || !strings.Contains(string(got), "*.user.json") {
+		t.Errorf("user rules dropped, got:\n%s", got)
+	}
+	if !strings.Contains(string(got), quancodeExcludeMarker) {
+		t.Errorf("quancode marker missing, got:\n%s", got)
+	}
+
+	// Verify the user rule actually filters in the worktree, alongside the
+	// quancode rules — both blocks should be active.
+	if err := os.WriteFile(filepath.Join(wt, "x.user.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(wt, ".gocache"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, ".gocache", "x"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, files, err := CollectPatch(wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, ".user.json") || strings.HasPrefix(f, ".gocache/") {
+			t.Errorf("rule block ineffective: %s slipped through (files=%v)", f, files)
+		}
+	}
+}
+
+// TestEnsureWorktreeIgnoreIsIdempotent — repeated worktree creation must
+// not duplicate the rule block in the common info/exclude file.
+func TestEnsureWorktreeIgnoreIsIdempotent(t *testing.T) {
+	repo := initTestRepo(t)
+	for i := 0; i < 3; i++ {
+		_, cleanup, err := CreateWorktree(repo)
+		if err != nil {
+			t.Fatalf("CreateWorktree #%d: %v", i, err)
+		}
+		cleanup()
+	}
+	excludeData, err := os.ReadFile(filepath.Join(repo, ".git", "info", "exclude"))
+	if err != nil {
+		t.Fatalf("read exclude: %v", err)
+	}
+	count := strings.Count(string(excludeData), quancodeExcludeMarker)
+	if count != 1 {
+		t.Errorf("expected marker exactly once, got %d in:\n%s", count, excludeData)
+	}
+}
+
 func TestApplyDiffToWorktreeWorking(t *testing.T) {
 	repo := initTestRepo(t)
 
