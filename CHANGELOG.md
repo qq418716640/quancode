@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.22] - 2026-05-05
+
+### Changed
+
+- **Copilot disabled by default**: 5-week usage analysis (1207 delegations) showed Copilot had the lowest success rate (76.7%) and highest timeout rate (13.3%) of all configured agents, with usage trailing off to zero in the most recent week. New `KnownAgents["copilot"].Enabled` default is `false`. Existing user configs that explicitly set `enabled: true` are preserved (`applyKnownAgentDefaults` does not backfill the `Enabled` field). Users who want to keep using Copilot can opt in by setting `enabled: true` under `agents.copilot` in `quancode.yaml`.
+- **PIPELINE and ASYNC prompt sections opt-in**: usage data showed `quancode pipeline` had 5 total runs across 5 weeks (all test names — zero production use) and `--async` had 4 total job files. The corresponding ~50 lines of guidance in the primary agent's system prompt added noise without value. Both sections are now gated by new preferences and omitted by default. The underlying `quancode pipeline` command and `delegate --async` flag continue to work unchanged — only the prompt-level guidance is removed. Re-enable via:
+  ```yaml
+  preferences:
+    enable_pipeline_prompt: true
+    enable_async_prompt: true
+  ```
+
+### Added
+
+- **Diagnostic hints persisted to ledger**: matched diagnostic hint messages (previously only printed to stderr in v0.8.20) now land in `ledger.Entry.MatchedHints` and serialize as `matched_hints` in the JSONL log. Closes the observability gap that prevented post-hoc analysis of which hint patterns actually fire. All four ledger write paths (sync/pipeline/async/speculative) propagate the field. Use `jq 'select(.matched_hints) | {agent, matched_hints}' ~/.config/quancode/logs/*.jsonl` to inspect.
+
 ## [v0.8.21] - 2026-04-27
 
 ### Added
