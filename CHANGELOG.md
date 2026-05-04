@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.23] - 2026-05-05
+
+### Added
+
+- **`review-set` command — same task, multiple agents, side-by-side**: 5-week usage analysis showed that 88 of the most-used delegation tasks were the user manually invoking `quancode delegate` 3+ times against different agents on the same prompt (codex+qoder+gemini "review the diff" was the dominant pattern). The new `quancode review-set --agents codex,qoder,gemini "..."` command does this fan-out as a single invocation:
+  - All sibling delegations share one auto-generated `review_set_id` (prefix `rs_`); each agent still gets its own `delegation_id` and `run_id`. The dashboard tags grouped entries with a cyan `review-set` badge and surfaces the id in the detail panel.
+  - Concurrent execution; one agent's failure does not abort the others. Exit code is non-zero when any sibling failed.
+  - `--isolation worktree` is supported (each agent runs in its own worktree) but patches are **never auto-applied** in review-set mode — N agents merging concurrently into the main tree would produce conflict chaos. Patches stay in the per-agent attempt result for human inspection.
+  - Speculative parallelism, fallback, verification, async, and dry-run are intentionally not wired in: review-set is a fan-out collector, not a competition or pipeline.
+  - Defaults to all enabled non-primary agents when `--agents` is omitted (requires `default_primary` to be configured).
+  - `Ctrl+C` cancels every in-flight sibling via shared `context.WithCancel`.
+
+  Three rounds of design review and two rounds of implementation review across codex+qoder produced this shape: the model is **fan-out** (vs `speculative` = race, `pipeline` = DAG).
+
+### Notes
+
+- `ledger.Entry` gained a `review_set_id` field (`omitempty`), surfacing through the existing `/api/delegations` endpoint. No migration required; old entries deserialize as empty strings.
+
 ## [v0.8.22] - 2026-05-05
 
 ### Changed
