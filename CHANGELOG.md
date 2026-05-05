@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.8.25] - 2026-05-05
+
+### Added
+
+- **Task-size warning at delegation time**: 5-week usage analysis surfaced a sharp inflection point — tasks at/over ~4000 characters saw timeout rates triple (7% → 22%) compared to shorter ones. New `preferences.task_size_warn_threshold` (default 4000) emits a stderr warning at `runDelegateAttempt` entry and records `task_size_warning` on the ledger entry. The dashboard tags affected entries with a yellow `large-task` badge and surfaces the full message in the detail panel. Async users see the same warning on `quancode job result`. Threshold semantics: `unset/0` → 4000 default, positive `N` → use N, negative → disabled (YAML can't distinguish unset from 0). The check looks at the user-supplied task only; auto-injected context (CLAUDE.md, git diff, --context-files) is monitored separately by `warnContextSize`. The primary agent prompt's `BEFORE DELEGATING` section now calls out the data-driven 4000-char heuristic so the orchestrator splits before delegating.
+
+  Three rounds of design + implementation review with codex+qoder shaped the final form: `>=` (not `>`) at the threshold, yellow (not red — this is advisory not failure), explicit `splitting into 2-3 smaller delegations` wording, and the unset-vs-explicit-0 trap documented in the Preferences struct.
+
 ## [v0.8.24] - 2026-05-05
 
 ### Fixed
