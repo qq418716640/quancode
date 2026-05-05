@@ -34,6 +34,19 @@ type Preferences struct {
 	// injected into the primary agent's system prompt. Default false because
 	// async usage is rare; `delegate --async` itself always works.
 	EnableAsyncPrompt bool `yaml:"enable_async_prompt"`
+	// TaskSizeWarnThreshold is the task length (in characters, >=) above
+	// which a warning is emitted to stderr and recorded in the ledger
+	// entry. Based on 5-week usage analysis: tasks at/over ~4000 chars saw
+	// timeout rates triple (7% → 22%).
+	//
+	//   unset / 0  → defaults to 4000 (YAML cannot distinguish unset from 0)
+	//   positive N → use N as the threshold
+	//   negative   → disables the warning entirely
+	//
+	// Note: this only checks the user-supplied task; auto-injected context
+	// (CLAUDE.md, AGENTS.md, --context-files, --context-diff) is monitored
+	// separately by warnContextSize against a fixed prompt-size budget.
+	TaskSizeWarnThreshold int `yaml:"task_size_warn_threshold"`
 }
 
 type AgentConfig struct {
@@ -237,6 +250,23 @@ func (p *Preferences) EffectiveDashboardPort() int {
 		return p.DashboardPort
 	}
 	return DefaultDashboardPort
+}
+
+// EffectiveTaskSizeWarnThreshold normalizes the task-size warning threshold:
+//   - negative value → disabled (no warning ever)
+//   - zero or unset  → DefaultTaskSizeWarnThreshold (4000)
+//   - positive value → that explicit value
+//
+// The negative-as-disabled convention exists because YAML can't distinguish
+// "unset" from "explicit 0", and we want unset users to get the protection.
+func (p *Preferences) EffectiveTaskSizeWarnThreshold() int {
+	if p.TaskSizeWarnThreshold < 0 {
+		return 0
+	}
+	if p.TaskSizeWarnThreshold == 0 {
+		return DefaultTaskSizeWarnThreshold
+	}
+	return p.TaskSizeWarnThreshold
 }
 
 // ConfigPath returns the default user config file path.

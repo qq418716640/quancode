@@ -115,20 +115,21 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 
 	go func() {
 		ar := runDelegateAttempt(DelegateAttemptOptions{
-			Agent:           opts.primaryAgent,
-			AgentKey:        opts.primaryKey,
-			Task:            opts.task,
-			CtxPrefix:       primaryCtxPrefix,
-			WorkDir:         opts.workDir,
-			Isolation:       opts.isolation,
-			Verify:          opts.verify,
-			TimeoutOverride: opts.timeoutOverride,
-			MinTimeout:      minTimeout,
-			Quiet:           true, // orchestrator manages UI
-			Ctx:             primaryCtx,
-			DeferPatchApply: true,
-			DeferVerify:     true,
-			ContextDiffMode: opts.contextDiff,
+			Agent:                 opts.primaryAgent,
+			AgentKey:              opts.primaryKey,
+			Task:                  opts.task,
+			CtxPrefix:             primaryCtxPrefix,
+			WorkDir:               opts.workDir,
+			Isolation:             opts.isolation,
+			Verify:                opts.verify,
+			TimeoutOverride:       opts.timeoutOverride,
+			MinTimeout:            minTimeout,
+			Quiet:                 true, // orchestrator manages UI
+			Ctx:                   primaryCtx,
+			DeferPatchApply:       true,
+			DeferVerify:           true,
+			ContextDiffMode:       opts.contextDiff,
+			TaskSizeWarnThreshold: opts.cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 		})
 		resultCh <- speculativeResult{agentKey: opts.primaryKey, ar: ar, role: "primary"}
 	}()
@@ -159,20 +160,21 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 		defer specCancel()
 		go func() {
 			ar := runDelegateAttempt(DelegateAttemptOptions{
-				Agent:           specAgent,
-				AgentKey:        specSel.AgentKey,
-				Task:            opts.task,
-				CtxPrefix:       specCtxPrefix,
-				WorkDir:         opts.workDir,
-				Isolation:       opts.isolation,
-				Verify:          opts.verify,
-				TimeoutOverride: opts.timeoutOverride,
-				MinTimeout:      minTimeout,
-				Quiet:           true,
-				Ctx:             specCtx,
-				DeferPatchApply: true,
-				DeferVerify:     true,
-				ContextDiffMode: opts.contextDiff,
+				Agent:                 specAgent,
+				AgentKey:              specSel.AgentKey,
+				Task:                  opts.task,
+				CtxPrefix:             specCtxPrefix,
+				WorkDir:               opts.workDir,
+				Isolation:             opts.isolation,
+				Verify:                opts.verify,
+				TimeoutOverride:       opts.timeoutOverride,
+				MinTimeout:            minTimeout,
+				Quiet:                 true,
+				Ctx:                   specCtx,
+				DeferPatchApply:       true,
+				DeferVerify:           true,
+				ContextDiffMode:       opts.contextDiff,
+				TaskSizeWarnThreshold: opts.cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 			})
 			resultCh <- speculativeResult{agentKey: specSel.AgentKey, ar: ar, role: "speculative"}
 		}()
@@ -195,20 +197,21 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 
 	go func() {
 		ar := runDelegateAttempt(DelegateAttemptOptions{
-			Agent:           specAgent,
-			AgentKey:        specSel.AgentKey,
-			Task:            opts.task,
-			CtxPrefix:       specCtxPrefix,
-			WorkDir:         opts.workDir,
-			Isolation:       opts.isolation,
-			Verify:          opts.verify,
-			TimeoutOverride: opts.timeoutOverride,
-			MinTimeout:      minTimeout,
-			Quiet:           true,
-			Ctx:             specCtx,
-			DeferPatchApply: true,
-			DeferVerify:     true,
-			ContextDiffMode: opts.contextDiff,
+			Agent:                 specAgent,
+			AgentKey:              specSel.AgentKey,
+			Task:                  opts.task,
+			CtxPrefix:             specCtxPrefix,
+			WorkDir:               opts.workDir,
+			Isolation:             opts.isolation,
+			Verify:                opts.verify,
+			TimeoutOverride:       opts.timeoutOverride,
+			MinTimeout:            minTimeout,
+			Quiet:                 true,
+			Ctx:                   specCtx,
+			DeferPatchApply:       true,
+			DeferVerify:           true,
+			ContextDiffMode:       opts.contextDiff,
+			TaskSizeWarnThreshold: opts.cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 		})
 		resultCh <- speculativeResult{agentKey: specSel.AgentKey, ar: ar, role: "speculative"}
 	}()
@@ -380,6 +383,7 @@ func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attempt
 		logEntry.ChangedFiles = ar.changedFiles
 		logEntry.MatchedHints = ar.result.MatchedHints
 	}
+	logEntry.TaskSizeWarning = ar.taskSizeWarning
 	logEntry.FailureClass = ar.failureClass
 	logEntry.ConflictFiles = ar.conflictFiles
 	if ar.patchApplyErr != nil {

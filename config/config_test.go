@@ -7,6 +7,26 @@ import (
 	"testing"
 )
 
+func TestEffectiveTaskSizeWarnThreshold(t *testing.T) {
+	cases := []struct {
+		name string
+		set  int
+		want int
+	}{
+		{"unset (zero) → default", 0, DefaultTaskSizeWarnThreshold},
+		{"explicit positive → as-is", 8000, 8000},
+		{"negative → disabled (0)", -1, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := Preferences{TaskSizeWarnThreshold: c.set}
+			if got := p.EffectiveTaskSizeWarnThreshold(); got != c.want {
+				t.Errorf("got %d, want %d", got, c.want)
+			}
+		})
+	}
+}
+
 func TestApplyKnownAgentDefaultsBackfillsPromptFields(t *testing.T) {
 	cfg := &Config{
 		DefaultPrimary: "codex",

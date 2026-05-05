@@ -166,18 +166,19 @@ func runReviewSet(cmd *cobra.Command, args []string) error {
 			deferApply := p.isolation == "worktree" || p.isolation == "patch"
 
 			ar := runDelegateAttempt(DelegateAttemptOptions{
-				Agent:           p.agentImpl,
-				AgentKey:        p.key,
-				Task:            task,
-				CtxPrefix:       ctxPrefix,
-				WorkDir:         workDir,
-				Isolation:       p.isolation,
-				TimeoutOverride: reviewSetTimeout,
-				MinTimeout:      cfg.Preferences.MinTimeoutSecs,
-				ContextDiffMode: reviewSetContextDiff,
-				Quiet:           true, // suppress per-agent spinner; we manage UI ourselves
-				Ctx:             ctx,
-				DeferPatchApply: deferApply,
+				Agent:                 p.agentImpl,
+				AgentKey:              p.key,
+				Task:                  task,
+				CtxPrefix:             ctxPrefix,
+				WorkDir:               workDir,
+				Isolation:             p.isolation,
+				TimeoutOverride:       reviewSetTimeout,
+				MinTimeout:            cfg.Preferences.MinTimeoutSecs,
+				ContextDiffMode:       reviewSetContextDiff,
+				Quiet:                 true, // suppress per-agent spinner; we manage UI ourselves
+				Ctx:                   ctx,
+				DeferPatchApply:       deferApply,
+				TaskSizeWarnThreshold: cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 			})
 
 			resultCh <- fanoutResult{index: i, ar: ar}

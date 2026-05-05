@@ -54,6 +54,7 @@ DELEGATION GUIDELINES:
 
 BEFORE DELEGATING — assess task size:
 - If the task involves multiple deliverables, multiple phases, or edits across many files, consider splitting it.
+- **Hard signal from usage data: tasks longer than ~4000 characters see ~3x the timeout rate (22% vs 7%).** When your task description is approaching that length, prefer splitting it over raising --timeout.
 - Strong signals to split:
   - multiple deliverables in one request (e.g., "refactor X and add tests and update docs")
   - mixed phases: analysis + implementation + verification in one task

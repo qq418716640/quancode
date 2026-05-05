@@ -48,6 +48,38 @@ func TestAppendAndReadAll(t *testing.T) {
 	}
 }
 
+// TestTaskSizeWarningJSONRoundTrip verifies TaskSizeWarning serialization:
+// present-text round-trips, empty value is omitted from the JSON output.
+func TestTaskSizeWarningJSONRoundTrip(t *testing.T) {
+	t.Run("present-survives-roundtrip", func(t *testing.T) {
+		original := Entry{Agent: "codex", TaskSizeWarning: "task is 5000 chars; threshold 4000"}
+		raw, err := json.Marshal(&original)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if !strings.Contains(string(raw), `"task_size_warning":"task is 5000 chars; threshold 4000"`) {
+			t.Errorf("expected task_size_warning in JSON, got %s", raw)
+		}
+		var decoded Entry
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if decoded.TaskSizeWarning != original.TaskSizeWarning {
+			t.Errorf("roundtrip lost TaskSizeWarning: %q", decoded.TaskSizeWarning)
+		}
+	})
+
+	t.Run("empty-omitted", func(t *testing.T) {
+		raw, err := json.Marshal(&Entry{Agent: "codex"})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if strings.Contains(string(raw), "task_size_warning") {
+			t.Errorf("expected task_size_warning absent when empty, got %s", raw)
+		}
+	})
+}
+
 // TestMatchedHintsJSONRoundTrip verifies MatchedHints survives JSON round-trip
 // when populated, and is omitted from JSON when empty (omitempty contract).
 func TestMatchedHintsJSONRoundTrip(t *testing.T) {

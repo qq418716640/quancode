@@ -108,17 +108,18 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 	minTimeout := cfg.Preferences.MinTimeoutSecs
 	go func() {
 		ar := runDelegateAttempt(DelegateAttemptOptions{
-			Agent:           a,
-			AgentKey:        agentKey,
-			Task:            state.Task,
-			CtxPrefix:       ctxPrefix,
-			WorkDir:         state.WorkDir,
-			Isolation:       state.Isolation,
-			MinTimeout:      minTimeout,
-			Quiet:           true,
-			Async:           true,
-			Ctx:             agentCtx,
-			ContextDiffMode: state.ContextDiff,
+			Agent:                 a,
+			AgentKey:              agentKey,
+			Task:                  state.Task,
+			CtxPrefix:             ctxPrefix,
+			WorkDir:               state.WorkDir,
+			Isolation:             state.Isolation,
+			MinTimeout:            minTimeout,
+			Quiet:                 true,
+			Async:                 true,
+			Ctx:                   agentCtx,
+			ContextDiffMode:       state.ContextDiff,
+			TaskSizeWarnThreshold: cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 		})
 		doneCh <- ar
 	}()
@@ -177,17 +178,18 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			fbCtx, fbCancel := context.WithTimeout(parentCtx, jobTimeout)
 
 			ar = runDelegateAttempt(DelegateAttemptOptions{
-				Agent:           nextA,
-				AgentKey:        sel.AgentKey,
-				Task:            state.Task,
-				CtxPrefix:       nextCtxPrefix,
-				WorkDir:         state.WorkDir,
-				Isolation:       state.Isolation,
-				MinTimeout:      minTimeout,
-				Quiet:           true,
-				Async:           true,
-				Ctx:             fbCtx,
-				ContextDiffMode: state.ContextDiff,
+				Agent:                 nextA,
+				AgentKey:              sel.AgentKey,
+				Task:                  state.Task,
+				CtxPrefix:             nextCtxPrefix,
+				WorkDir:               state.WorkDir,
+				Isolation:             state.Isolation,
+				MinTimeout:            minTimeout,
+				Quiet:                 true,
+				Async:                 true,
+				Ctx:                   fbCtx,
+				ContextDiffMode:       state.ContextDiff,
+				TaskSizeWarnThreshold: cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 			})
 			fbCancel()
 			agentKey = sel.AgentKey
@@ -263,6 +265,7 @@ func writeJobResult(state *job.State, actualAgent string, ar attemptResult) erro
 		state.DelegationID = ar.result.DelegationID
 	}
 	state.ChangedFiles = ar.changedFiles
+	state.TaskSizeWarning = ar.taskSizeWarning
 
 	// Write agent output to file (capped).
 	if ar.output != "" {
@@ -321,6 +324,7 @@ func writeLedger(state *job.State, ar attemptResult, verifyJSON json.RawMessage)
 		entry.ChangedFiles = ar.changedFiles
 		entry.MatchedHints = ar.result.MatchedHints
 	}
+	entry.TaskSizeWarning = ar.taskSizeWarning
 	// Map job status to ledger status for consistency.
 	// Job uses "succeeded"; ledger uses "completed".
 	entry.FinalStatus = determineFinalStatus(entry.ExitCode, entry.TimedOut, entry.Cancelled, ar.verify)

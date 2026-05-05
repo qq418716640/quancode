@@ -70,6 +70,13 @@ type Entry struct {
 	// output of this attempt. Populated from runner.Result.MatchedHints.
 	// Empty/omitted on success or when no patterns matched.
 	MatchedHints []string `json:"matched_hints,omitempty"`
+
+	// TaskSizeWarning is set when the user task length exceeded the
+	// configured warning threshold (preferences.task_size_warn_threshold).
+	// Empty when under threshold or warnings are disabled. Used by
+	// dashboard and post-hoc analysis to find oversized tasks correlated
+	// with timeouts.
+	TaskSizeWarning string `json:"task_size_warning,omitempty"`
 }
 
 // LogDir returns the path to the ledger log directory.

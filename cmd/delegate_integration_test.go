@@ -512,6 +512,180 @@ agents:
 	}
 }
 
+// TestDelegateRunELargeTaskTriggersWarning verifies that a task longer than
+// the configured threshold writes a non-empty TaskSizeWarning to the ledger
+// and emits a stderr warning. Threshold is also exercised via yaml override.
+func TestDelegateRunELargeTaskTriggersWarning(t *testing.T) {
+	isolateHome(t)
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+preferences:
+  task_size_warn_threshold: 100
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+  codex:
+    name: Codex CLI
+    command: /bin/sh
+    enabled: true
+    delegate_args:
+      - -c
+      - printf ok
+`)
+
+	oldCfgFile := cfgFile
+	oldAgent := delegateAgent
+	oldWorkdir := delegateWorkdir
+	oldFormat := delegateFormat
+	oldIsolation := delegateIsolation
+	cfgFile = cfgPath
+	delegateAgent = "codex"
+	delegateWorkdir = dir
+	delegateFormat = "json"
+	delegateIsolation = "inplace"
+	defer func() {
+		cfgFile = oldCfgFile
+		delegateAgent = oldAgent
+		delegateWorkdir = oldWorkdir
+		delegateFormat = oldFormat
+		delegateIsolation = oldIsolation
+	}()
+
+	bigTask := strings.Repeat("X", 200) // > 100 threshold
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := delegateCmd.RunE(delegateCmd, []string{bigTask}); err != nil {
+				t.Fatalf("RunE: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(stderr, "task is 200 characters") {
+		t.Errorf("expected stderr warning, got %q", stderr)
+	}
+
+	entries, err := ledger.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("no ledger entries")
+	}
+	last := entries[len(entries)-1]
+	if last.TaskSizeWarning == "" {
+		t.Errorf("expected TaskSizeWarning populated in ledger, got empty")
+	}
+	if !strings.Contains(last.TaskSizeWarning, "100") {
+		t.Errorf("expected threshold 100 in warning, got %q", last.TaskSizeWarning)
+	}
+}
+
+// TestDelegateRunESmallTaskNoWarning is the negative case: under-threshold
+// tasks must not trigger the warning or write the ledger field.
+func TestDelegateRunESmallTaskNoWarning(t *testing.T) {
+	isolateHome(t)
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+preferences:
+  task_size_warn_threshold: 100
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+  codex:
+    name: Codex CLI
+    command: /bin/sh
+    enabled: true
+    delegate_args:
+      - -c
+      - printf ok
+`)
+	oldCfgFile, oldAgent, oldWD, oldFmt, oldIso := cfgFile, delegateAgent, delegateWorkdir, delegateFormat, delegateIsolation
+	cfgFile = cfgPath
+	delegateAgent = "codex"
+	delegateWorkdir = dir
+	delegateFormat = "json"
+	delegateIsolation = "inplace"
+	defer func() {
+		cfgFile, delegateAgent, delegateWorkdir, delegateFormat, delegateIsolation = oldCfgFile, oldAgent, oldWD, oldFmt, oldIso
+	}()
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := delegateCmd.RunE(delegateCmd, []string{"short task"}); err != nil {
+				t.Fatalf("RunE: %v", err)
+			}
+		})
+	})
+	if strings.Contains(stderr, "task is") && strings.Contains(stderr, "characters") {
+		t.Errorf("unexpected size warning for small task: %q", stderr)
+	}
+	entries, _ := ledger.ReadAll()
+	if len(entries) == 0 {
+		t.Fatal("no ledger entries")
+	}
+	if entries[len(entries)-1].TaskSizeWarning != "" {
+		t.Errorf("expected empty TaskSizeWarning, got %q", entries[len(entries)-1].TaskSizeWarning)
+	}
+}
+
+// TestDelegateRunENegativeThresholdDisablesWarning verifies that setting
+// task_size_warn_threshold to a negative value suppresses both the stderr
+// message and the ledger field, even for very large tasks.
+func TestDelegateRunENegativeThresholdDisablesWarning(t *testing.T) {
+	isolateHome(t)
+	dir := t.TempDir()
+	cfgPath := writeConfig(t, dir, `
+default_primary: claude
+preferences:
+  task_size_warn_threshold: -1
+agents:
+  claude:
+    name: Claude Code
+    command: /bin/sh
+    enabled: true
+  codex:
+    name: Codex CLI
+    command: /bin/sh
+    enabled: true
+    delegate_args:
+      - -c
+      - printf ok
+`)
+	oldCfgFile, oldAgent, oldWD, oldFmt, oldIso := cfgFile, delegateAgent, delegateWorkdir, delegateFormat, delegateIsolation
+	cfgFile = cfgPath
+	delegateAgent = "codex"
+	delegateWorkdir = dir
+	delegateFormat = "json"
+	delegateIsolation = "inplace"
+	defer func() {
+		cfgFile, delegateAgent, delegateWorkdir, delegateFormat, delegateIsolation = oldCfgFile, oldAgent, oldWD, oldFmt, oldIso
+	}()
+
+	huge := strings.Repeat("Y", 10000) // far over default 4000
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := delegateCmd.RunE(delegateCmd, []string{huge}); err != nil {
+				t.Fatalf("RunE: %v", err)
+			}
+		})
+	})
+	if strings.Contains(stderr, "task is") && strings.Contains(stderr, "characters") {
+		t.Errorf("expected NO size warning when threshold is negative (disabled), got %q", stderr)
+	}
+	entries, _ := ledger.ReadAll()
+	if len(entries) == 0 {
+		t.Fatal("no ledger entries")
+	}
+	if entries[len(entries)-1].TaskSizeWarning != "" {
+		t.Errorf("expected empty TaskSizeWarning when disabled, got %q", entries[len(entries)-1].TaskSizeWarning)
+	}
+}
+
 func TestDelegateRunEDryRunJSON(t *testing.T) {
 	isolateHome(t)
 	dir := t.TempDir()

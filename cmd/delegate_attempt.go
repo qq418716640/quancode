@@ -36,6 +36,10 @@ type attemptResult struct {
 	patchApplyErr error
 	conflictFiles []string
 	failureClass  string
+	// taskSizeWarning is set at attempt entry when the user task length
+	// exceeds the configured warning threshold. Surfaced to ledger.Entry
+	// for post-hoc analysis (large tasks correlate with timeouts).
+	taskSizeWarning string
 }
 
 
@@ -62,6 +66,10 @@ type DelegateAttemptOptions struct {
 	// ContextDiffMode applies the working/staged diff to the worktree before agent execution,
 	// so the agent sees files consistent with the prompt's context diff.
 	ContextDiffMode string // "working", "staged", or ""
+	// TaskSizeWarnThreshold is the character count above which a stderr
+	// warning fires and a TaskSizeWarning is recorded in the ledger entry.
+	// 0 disables the check. Caller passes preferences.EffectiveTaskSizeWarnThreshold().
+	TaskSizeWarnThreshold int
 }
 
 // runDelegateAttempt executes one delegation attempt against a single agent,
@@ -75,6 +83,15 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 		if !opts.Quiet {
 			fmt.Fprintf(os.Stderr, format, args...)
 		}
+	}
+
+	// Task-size warning: tasks at/past the threshold show ~3x timeout rate
+	// (5-week usage analysis, v0.8.24 retro). Always recorded; only
+	// printed to stderr in interactive (non-Quiet) mode.
+	if opts.TaskSizeWarnThreshold > 0 && len(opts.Task) >= opts.TaskSizeWarnThreshold {
+		ar.taskSizeWarning = fmt.Sprintf("task is %d characters (threshold %d); tasks at this size see ~3x timeout rate — consider splitting into 2–3 smaller delegations",
+			len(opts.Task), opts.TaskSizeWarnThreshold)
+		logf("[quancode] warning: %s\n", ar.taskSizeWarning)
 	}
 
 	// Clean up orphan worktrees from previous crashed runs
@@ -272,6 +289,7 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 		logEntry.ChangedFiles = ar.changedFiles
 		logEntry.MatchedHints = ar.result.MatchedHints
 	}
+	logEntry.TaskSizeWarning = ar.taskSizeWarning
 	logEntry.FailureClass = ar.failureClass
 	logEntry.ConflictFiles = ar.conflictFiles
 	if ar.patchApplyErr != nil {

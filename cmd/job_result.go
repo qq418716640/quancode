@@ -16,16 +16,17 @@ var (
 
 // jobResultOutput is the JSON structure returned by `job result`.
 type jobResultOutput struct {
-	JobID        string   `json:"job_id"`
-	Status       string   `json:"status"`
-	Agent        string   `json:"agent"`
-	ActualAgent  string   `json:"actual_agent,omitempty"`
-	ExitCode     *int     `json:"exit_code,omitempty"`
-	ErrorCode    string   `json:"error_code,omitempty"`
-	Error        string   `json:"error,omitempty"`
-	ChangedFiles []string `json:"changed_files,omitempty"`
-	PatchFile    string   `json:"patch_file,omitempty"`
-	OutputTail   string   `json:"output_tail,omitempty"`
+	JobID           string   `json:"job_id"`
+	Status          string   `json:"status"`
+	Agent           string   `json:"agent"`
+	ActualAgent     string   `json:"actual_agent,omitempty"`
+	ExitCode        *int     `json:"exit_code,omitempty"`
+	ErrorCode       string   `json:"error_code,omitempty"`
+	Error           string   `json:"error,omitempty"`
+	ChangedFiles    []string `json:"changed_files,omitempty"`
+	PatchFile       string   `json:"patch_file,omitempty"`
+	OutputTail      string   `json:"output_tail,omitempty"`
+	TaskSizeWarning string   `json:"task_size_warning,omitempty"`
 }
 
 var jobResultCmd = &cobra.Command{
@@ -48,16 +49,17 @@ var jobResultCmd = &cobra.Command{
 
 		if jobResultFormat == "json" {
 			out := jobResultOutput{
-				JobID:        state.JobID,
-				Status:       state.Status,
-				Agent:        state.Agent,
-				ActualAgent:  state.ActualAgent,
-				ExitCode:     state.ExitCode,
-				ErrorCode:    state.ErrorCode,
-				Error:        state.Error,
-				ChangedFiles: state.ChangedFiles,
-				PatchFile:    state.PatchFile,
-				OutputTail:   outputTail,
+				JobID:           state.JobID,
+				Status:          state.Status,
+				Agent:           state.Agent,
+				ActualAgent:     state.ActualAgent,
+				ExitCode:        state.ExitCode,
+				ErrorCode:       state.ErrorCode,
+				Error:           state.Error,
+				ChangedFiles:    state.ChangedFiles,
+				PatchFile:       state.PatchFile,
+				OutputTail:      outputTail,
+				TaskSizeWarning: state.TaskSizeWarning,
 			}
 			data, _ := json.MarshalIndent(out, "", "  ")
 			fmt.Println(string(data))
@@ -69,6 +71,9 @@ var jobResultCmd = &cobra.Command{
 		fmt.Fprintf(os.Stdout, "Status: %s\n", state.Status)
 		if state.ErrorCode != "" {
 			fmt.Fprintf(os.Stdout, "Error:  [%s] %s\n", state.ErrorCode, state.Error)
+		}
+		if state.TaskSizeWarning != "" {
+			fmt.Fprintf(os.Stdout, "Warn:   %s\n", state.TaskSizeWarning)
 		}
 		if len(state.ChangedFiles) > 0 {
 			fmt.Fprintf(os.Stdout, "\nChanged files:\n")

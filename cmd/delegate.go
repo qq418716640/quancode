@@ -325,16 +325,17 @@ var delegateCmd = &cobra.Command{
 			}
 
 			ar := runDelegateAttempt(DelegateAttemptOptions{
-				Agent:           a,
-				AgentKey:        agentKey,
-				Task:            task,
-				CtxPrefix:       ctxPrefix,
-				WorkDir:         workDir,
-				Isolation:       isolation,
-				Verify:          vs,
-				TimeoutOverride: delegateTimeout,
-				MinTimeout:      cfg.Preferences.MinTimeoutSecs,
-				ContextDiffMode: delegateContextDiff,
+				Agent:                 a,
+				AgentKey:              agentKey,
+				Task:                  task,
+				CtxPrefix:             ctxPrefix,
+				WorkDir:               workDir,
+				Isolation:             isolation,
+				Verify:                vs,
+				TimeoutOverride:       delegateTimeout,
+				MinTimeout:            cfg.Preferences.MinTimeoutSecs,
+				ContextDiffMode:       delegateContextDiff,
+				TaskSizeWarnThreshold: cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 			})
 
 			// Check if fallback is needed and allowed

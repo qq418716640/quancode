@@ -76,4 +76,8 @@ type State struct {
 	DelegationID     string          `json:"delegation_id,omitempty"`
 	RunID            string          `json:"run_id,omitempty"`
 	VerifyRaw        json.RawMessage `json:"verify,omitempty"`
+	// TaskSizeWarning, mirrored from the ledger entry, surfaces oversized
+	// tasks via `quancode job result` so async users can see the warning
+	// without diving into the dashboard or ledger files.
+	TaskSizeWarning string `json:"task_size_warning,omitempty"`
 }

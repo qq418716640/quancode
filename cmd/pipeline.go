@@ -319,15 +319,16 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 			}
 
 			ar = runDelegateAttempt(DelegateAttemptOptions{
-				Agent:           currentAgent,
-				AgentKey:        currentAgentKey,
-				Task:            rendered,
-				CtxPrefix:       attemptCtxPrefix,
-				WorkDir:         execDir,
-				Isolation:       "inplace",
-				Verify:          vs,
-				TimeoutOverride: stageDef.TimeoutSecs,
-				MinTimeout:      cfg.Preferences.MinTimeoutSecs,
+				Agent:                 currentAgent,
+				AgentKey:              currentAgentKey,
+				Task:                  rendered,
+				CtxPrefix:             attemptCtxPrefix,
+				WorkDir:               execDir,
+				Isolation:             "inplace",
+				Verify:                vs,
+				TimeoutOverride:       stageDef.TimeoutSecs,
+				MinTimeout:            cfg.Preferences.MinTimeoutSecs,
+				TaskSizeWarnThreshold: cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 			})
 
 			// Log each attempt to ledger
@@ -638,6 +639,7 @@ func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int
 		logEntry.ChangedFiles = ar.changedFiles
 		logEntry.MatchedHints = ar.result.MatchedHints
 	}
+	logEntry.TaskSizeWarning = ar.taskSizeWarning
 	logEntry.FailureClass = ar.failureClass
 	if (ar.err != nil) && logEntry.ExitCode == 0 {
 		logEntry.ExitCode = 1

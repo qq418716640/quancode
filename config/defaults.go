@@ -168,6 +168,11 @@ var KnownAgents = map[string]AgentConfig{
 	},
 }
 
+// DefaultTaskSizeWarnThreshold is the default character length above which
+// a delegation task triggers a size warning. Derived from 5-week usage
+// analysis showing timeout rate tripling past this point.
+const DefaultTaskSizeWarnThreshold = 4000
+
 // defaultPreferences is the single source of truth for preference defaults.
 var defaultPreferences = Preferences{
 	DefaultIsolation: "inplace",
