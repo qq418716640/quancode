@@ -103,4 +103,3 @@ func TestStatsNoFallbackSectionWhenNoRunTracking(t *testing.T) {
 		t.Fatalf("expected no fallback section for old data, got:\n%s", out)
 	}
 }
-

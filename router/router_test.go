@@ -169,3 +169,85 @@ func TestSelectAgentDisabledSkipped(t *testing.T) {
 		t.Fatalf("expected qoder (codex disabled), got %q", got.AgentKey)
 	}
 }
+
+// fakeHealth implements HealthFilter for tests.
+type fakeHealth map[string]string // agent -> reason (presence means open)
+
+func (f fakeHealth) IsOpen(agent string) (bool, string) {
+	r, ok := f[agent]
+	return ok, r
+}
+
+func TestSelectHealthySkipsUnhealthy(t *testing.T) {
+	cfg := &config.Config{
+		DefaultPrimary: "claude",
+		Agents: map[string]config.AgentConfig{
+			"claude":  {Enabled: true, Priority: 10},
+			"copilot": {Enabled: true, Priority: 20},
+			"codex":   {Enabled: true, Priority: 30},
+		},
+	}
+	hf := fakeHealth{"copilot": "66 consecutive failures"}
+
+	sel, probed, skipped := SelectHealthy(cfg, "do a thing", nil, hf, true)
+	if sel == nil || sel.AgentKey != "codex" {
+		t.Fatalf("got %v, want codex (copilot is unhealthy, claude is primary)", sel)
+	}
+	if probed {
+		t.Error("should not be a forced probe when a healthy agent exists")
+	}
+	if skipped["copilot"] == "" {
+		t.Error("skipped map should explain why copilot was dropped")
+	}
+}
+
+func TestSelectHealthyForcedProbeWhenAllUnhealthy(t *testing.T) {
+	cfg := &config.Config{
+		DefaultPrimary: "claude",
+		Agents: map[string]config.AgentConfig{
+			"claude":  {Enabled: true, Priority: 10},
+			"copilot": {Enabled: true, Priority: 20},
+		},
+	}
+	hf := fakeHealth{"copilot": "dead"}
+
+	sel, probed, _ := SelectHealthy(cfg, "task", nil, hf, true)
+	if sel == nil || !probed {
+		t.Fatalf("expected a forced probe, got sel=%v probed=%v", sel, probed)
+	}
+
+	// With probing disallowed, the caller gets nothing rather than a known-dead agent.
+	sel2, probed2, _ := SelectHealthy(cfg, "task", nil, hf, false)
+	if sel2 != nil || probed2 {
+		t.Errorf("allowProbe=false should return nil, got %v", sel2)
+	}
+}
+
+func TestSelectHealthyNilFilterIsPassthrough(t *testing.T) {
+	cfg := &config.Config{
+		DefaultPrimary: "claude",
+		Agents: map[string]config.AgentConfig{
+			"claude": {Enabled: true, Priority: 10},
+			"codex":  {Enabled: true, Priority: 20},
+		},
+	}
+	sel, probed, _ := SelectHealthy(cfg, "task", nil, nil, true)
+	if sel == nil || sel.AgentKey != "codex" || probed {
+		t.Errorf("nil filter should behave like SelectAgentExcluding, got %v", sel)
+	}
+}
+
+func TestSelectHealthyRespectsExcludeSet(t *testing.T) {
+	cfg := &config.Config{
+		DefaultPrimary: "claude",
+		Agents: map[string]config.AgentConfig{
+			"claude": {Enabled: true, Priority: 10},
+			"codex":  {Enabled: true, Priority: 20},
+			"qoder":  {Enabled: true, Priority: 30},
+		},
+	}
+	sel, _, _ := SelectHealthy(cfg, "task", map[string]bool{"codex": true}, fakeHealth{}, true)
+	if sel == nil || sel.AgentKey != "qoder" {
+		t.Errorf("got %v, want qoder (codex excluded, claude is primary)", sel)
+	}
+}

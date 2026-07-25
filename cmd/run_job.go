@@ -13,6 +13,7 @@ import (
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
 	qcontext "github.com/qq418716640/quancode/context"
+	"github.com/qq418716640/quancode/health"
 	"github.com/qq418716640/quancode/job"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/router"
@@ -151,7 +152,9 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			default:
 			}
 
-			sel := router.SelectAgentExcluding(cfg, state.Task, tried)
+			// Async fallback must respect the health breaker too, otherwise a
+			// background job keeps handing work to a known-dead agent.
+			sel, _, _ := router.SelectHealthy(cfg, state.Task, tried, health.NewSnapshot(cfg.Preferences.AgentHealth), false)
 			if sel == nil {
 				break
 			}
@@ -177,6 +180,7 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 			// Derive from parentCtx so SIGTERM cancels fallback attempts too.
 			fbCtx, fbCancel := context.WithTimeout(parentCtx, jobTimeout)
 
+			prevAr := ar
 			ar = runDelegateAttempt(DelegateAttemptOptions{
 				Agent:                 nextA,
 				AgentKey:              sel.AgentKey,
@@ -192,6 +196,11 @@ func runJobMain(cmd *cobra.Command, args []string) error {
 				TaskSizeWarnThreshold: cfg.Preferences.EffectiveTaskSizeWarnThreshold(),
 			})
 			fbCancel()
+			// Record the attempt we are about to supersede. Without this, only
+			// the final attempt of an async chain ever reaches the ledger, so
+			// the health breaker could never see async agent-fault failures.
+			logAttempt(agentKey, state.Task, state.WorkDir, state.Isolation,
+				attemptMeta{RunID: state.RunID, Attempt: attempt - 1}, prevAr)
 			agentKey = sel.AgentKey
 			if !isTransientFailure(ar.failureClass) {
 				break
@@ -323,6 +332,7 @@ func writeLedger(state *job.State, ar attemptResult, verifyJSON json.RawMessage)
 		entry.DurationMs = ar.result.DurationMs
 		entry.ChangedFiles = ar.changedFiles
 		entry.MatchedHints = ar.result.MatchedHints
+		entry.AgentFault = ar.agentFault
 	}
 	entry.TaskSizeWarning = ar.taskSizeWarning
 	// Map job status to ledger status for consistency.

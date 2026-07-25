@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	qcontext "github.com/qq418716640/quancode/context"
+	"github.com/qq418716640/quancode/health"
 )
 
 type Config struct {
@@ -20,12 +21,18 @@ type Config struct {
 // Preferences contains user-level defaults for delegation behavior.
 // CLI flags override these when explicitly set.
 type Preferences struct {
-	DefaultIsolation     string `yaml:"default_isolation"`      // "inplace" (default), "worktree", "patch"
-	FallbackMode         string `yaml:"fallback_mode"`          // "auto" (default), "off"
-	SpeculativeDelaySecs int    `yaml:"speculative_delay_secs"` // seconds before launching speculative agent; 0 = disabled (default)
-	MinTimeoutSecs       int    `yaml:"min_timeout_secs"`       // floor for effective delegation timeout; 0 = disabled (default)
-	DashboardMode        string `yaml:"dashboard_mode"`         // "" = undecided (show tip), "auto" = auto-start on start, "off" = disabled
-	DashboardPort        int    `yaml:"dashboard_port"`         // port for dashboard server; 0 or unset = 8377
+	DefaultIsolation string `yaml:"default_isolation"` // "inplace" (default), "worktree", "patch"
+	FallbackMode     string `yaml:"fallback_mode"`     // "auto" (default), "off"
+	// SpeculativeDelaySecs is the delay before launching a backup agent in
+	// parallel. 0 = disabled, and disabled is the recommended setting: over
+	// 55 speculative runs in the 2026-05..07 review the backup won only
+	// twice (3.6%) while burning 75 minutes of wall-time. Fallback already
+	// covers the failure case; speculation only buys latency, and only when
+	// the backup is both healthy and genuinely faster.
+	SpeculativeDelaySecs int    `yaml:"speculative_delay_secs"`
+	MinTimeoutSecs       int    `yaml:"min_timeout_secs"` // floor for effective delegation timeout; 0 = disabled (default)
+	DashboardMode        string `yaml:"dashboard_mode"`   // "" = undecided (show tip), "auto" = auto-start on start, "off" = disabled
+	DashboardPort        int    `yaml:"dashboard_port"`   // port for dashboard server; 0 or unset = 8377
 	// EnablePipelinePrompt controls whether the PIPELINE section is injected
 	// into the primary agent's system prompt. Default false because pipeline
 	// usage is rare; the `quancode pipeline` command itself always works.
@@ -47,6 +54,10 @@ type Preferences struct {
 	// (CLAUDE.md, AGENTS.md, --context-files, --context-diff) is monitored
 	// separately by warnContextSize against a fixed prompt-size budget.
 	TaskSizeWarnThreshold int `yaml:"task_size_warn_threshold"`
+	// AgentHealth configures the health circuit breaker, which keeps
+	// automatic routing away from agents that are currently failing. Absent
+	// means enabled with defaults; set `enabled: false` to turn it off.
+	AgentHealth health.Config `yaml:"agent_health,omitempty"`
 }
 
 type AgentConfig struct {
@@ -88,9 +99,13 @@ type AgentConfig struct {
 }
 
 // DiagnosticHint is a per-CLI failure pattern and recovery message.
+// It is scanned in addition to CommonFailurePatterns; see failure_patterns.go.
 type DiagnosticHint struct {
-	Pattern string `yaml:"pattern"` // substring match on stderr+stdout (case-sensitive)
+	Pattern string `yaml:"pattern"` // substring match on stderr+stdout (case-insensitive)
 	Hint    string `yaml:"hint"`    // message printed to stderr when matched
+	// Transient marks the failure as worth retrying on a different agent.
+	// When true, a match triggers fallback in addition to printing the hint.
+	Transient bool `yaml:"transient,omitempty"`
 }
 
 // SupportsIsolation reports whether the agent supports the given isolation mode.
@@ -122,12 +137,12 @@ func (ac *AgentConfig) FallbackIsolation() string {
 
 // Valid enum values for configuration fields.
 var (
-	validPromptModes   = map[string]bool{"": true, "append_arg": true, "stdin": true, "env": true, "file": true}
-	validTaskModes     = map[string]bool{"": true, "arg": true, "stdin": true}
-	validOutputModes   = map[string]bool{"": true, "stdout": true, "file": true}
+	validPromptModes    = map[string]bool{"": true, "append_arg": true, "stdin": true, "env": true, "file": true}
+	validTaskModes      = map[string]bool{"": true, "arg": true, "stdin": true}
+	validOutputModes    = map[string]bool{"": true, "stdout": true, "file": true}
 	validIsolationModes = map[string]bool{"": true, "inplace": true, "worktree": true, "patch": true}
-	validFallbackModes   = map[string]bool{"": true, "auto": true, "off": true}
-	validDashboardModes  = map[string]bool{"": true, "auto": true, "off": true}
+	validFallbackModes  = map[string]bool{"": true, "auto": true, "off": true}
+	validDashboardModes = map[string]bool{"": true, "auto": true, "off": true}
 )
 
 // Load loads config from the first available source:
@@ -253,18 +268,19 @@ func (p *Preferences) EffectiveDashboardPort() int {
 }
 
 // EffectiveTaskSizeWarnThreshold normalizes the task-size warning threshold:
-//   - negative value → disabled (no warning ever)
-//   - zero or unset  → DefaultTaskSizeWarnThreshold (4000)
-//   - positive value → that explicit value
+//   - negative or zero/unset → disabled
+//   - positive value         → that explicit value
 //
-// The negative-as-disabled convention exists because YAML can't distinguish
-// "unset" from "explicit 0", and we want unset users to get the protection.
+// Off by default since v0.9.0. The v0.8.24 analysis behind the original 4000
+// threshold did not survive a larger sample: across 1279 attempts from
+// 2026-05-06 to 07-25, tasks over 4000 chars were only n=25, and every
+// stable bucket between 1000 and 3000 chars showed a timeout ratio of
+// 0.84–1.11 — no signal. The warned group actually timed out *less* than the
+// unwarned one (10.8% vs 12.0%). Timeout headroom, not task length, is what
+// predicts timeouts; see warnTimeoutHeadroom.
 func (p *Preferences) EffectiveTaskSizeWarnThreshold() int {
-	if p.TaskSizeWarnThreshold < 0 {
+	if p.TaskSizeWarnThreshold <= 0 {
 		return 0
-	}
-	if p.TaskSizeWarnThreshold == 0 {
-		return DefaultTaskSizeWarnThreshold
 	}
 	return p.TaskSizeWarnThreshold
 }

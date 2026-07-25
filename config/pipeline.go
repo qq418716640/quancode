@@ -12,12 +12,12 @@ import (
 
 // PipelineDef defines a pipeline of ordered delegation stages.
 type PipelineDef struct {
-	Name        string     `yaml:"name"`
-	Description string     `yaml:"description,omitempty"`
-	Stages      []StageDef `yaml:"stages"`
-	OnFailure   string     `yaml:"on_failure,omitempty"`
-	Verify      []string   `yaml:"verify,omitempty"`
-	VerifyStrict bool      `yaml:"verify_strict,omitempty"`
+	Name         string     `yaml:"name"`
+	Description  string     `yaml:"description,omitempty"`
+	Stages       []StageDef `yaml:"stages"`
+	OnFailure    string     `yaml:"on_failure,omitempty"`
+	Verify       []string   `yaml:"verify,omitempty"`
+	VerifyStrict bool       `yaml:"verify_strict,omitempty"`
 }
 
 // StageDef defines a single stage within a pipeline.

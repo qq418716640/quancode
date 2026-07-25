@@ -12,6 +12,7 @@ import (
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
 	qcontext "github.com/qq418716640/quancode/context"
+	"github.com/qq418716640/quancode/health"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/router"
 	"github.com/qq418716640/quancode/runner"
@@ -293,7 +294,7 @@ func runPipeline(cfg *config.Config, def *config.PipelineDef, input, workDir, is
 		}
 
 		// Stage execution with fallback loop
-		fl := newFallbackLoop(cfg, rendered, agentKey, "inplace", 0)
+		fl := newFallbackLoop(cfg, rendered, agentKey, "inplace", 0).withHealth(health.NewSnapshot(cfg.Preferences.AgentHealth))
 		currentAgentKey := agentKey
 		currentAgent := a
 		var ar attemptResult
@@ -638,6 +639,7 @@ func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int
 		logEntry.DurationMs = ar.result.DurationMs
 		logEntry.ChangedFiles = ar.changedFiles
 		logEntry.MatchedHints = ar.result.MatchedHints
+		logEntry.AgentFault = ar.agentFault
 	}
 	logEntry.TaskSizeWarning = ar.taskSizeWarning
 	logEntry.FailureClass = ar.failureClass

@@ -11,6 +11,7 @@ import (
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
 	qcontext "github.com/qq418716640/quancode/context"
+	"github.com/qq418716640/quancode/health"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/router"
 	"github.com/qq418716640/quancode/runner"
@@ -58,9 +59,16 @@ func runSpeculativeDelegation(opts speculativeDelegationOpts) error {
 	var specSel *router.Selection
 	var specAc config.AgentConfig
 	var specAgent agent.Agent
+	// Speculation spends a whole extra agent run to save latency, so an
+	// unhealthy backup is pure waste — never force-probe one here. If every
+	// candidate is unhealthy, skip speculation entirely and run serially.
+	hs := health.NewSnapshot(opts.cfg.Preferences.AgentHealth)
 	for {
-		sel := router.SelectAgentExcluding(opts.cfg, opts.task, tried)
+		sel, _, skipped := router.SelectHealthy(opts.cfg, opts.task, tried, hs, false)
 		if sel == nil {
+			for key, reason := range skipped {
+				fmt.Fprintf(os.Stderr, "[quancode] no speculative backup: %s is unhealthy (%s)\n", key, reason)
+			}
 			return errNoSpeculativeAgent
 		}
 		tried[sel.AgentKey] = true
@@ -382,6 +390,7 @@ func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attempt
 		logEntry.DurationMs = ar.result.DurationMs
 		logEntry.ChangedFiles = ar.changedFiles
 		logEntry.MatchedHints = ar.result.MatchedHints
+		logEntry.AgentFault = ar.agentFault
 	}
 	logEntry.TaskSizeWarning = ar.taskSizeWarning
 	logEntry.FailureClass = ar.failureClass

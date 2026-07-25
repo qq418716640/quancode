@@ -28,6 +28,14 @@ type Result struct {
 	// failure output (set by agent.applyDiagnosticHints). Empty on
 	// success or when no patterns matched.
 	MatchedHints []string
+	// Transient is set when a matched failure pattern marked this failure
+	// as worth retrying on a different agent (quota exhaustion, upstream
+	// flakiness). Read by cmd.isFallbackEligible.
+	Transient bool
+	// AgentFault is set when a matched failure pattern indicts the agent
+	// itself rather than the task. Recorded in the ledger and counted by the
+	// health breaker.
+	AgentFault bool
 }
 
 // MergeEnv replaces env vars in base with values from extra (case-insensitive key match).

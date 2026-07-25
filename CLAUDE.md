@@ -27,6 +27,8 @@ cmd/pipeline.go → config/pipeline.go (LoadPipeline) → cmd/delegate_attempt.g
                                                                                              → ledger/
 cmd/delegate_async.go → job/ (write pending) → cmd/run_job.go (detached) → delegate_attempt.go
 cmd/job*.go → job/ (list/status/result/logs/cancel/clean)
+cmd/batch.go → batch/ (manifest+state) → cmd/delegate_attempt.go (per item)   → runner/
+                                                                                → ledger/
 cmd/dashboard.go → server/ (HTTP server) → ledger/ + job/ + active/ (read-only)
                                           → web/ (embedded frontend via go:embed)
 ```
@@ -43,6 +45,8 @@ cmd/dashboard.go → server/ (HTTP server) → ledger/ + job/ + active/ (read-on
 - **active/** — Lightweight file-based registry at `~/.config/quancode/active/` tracking currently running synchronous delegations. Each running task writes a marker file with PID and start time; `List()` scans the directory and cleans up stale entries via PID liveness checks. Only sync delegations register here; async jobs already have persistent state in `job/`.
 - **server/** — HTTP server for the web dashboard. Provides REST API endpoints (`/api/delegations`, `/api/delegations/{id}/output`, `/api/jobs`, `/api/agents`, `/api/stats`, `/api/events`, `/api/version`) with pagination, filtering, SSE broadcast, and stats caching. Uses Go 1.22 enhanced `ServeMux` routing. Graceful shutdown on SIGTERM/SIGINT.
 - **web/** — Embedded frontend assets. Single-file `index.html` with Alpine.js and Tailwind CSS (vendored in `static/`). Exported via `go:embed` as `web.Assets`. In `--dev` mode, files are served from the filesystem for live editing.
+- **health/** — Agent circuit breaker, **derived from the ledger rather than stored**. `NewSnapshot` reads recent entries and opens a breaker for any agent with N consecutive *agent-fault* failures, with exponential backoff. Only quota/upstream/auth failures count — timeouts and task failures never do, so a hard task cannot disable a healthy agent. Never blocks an explicitly named agent; fails open by force-probing exactly one candidate when all are unhealthy.
+- **batch/** — Frozen manifest plus mutable per-item state for `quancode batch`, at `~/.config/quancode/batches/{id}.json`. The manifest (template text, item list, workdir, agent) is immutable so resume cannot silently pick up an edited template; the ledger cannot replace it because it only records what ran, never what *should* run. Atomic writes under flock.
 - **job/** — Persistent async job state at `~/.config/quancode/jobs/`. Atomic writes via flock+CAS with schema versioning. Handles job lifecycle (pending→running→succeeded/failed/timed_out/cancelled/lost), TTL cleanup, PID reuse detection via `pid_start_time`, and capped output files (50MB).
 
 ### Dashboard (preview)
@@ -81,6 +85,18 @@ When `preferences.speculative_delay_secs > 0` and isolation is `worktree`/`patch
 ### Pipeline (multi-stage delegation)
 
 `quancode pipeline <name-or-file> [task]` runs an ordered sequence of delegation stages defined in YAML. Creates a pipeline-level worktree where all stages execute as `inplace`, with code changes accumulating naturally. Stage outputs flow to subsequent stages via Go `text/template` variables (`{{.Input}}`, `{{.Prev.Output}}`, `{{.Stages.NAME.Output}}`). Pipeline definitions are loaded from explicit paths, `.quancode/pipelines/`, or `~/.config/quancode/pipelines/`. Each stage can specify its own agent, timeout, verify commands, and on_failure policy (`stop`/`continue`). Final patch is collected via `CollectPatchSince(baseSHA)` to capture both committed and uncommitted changes.
+
+### Agent health circuit breaker
+
+Automatic routing (initial selection, fallback, speculative backup, `route` preview) skips agents that are currently broken. Health is derived from recent ledger entries — no second source of truth, no read-modify-write races between concurrent delegations. Only `agent_fault` failures count toward the breaker; timeouts track task difficulty, not agent health. Configure via `preferences.agent_health`; absent config means enabled.
+
+Failure patterns live in one table (`config.CommonFailurePatterns`) carrying both `Transient` (drives fallback) and `AgentFault` (drives the breaker), so the fallback decision and the user-facing diagnostic hint cannot drift apart. Add new patterns by pasting the CLI's real message verbatim.
+
+### Batch delegation
+
+`quancode batch` applies one task template across many items, one delegation per item, serially. Successful items are never re-run, so an interrupted or partly failed batch resumes without redoing work. Resume distinguishes transient failures (retried automatically) from deterministic ones (skipped unless `--retry-failed`), so a task that fails the same way every time stops burning quota. `--dry-run` validates every item renders and shows the first and last prompt before anything executes.
+
+Execution is serial by design: batch is the heaviest thing QuanCode does, and parallel items multiply the rate at which a shared account hits its quota.
 
 ### Statusline
 

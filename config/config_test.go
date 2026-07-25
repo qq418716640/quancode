@@ -13,7 +13,9 @@ func TestEffectiveTaskSizeWarnThreshold(t *testing.T) {
 		set  int
 		want int
 	}{
-		{"unset (zero) → default", 0, DefaultTaskSizeWarnThreshold},
+		// Off by default since v0.9.0: the 4000-char threshold did not hold up
+		// on a larger sample (warned tasks timed out 10.8% vs 12.0% unwarned).
+		{"unset (zero) → disabled", 0, 0},
 		{"explicit positive → as-is", 8000, 8000},
 		{"negative → disabled (0)", -1, 0},
 	}

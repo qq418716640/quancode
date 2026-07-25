@@ -16,9 +16,9 @@ func TestFallbackLoop_ShouldRetry(t *testing.T) {
 	fl := newFallbackLoop(cfg, "test task", "a", "", 3)
 
 	tests := []struct {
-		name     string
-		ar       attemptResult
-		attempt  int
+		name      string
+		ar        attemptResult
+		attempt   int
 		wantRetry bool
 	}{
 		{
@@ -66,6 +66,72 @@ func TestFallbackLoop_ShouldRetry(t *testing.T) {
 				t.Errorf("shouldRetry = %v, want %v", got, tt.wantRetry)
 			}
 		})
+	}
+}
+
+// TestRealWorldQuotaFailuresTriggerFallback is the regression test for the
+// 2026-07 log review: 105 attempts (40 codex quota + 65 copilot upstream)
+// were classified agent_failed and silently skipped fallback because their
+// wording matched none of the old rateLimitPatterns entries.
+func TestRealWorldQuotaFailuresTriggerFallback(t *testing.T) {
+	cases := []struct {
+		name   string
+		stdout string
+	}{
+		{
+			name:   "codex usage limit",
+			stdout: "ERROR: You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Jul 29th, 2026 10:11 PM.",
+		},
+		{
+			name:   "copilot transient bad request",
+			stdout: "● Request failed (transient_bad_request). Retrying...",
+		},
+	}
+
+	cfg := &config.Config{Agents: map[string]config.AgentConfig{"a": {Command: "echo", Enabled: true}}}
+	fl := newFallbackLoop(cfg, "task", "a", "", 3)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := &runner.Result{ExitCode: 1, Stdout: tc.stdout}
+
+			if !isFallbackEligible(result, tc.stdout, "") {
+				t.Fatal("failure should be fallback-eligible")
+			}
+
+			ar := attemptResult{result: result, output: tc.stdout}
+			ar.failureClass = classifyFailure(ar)
+			if ar.failureClass != FailureClassRateLimited {
+				t.Errorf("failureClass = %q, want %q", ar.failureClass, FailureClassRateLimited)
+			}
+			if !fl.shouldRetry(ar, 1) {
+				t.Error("shouldRetry = false, want true — this is the bug that lost 67 runs")
+			}
+		})
+	}
+}
+
+// TestGenuineTaskFailureDoesNotFallback guards the other direction: widening
+// the transient table must not turn ordinary failures into quota burn.
+func TestGenuineTaskFailureDoesNotFallback(t *testing.T) {
+	stdout := "--- FAIL: TestParseConfig\n    config_test.go:88: unexpected nil"
+	result := &runner.Result{ExitCode: 1, Stdout: stdout}
+
+	if isFallbackEligible(result, stdout, "") {
+		t.Error("a real test failure must not be fallback-eligible")
+	}
+	ar := attemptResult{result: result, output: stdout}
+	if got := classifyFailure(ar); got != FailureClassAgentFailed {
+		t.Errorf("failureClass = %q, want %q", got, FailureClassAgentFailed)
+	}
+}
+
+// TestResultTransientFlagHonored verifies the agent-set flag path (the agent
+// scans per-agent DiagnosticHints that cmd cannot see).
+func TestResultTransientFlagHonored(t *testing.T) {
+	result := &runner.Result{ExitCode: 1, Transient: true, Stdout: "some cli-specific wording"}
+	if !isFallbackEligible(result, result.Stdout, "") {
+		t.Error("result.Transient set by the agent should make the failure eligible")
 	}
 }
 

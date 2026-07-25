@@ -11,6 +11,7 @@ import (
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
 	qcontext "github.com/qq418716640/quancode/context"
+	"github.com/qq418716640/quancode/health"
 	"github.com/qq418716640/quancode/ledger"
 	"github.com/qq418716640/quancode/router"
 	"github.com/qq418716640/quancode/runner"
@@ -148,14 +149,32 @@ var delegateCmd = &cobra.Command{
 			return fmt.Errorf("--timeout must be a positive number of seconds")
 		}
 
+		// Health snapshot for this invocation. Derived from the ledger, so it
+		// reflects every delegation path including async jobs and other
+		// concurrent processes.
+		hs := health.NewSnapshot(cfg.Preferences.AgentHealth)
+
 		// Resolve initial agent
 		agentKey := delegateAgent
+		initialProbeUsed := false
 		if agentKey == "" {
-			sel := router.SelectAgent(cfg, task)
+			sel, probed, skipped := router.SelectHealthy(cfg, task, nil, hs, true)
+			for key, reason := range skipped {
+				fmt.Fprintf(os.Stderr, "[quancode] skipping %s — %s\n", key, reason)
+			}
 			if sel != nil {
 				agentKey = sel.AgentKey
-				fmt.Fprintf(os.Stderr, "[quancode] auto-routed to %s (%s)\n", agentKey, sel.Reason)
+				if probed {
+					initialProbeUsed = true
+					fmt.Fprintf(os.Stderr, "[quancode] all agents are unhealthy; probing %s anyway\n", agentKey)
+				} else {
+					fmt.Fprintf(os.Stderr, "[quancode] auto-routed to %s (%s)\n", agentKey, sel.Reason)
+				}
 			}
+		} else if open, reason := hs.IsOpen(agentKey); open {
+			// An explicitly requested agent is never blocked — the user asked
+			// for it by name. Warn so the likely failure is not a surprise.
+			fmt.Fprintf(os.Stderr, "[quancode] warning: %s looks unhealthy (%s); running it anyway because you named it explicitly\n", agentKey, reason)
 		}
 		if agentKey == "" {
 			return fmt.Errorf("no agent specified and no available sub-agent found")
@@ -270,6 +289,13 @@ var delegateCmd = &cobra.Command{
 			return launchAsyncJob(agentKey, task, workDir, isolation, delegateContextDiff, effectiveTimeout)
 		}
 
+		// Warn when this agent's recent successes are already pressing against
+		// its timeout. This is the signal that actually predicts timeouts;
+		// task length is not (see EffectiveTaskSizeWarnThreshold).
+		if effTimeout, _ := resolveEffectiveTimeout(delegateTimeout, ac.TimeoutSecs, cfg.Preferences.MinTimeoutSecs); effTimeout > 0 {
+			warnTimeoutHeadroom(hs, agentKey, effTimeout, false)
+		}
+
 		// Resolve fallback: CLI flag > preferences > auto
 		noFallback := delegateNoFallback
 		if !cmd.Flags().Changed("no-fallback") {
@@ -302,7 +328,11 @@ var delegateCmd = &cobra.Command{
 		}
 
 		// Run attempt with fallback loop
-		fl := newFallbackLoop(cfg, task, agentKey, isolation, 0)
+		fl := newFallbackLoop(cfg, task, agentKey, isolation, 0).withHealth(hs)
+		if initialProbeUsed {
+			// The initial selection already spent this chain's one probe.
+			fl.markProbeUsed()
+		}
 		var chain []ui.ChainLink
 		runID, err := ledger.NewRunID()
 		if err != nil {

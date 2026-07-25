@@ -9,6 +9,7 @@ import (
 
 	"github.com/qq418716640/quancode/agent"
 	"github.com/qq418716640/quancode/config"
+	"github.com/qq418716640/quancode/health"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +31,8 @@ var agentsCmd = &cobra.Command{
 		}
 		sort.Strings(keys)
 
+		hs := health.NewSnapshot(cfg.Preferences.AgentHealth)
+
 		for _, key := range keys {
 			ac := cfg.Agents[key]
 			if !ac.Enabled {
@@ -39,6 +42,11 @@ var agentsCmd = &cobra.Command{
 			status := "unavailable"
 			if ok, _ := a.IsAvailable(); ok {
 				status = "available"
+			}
+			// An unhealthy agent is installed and runnable but currently
+			// failing, so report that instead of a bare "available".
+			if open, reason := hs.IsOpen(key); open && status == "available" {
+				status = "unhealthy (" + reason + ")"
 			}
 			strengths := strings.Join(ac.Strengths, ", ")
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", key, status, ac.Command, strengths, ac.Description)

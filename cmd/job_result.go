@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	jobResultFormat       string
-	jobResultOutputTail   int
+	jobResultFormat     string
+	jobResultOutputTail int
 )
 
 // jobResultOutput is the JSON structure returned by `job result`.

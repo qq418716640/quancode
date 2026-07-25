@@ -31,26 +31,30 @@ var KnownAgents = map[string]AgentConfig{
 		Priority:     20,
 	},
 	"qoder": {
-		Name:             "Qoder CLI",
-		Command:          "qodercli",
-		Description:      "Strong at code analysis, debugging, MCP integration",
-		Strengths:        []string{"code-analysis", "debugging", "explanation", "mcp-integration"},
-		PrimaryArgs:      []string{"--dangerously-skip-permissions"},
-		DelegateArgs:     []string{"--dangerously-skip-permissions", "-p"},
-		TimeoutSecs:      300,
-		Enabled:          true,
-		PreferredFor:     []string{"analyze", "explain", "review"},
-		Priority:         25,
-		DefaultIsolation:    "inplace",                // Qoder ignores worktree cwd; see feedback_qoder_worktree.md
-		SupportedIsolations: []string{"inplace"},      // worktree/patch unsupported (upstream cwd issue)
+		Name:                "Qoder CLI",
+		Command:             "qodercli",
+		Description:         "Strong at code analysis, debugging, MCP integration",
+		Strengths:           []string{"code-analysis", "debugging", "explanation", "mcp-integration"},
+		PrimaryArgs:         []string{"--dangerously-skip-permissions"},
+		DelegateArgs:        []string{"--dangerously-skip-permissions", "-p"},
+		TimeoutSecs:         300,
+		Enabled:             true,
+		PreferredFor:        []string{"analyze", "explain", "review"},
+		Priority:            25,
+		DefaultIsolation:    "inplace",           // Qoder ignores worktree cwd; see feedback_qoder_worktree.md
+		SupportedIsolations: []string{"inplace"}, // worktree/patch unsupported (upstream cwd issue)
 		DiagnosticHints: []DiagnosticHint{
 			{
 				Pattern: "Not logged in",
 				Hint:    "Qoder login expired. Run: qodercli login",
 			},
 			{
-				Pattern: "Execution error",
-				Hint:    "Qoder execution failed with a generic internal error. Try retrying once. If the task scans many files, consider splitting it or routing to codex.",
+				// Qoder's generic internal error. Marked transient because the
+				// hint's own advice is "retry" — falling back to another agent
+				// is that retry, done automatically.
+				Pattern:   "Execution error",
+				Transient: true,
+				Hint:      "Qoder execution failed with a generic internal error. Falling back to another agent. If the task scans many files, consider splitting it.",
 			},
 		},
 	},
@@ -86,16 +90,20 @@ var KnownAgents = map[string]AgentConfig{
 		PromptFile:   "GEMINI.md",
 		DelegateArgs: []string{"--yolo", "-o", "text", "-p"},
 		TimeoutSecs:  420,
-		Enabled:      true,
+		// Disabled by default since v0.9.0: the 2026-05..07 usage review found
+		// every gemini failure in the window was an account-eligibility error
+		// (throwIneligibleOrProjectIdError), not a task failure. Users with a
+		// working Gemini account can opt in with `enabled: true`.
+		Enabled:      false,
 		PreferredFor: []string{"explore", "explain", "summarize", "generate"},
 		Priority:     30,
 	},
 	"copilot": {
-		Name:        "GitHub Copilot CLI",
-		Command:     "copilot",
-		Description: "Full coding agent powered by GitHub Copilot, multi-model support, deep repository context",
-		Strengths:   []string{"code-generation", "github-integration", "repository-context", "multi-model"},
-		PrimaryArgs: []string{"--yolo"},
+		Name:         "GitHub Copilot CLI",
+		Command:      "copilot",
+		Description:  "Full coding agent powered by GitHub Copilot, multi-model support, deep repository context",
+		Strengths:    []string{"code-generation", "github-integration", "repository-context", "multi-model"},
+		PrimaryArgs:  []string{"--yolo"},
 		DelegateArgs: []string{"--yolo", "--no-auto-update", "-p"},
 		TimeoutSecs:  420,
 		// Disabled by default: usage-data review showed lowest success rate (76.7%)

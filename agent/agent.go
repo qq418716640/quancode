@@ -80,8 +80,8 @@ func (a *genericAgent) LaunchAsPrimary(workDir, systemPrompt string) error {
 
 	env := runner.MergeEnv(os.Environ(), a.cfg.Env)
 	env = runner.MergeEnv(env, map[string]string{
-		"QUANCODE_SESSION":    "1",
-		"QUANCODE_PRIMARY":    a.key,
+		"QUANCODE_SESSION":     "1",
+		"QUANCODE_PRIMARY":     a.key,
 		"QUANCODE_PROMPT_MODE": promptMode,
 	})
 
@@ -266,22 +266,21 @@ func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task st
 // Only scans on failure signals (non-zero exit, timeout, cancellation, or
 // launch error). Successful runs produce no hints.
 func (a *genericAgent) applyDiagnosticHints(result *runner.Result, runErr error) {
-	if len(a.cfg.DiagnosticHints) == 0 {
-		return
-	}
 	failed := runErr != nil || (result != nil && (result.ExitCode != 0 || result.TimedOut || result.Cancelled))
 	if !failed || result == nil {
 		return
 	}
 	combined := result.Stderr + "\n" + result.Stdout
-	for _, h := range a.cfg.DiagnosticHints {
-		if h.Pattern == "" {
-			continue
-		}
-		if strings.Contains(combined, h.Pattern) {
-			fmt.Fprintf(os.Stderr, "[quancode hint] %s\n", h.Hint)
-			result.MatchedHints = append(result.MatchedHints, h.Hint)
-		}
+	m := config.MatchFailure(combined, a.cfg.DiagnosticHints)
+	for _, h := range m.Hints {
+		fmt.Fprintf(os.Stderr, "[quancode hint] %s\n", h)
+	}
+	result.MatchedHints = append(result.MatchedHints, m.Hints...)
+	if m.Transient {
+		result.Transient = true
+	}
+	if m.AgentFault {
+		result.AgentFault = true
 	}
 }
 

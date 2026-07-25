@@ -36,13 +36,19 @@ type attemptResult struct {
 	patchApplyErr error
 	conflictFiles []string
 	failureClass  string
+	// orchestrationErr marks a failure that happened before the agent process
+	// was ever launched (worktree creation, context-diff apply, ID generation).
+	// These are QuanCode's or git's problem, not the agent's, and must not
+	// count against agent health.
+	orchestrationErr bool
+	// agentFault marks a failure whose output matched a pattern that indicts
+	// the agent itself. Surfaced to the ledger for the health breaker.
+	agentFault bool
 	// taskSizeWarning is set at attempt entry when the user task length
 	// exceeds the configured warning threshold. Surfaced to ledger.Entry
 	// for post-hoc analysis (large tasks correlate with timeouts).
 	taskSizeWarning string
 }
-
-
 
 // DelegateAttemptOptions controls the behavior of runDelegateAttempt.
 type DelegateAttemptOptions struct {
@@ -77,6 +83,7 @@ type DelegateAttemptOptions struct {
 func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 	defer func() {
 		ar.failureClass = classifyFailure(ar)
+		ar.agentFault = isAgentFault(ar)
 	}()
 
 	logf := func(format string, args ...any) {
@@ -85,11 +92,11 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 		}
 	}
 
-	// Task-size warning: tasks at/past the threshold show ~3x timeout rate
-	// (5-week usage analysis, v0.8.24 retro). Always recorded; only
-	// printed to stderr in interactive (non-Quiet) mode.
+	// Task-size warning. Opt-in since v0.9.0: a 10-week sample showed task
+	// length does not predict timeouts, so the message no longer claims it
+	// does. Always recorded; only printed in interactive (non-Quiet) mode.
 	if opts.TaskSizeWarnThreshold > 0 && len(opts.Task) >= opts.TaskSizeWarnThreshold {
-		ar.taskSizeWarning = fmt.Sprintf("task is %d characters (threshold %d); tasks at this size see ~3x timeout rate — consider splitting into 2–3 smaller delegations",
+		ar.taskSizeWarning = fmt.Sprintf("task is %d characters (your configured threshold is %d) — consider whether it covers more than one deliverable",
 			len(opts.Task), opts.TaskSizeWarnThreshold)
 		logf("[quancode] warning: %s\n", ar.taskSizeWarning)
 	}
@@ -106,11 +113,13 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 	if opts.Isolation == "worktree" || opts.Isolation == "patch" {
 		if !runner.IsGitRepo(opts.WorkDir) {
 			ar.err = fmt.Errorf("--isolation %s requires a git repository", opts.Isolation)
+			ar.orchestrationErr = true
 			return ar
 		}
 		wt, cleanup, wtErr := runner.CreateWorktree(opts.WorkDir)
 		if wtErr != nil {
 			ar.err = fmt.Errorf("create worktree: %w", wtErr)
+			ar.orchestrationErr = true
 			return ar
 		}
 		cleanupWorktree = cleanup
@@ -127,6 +136,7 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 			sha, applyErr := runner.ApplyDiffToWorktree(opts.WorkDir, execDir, opts.ContextDiffMode)
 			if applyErr != nil {
 				ar.err = fmt.Errorf("apply context-diff to worktree: %w", applyErr)
+				ar.orchestrationErr = true
 				return ar
 			}
 			if sha != "" {
@@ -148,6 +158,7 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 	delegationID, err := ledger.NewDelegationID()
 	if err != nil {
 		ar.err = fmt.Errorf("generate delegation id: %w", err)
+		ar.orchestrationErr = true
 		return ar
 	}
 	ar.delegationID = delegationID
@@ -262,6 +273,10 @@ type attemptMeta struct {
 	FallbackFrom   string
 	FallbackReason string
 	ReviewSetID    string // set by review-set; groups sibling delegations
+	// Batch tracking. BatchItemID is the stable per-item identifier rather
+	// than the item text, which may repeat or contain arbitrary characters.
+	BatchID     string
+	BatchItemID string
 }
 
 // logAttempt writes a ledger entry for a single attempt.
@@ -280,6 +295,8 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 		FallbackFrom:   meta.FallbackFrom,
 		FallbackReason: meta.FallbackReason,
 		ReviewSetID:    meta.ReviewSetID,
+		BatchID:        meta.BatchID,
+		BatchItemID:    meta.BatchItemID,
 	}
 	if ar.result != nil {
 		logEntry.ExitCode = ar.result.ExitCode
@@ -291,6 +308,7 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 	}
 	logEntry.TaskSizeWarning = ar.taskSizeWarning
 	logEntry.FailureClass = ar.failureClass
+	logEntry.AgentFault = ar.agentFault
 	logEntry.ConflictFiles = ar.conflictFiles
 	if ar.patchApplyErr != nil {
 		logEntry.ChangedFiles = nil // patch was not applied to the main tree
@@ -380,4 +398,3 @@ func finalizeDelegation(agentKey, task, workDir, isolation string, meta attemptM
 	fmt.Print(ar.output)
 	return nil
 }
-

@@ -10,13 +10,26 @@ const (
 	FailureClassVerifyFailed         = "verify_failed"
 	FailureClassSpeculativeCancelled = "speculative_cancelled"
 	FailureClassTemplateError        = "template_error"
+	// FailureClassOrchestrationError covers failures that happen before the
+	// agent process is launched: worktree creation, context-diff apply, ID
+	// generation. Split out of launch_failure in v0.9.0 so a git problem in
+	// the working directory can no longer be blamed on the agent.
+	FailureClassOrchestrationError = "orchestration_error"
 )
 
 // classifyFailure determines the failure class for a delegation attempt.
 // Returns empty string for successful attempts.
 func classifyFailure(ar attemptResult) string {
-	// Launch failure: agent process never started
-	if ar.result == nil && ar.err != nil {
+	// Setup failed before the agent was ever launched — not the agent's fault.
+	if ar.orchestrationErr {
+		return FailureClassOrchestrationError
+	}
+
+	// Launch failure: the agent process never started. runCmd returns a
+	// non-nil Result with ExitCode 0 alongside an error when cmd.Run fails
+	// before producing an exit status (binary missing or not executable,
+	// working directory gone), so a nil Result is not the only signal.
+	if ar.err != nil && (ar.result == nil || (ar.result.ExitCode == 0 && !ar.result.TimedOut && !ar.result.Cancelled)) {
 		return FailureClassLaunchFailure
 	}
 
@@ -57,6 +70,30 @@ func classifyFailure(ar attemptResult) string {
 
 	// Agent exited non-zero for non-transient reasons
 	return FailureClassAgentFailed
+}
+
+// isAgentFault reports whether a failure indicts the agent itself, as opposed
+// to the task, the working directory, or QuanCode's own orchestration. Only
+// these count toward the health breaker.
+func isAgentFault(ar attemptResult) bool {
+	// Setup never reached the agent.
+	if ar.orchestrationErr {
+		return false
+	}
+	// The agent binary could not be launched at all (missing, not executable).
+	if ar.result == nil {
+		return ar.err != nil
+	}
+	if ar.result.Cancelled || ar.result.TimedOut {
+		return false
+	}
+	if ar.result.ExitCode == 0 {
+		// Exit 0 with an error means the process never ran — see
+		// classifyFailure. That is the agent's own installation being broken.
+		return ar.err != nil
+	}
+	// Set by agent.applyDiagnosticHints from the shared pattern table.
+	return ar.result.AgentFault
 }
 
 // isTransientFailure returns true if the failure class represents a

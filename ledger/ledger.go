@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,17 +14,17 @@ import (
 
 // Entry represents a single delegation attempt record.
 type Entry struct {
-	Timestamp      string          `json:"timestamp"`
-	Agent          string          `json:"agent"`
-	Task           string          `json:"task"`
-	ExitCode       int             `json:"exit_code"`
-	TimedOut       bool            `json:"timed_out"`
-	Cancelled      bool            `json:"cancelled,omitempty"`
-	DurationMs     int64           `json:"duration_ms"`
-	ChangedFiles   []string        `json:"changed_files,omitempty"`
-	Isolation string `json:"isolation,omitempty"`
-	WorkDir        string          `json:"work_dir"`
-	FinalStatus    string          `json:"final_status,omitempty"`
+	Timestamp    string   `json:"timestamp"`
+	Agent        string   `json:"agent"`
+	Task         string   `json:"task"`
+	ExitCode     int      `json:"exit_code"`
+	TimedOut     bool     `json:"timed_out"`
+	Cancelled    bool     `json:"cancelled,omitempty"`
+	DurationMs   int64    `json:"duration_ms"`
+	ChangedFiles []string `json:"changed_files,omitempty"`
+	Isolation    string   `json:"isolation,omitempty"`
+	WorkDir      string   `json:"work_dir"`
+	FinalStatus  string   `json:"final_status,omitempty"`
 
 	// Run/attempt tracking — links multiple attempts within a single delegate invocation.
 	RunID          string `json:"run_id,omitempty"`
@@ -53,6 +54,14 @@ type Entry struct {
 	// delegation gets its own RunID/DelegationID; ReviewSetID groups them.
 	ReviewSetID string `json:"review_set_id,omitempty"`
 
+	// Batch tracking — links attempts produced by `quancode batch`.
+	// BatchItemID is the stable item identifier, formatted as a zero-padded
+	// index plus a content hash ("0007-a1b2c3d4"). The item text itself is
+	// not recorded here: it may repeat or contain arbitrary characters, and
+	// the rendered task is already in Task.
+	BatchID     string `json:"batch_id,omitempty"`
+	BatchItemID string `json:"batch_item_id,omitempty"`
+
 	// DelegationID uniquely identifies each delegation attempt.
 	DelegationID string `json:"delegation_id,omitempty"`
 
@@ -70,6 +79,14 @@ type Entry struct {
 	// output of this attempt. Populated from runner.Result.MatchedHints.
 	// Empty/omitted on success or when no patterns matched.
 	MatchedHints []string `json:"matched_hints,omitempty"`
+
+	// AgentFault marks a failure that indicts the agent itself (quota
+	// exhaustion, upstream rejection, expired login, unknown model) rather
+	// than the task, the working directory, or QuanCode's own orchestration.
+	// The health breaker counts only these. Derived from the matched
+	// failure pattern at write time so health can be computed from the
+	// ledger alone, without re-reading output files.
+	AgentFault bool `json:"agent_fault,omitempty"`
 
 	// TaskSizeWarning is set when the user task length exceeded the
 	// configured warning threshold (preferences.task_size_warn_threshold).
@@ -151,20 +168,41 @@ func ReadAll() ([]Entry, error) {
 }
 
 // ReadSince reads entries from a given time onward.
+//
+// Log files are named {date}.jsonl, so files whose date is entirely older
+// than `since` are skipped without being opened. This keeps hot-path callers
+// (the health breaker runs on every delegation) from parsing months of
+// history to answer a question about the last day.
 func ReadSince(since time.Time) ([]Entry, error) {
-	all, err := ReadAll()
+	dir := LogDir()
+	files, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("glob log files: %w", err)
 	}
 
+	// Entries carry UTC timestamps while file names use local dates. Step
+	// back a day so a file straddling the boundary is never skipped.
+	cutoffDate := since.Add(-24 * time.Hour).Format("2006-01-02")
+
 	var filtered []Entry
-	for _, e := range all {
-		t, err := time.Parse(time.RFC3339, e.Timestamp)
+	for _, f := range files {
+		if name := strings.TrimSuffix(filepath.Base(f), ".jsonl"); name < cutoffDate {
+			continue
+		}
+		data, err := os.ReadFile(f)
 		if err != nil {
 			continue
 		}
-		if !t.Before(since) {
-			filtered = append(filtered, e)
+		for _, line := range splitNonEmpty(data) {
+			var entry Entry
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				continue
+			}
+			t, err := time.Parse(time.RFC3339, entry.Timestamp)
+			if err != nil || t.Before(since) {
+				continue
+			}
+			filtered = append(filtered, entry)
 		}
 	}
 	return filtered, nil

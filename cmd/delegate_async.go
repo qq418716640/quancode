@@ -130,4 +130,3 @@ func resolveEffectiveTimeout(flagTimeout, configTimeout, minTimeout int) (int, b
 	}
 	return effective, false
 }
-

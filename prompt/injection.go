@@ -52,9 +52,9 @@ DELEGATION GUIDELINES:
 - Do NOT delegate if you can do the task yourself just as efficiently
 - You are the primary agent. You own the overall plan and final quality.
 
-BEFORE DELEGATING — assess task size:
+BEFORE DELEGATING — assess task scope:
 - If the task involves multiple deliverables, multiple phases, or edits across many files, consider splitting it.
-- **Hard signal from usage data: tasks longer than ~4000 characters see ~3x the timeout rate (22% vs 7%).** When your task description is approaching that length, prefer splitting it over raising --timeout.
+- Split by what the task *does*, not by how long the description is. A 10-week usage review found task length does not predict timeouts (tasks over 4000 chars timed out no more often than short ones); what does predict them is work that needs most of the agent's time budget. Judge the work, not the character count.
 - Strong signals to split:
   - multiple deliverables in one request (e.g., "refactor X and add tests and update docs")
   - mixed phases: analysis + implementation + verification in one task

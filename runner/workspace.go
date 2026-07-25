@@ -80,6 +80,19 @@ func IsGitRepo(dir string) bool {
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
+// GitToplevel returns the absolute path of the repository root containing
+// dir, or an error if dir is not inside a git repository. Used to detect a
+// resumed batch pointing at a different repository than it was created in.
+func GitToplevel(dir string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // PruneOrphanWorktrees removes leftover worktree directories from previous
 // runs that were not cleaned up (e.g. due to SIGKILL). It compares entries
 // in .quancode/worktrees/ against `git worktree list` to identify orphans.

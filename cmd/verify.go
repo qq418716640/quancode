@@ -9,21 +9,21 @@ import (
 
 // Verify status constants.
 const (
-	VerifyPassed  = "passed"
-	VerifyFailed  = "failed"
-	VerifySkipped = "skipped"
-	VerifyError   = "error"
+	VerifyPassed   = "passed"
+	VerifyFailed   = "failed"
+	VerifySkipped  = "skipped"
+	VerifyError    = "error"
 	VerifyTimedOut = "timed_out"
 )
 
 // Final status constants for delegation results and ledger entries.
 const (
-	StatusCompleted                      = "completed"
-	StatusFailed                         = "failed"
-	StatusTimedOut                       = "timed_out"
-	StatusCancelled                      = "cancelled"
-	StatusSkipped                        = "skipped"
-	StatusCompletedWithVerifyFailures    = "completed_with_verification_failures"
+	StatusCompleted                   = "completed"
+	StatusFailed                      = "failed"
+	StatusTimedOut                    = "timed_out"
+	StatusCancelled                   = "cancelled"
+	StatusSkipped                     = "skipped"
+	StatusCompletedWithVerifyFailures = "completed_with_verification_failures"
 )
 
 // IsStrictFailure returns true if this is a strict verification that failed.

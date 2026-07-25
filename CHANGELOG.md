@@ -4,6 +4,64 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.9.0] - 2026-07-25
+
+A 10-week ledger review (2026-05-06 → 07-25, 1282 attempts across 1195 delegations) drove this release. Three of the findings invalidated assumptions baked into earlier versions.
+
+### Fixed
+
+- **Rate-limit detection never matched real CLI output, so fallback silently never fired.** `rateLimitPatterns` contained `"try again later"`, but Codex actually says `"...or try again at Jul 29th, 2026 10:11 PM."`, and it had no entry at all for Copilot's `"transient_bad_request"`. Result: **105 attempts** (40 codex quota + 65 copilot upstream) were classified `agent_failed`, which `isTransientFailure` treats as non-retryable — so no fallback was attempted and the user got a hard failure. Across the window, `fallback_reason` was **only ever `timed_out`** (32 times); `rate_limited` never fired once in 10 weeks. **67 of 204 totally-failed runs (33%)** trace to this.
+
+  Replaying the real ledger through the new table: **116 of 151** historical `agent_failed` attempts (77%) now classify as transient and would fall back, and 87% now produce a diagnostic hint.
+
+- **`launch_failure` blamed the agent for git problems.** Worktree creation, context-diff apply, and delegation-ID generation all failed before the agent process was ever started, yet were classified `launch_failure` (a transient class that triggered fallback to a different agent — which cannot fix a non-git working directory). These now classify as the new `orchestration_error` and never count against agent health.
+
+### Added
+
+- **`quancode batch` — one template, many items, resumable.** Batch work was the single largest use of QuanCode in the review window and had no tool support at all: 561 of 1279 attempts (44%) came from two projects applying one task template across a list of scopes, driven by hand one `delegate` at a time. The cost showed up as **116 tasks re-delegated across separate runs for 291 attempts (23% of all activity)** — one scope was re-sent seven times before succeeding, another five times and never succeeded.
+
+  ```
+  quancode batch --template-file review.tmpl --items-file scopes.txt --dry-run
+  quancode batch --template-file review.tmpl --items-file scopes.txt
+  quancode batch --resume batch_7f3a2b1c
+  ```
+
+  - **Successful items are never re-run.** Resume picks up exactly where a batch stopped. This is skip-on-success with at-least-once execution, not exactly-once: an agent can change files and then the process can die before the result is recorded, so batch tasks should tolerate repetition.
+  - **Resume distinguishes transient from deterministic failures.** Timeouts, rate limits, and launch failures retry automatically; anything else stays failed until `--retry-failed`. Without this, the A-BATCH-023 pattern (five identical re-sends, never succeeding) would repeat on every resume, burning quota each time.
+  - **The template and item list are frozen into a manifest** at creation. Editing the template file later cannot silently change what a half-finished batch is doing. This is why batch state is not derived from the ledger the way health is — the ledger records what *ran*, and can never say which items were never started.
+  - **`--dry-run` validates every item renders** (`missingkey=error`, so `{{.Itme}}` fails preflight rather than sending a thousand prompts containing `<no value>`) and prints the first and last rendered task.
+  - **Serial execution.** Batch is the heaviest thing QuanCode does; running items in parallel multiplies the rate at which a shared account hits its quota. Concurrency is deliberately not offered yet.
+  - Each item is an ordinary delegation, so fallback, the health breaker, context injection, and ledger recording all behave exactly as in `quancode delegate`. Health is re-derived per item rather than once per batch, since a batch can run for hours. Ledger entries carry `batch_id` and a stable `batch_item_id` (zero-padded index + content hash, so duplicate item text stays distinguishable). Ctrl+C stops after the current item and prints the resume command.
+
+  Design reviewed with codex, which corrected three things in the original draft: the manifest cannot be ledger-derived, resume must not blindly retry deterministic failures, and v1 should be serial-only rather than shipping a worker pool.
+
+- **Agent health circuit breaker (`health/`).** GitHub Copilot CLI failed **66 consecutive delegations** between 2026-06-24 and 07-25 without a single success, while remaining the top fallback target (24 of 29 fallback chains) and the speculative backup in **54 of 55** runs — burning 90 minutes of wall-clock on guaranteed failures and dragging the fallback rescue rate from 60% down to 34%. Routing had no idea the agent was dead.
+
+  Automatic routing (initial selection, fallback, speculative backup, and `route` preview) now skips agents with a recent streak of agent-fault failures. Design notes:
+  - **Derived from the ledger, not stored separately.** No second source of truth and no read-modify-write races between concurrent delegations — each one just appends its own line. `ledger.ReadSince` now skips log files by date, so a 24h lookback no longer parses months of history.
+  - **Only agent-fault failures count.** Timeouts are deliberately excluded: codex timed out 128 times in the window while succeeding 82% overall, so timeouts track task difficulty, not agent health. Task failures, patch conflicts, and orchestration errors are likewise excluded — a bad task can never disable a healthy agent.
+  - **Exponential backoff**, 15 min base to a 6 h ceiling, so a briefly flaky agent recovers fast while a month-dead one is probed rarely instead of once every 15 minutes.
+  - **Never blocks an explicitly named agent** (`--agent X` warns and runs anyway), and **fails open**: if every candidate is unhealthy, exactly one is force-probed — the one closest to recovering — rather than marching a fallback chain through every dead agent.
+  - Configure via `preferences.agent_health` (`enabled`, `failure_threshold`, `cooldown_secs`, `max_cooldown_secs`, `lookback_secs`). Absent config means enabled with defaults; `enabled: false` turns it off.
+
+- **Timeout-headroom warning**, replacing the task-size warning. 138 of 152 timeouts landed exactly on the configured ceiling, while codex's *successful* runs reached p90=412s and p99=474s against a 480s cap — the work genuinely needs most of the budget and anything slightly slower dies. `quancode delegate` now warns when an agent's recent successful runs (p90, from the ledger) consume more than 80% of its effective timeout, and suggests a concrete larger `--timeout`.
+
+- **`agent_fault` ledger field** and `quancode agents` health column, so a broken agent is visible rather than inferred.
+
+- **Genuine launch failures are now classified as such.** When `cmd.Run` fails before the process produces an exit status (binary missing or not executable, working directory gone), the runner returns a non-nil `Result` with `ExitCode: 0` *plus* an error. `classifyFailure` only checked for a nil Result, so a missing agent binary was labelled `agent_failed`: no fallback, and no health signal. Found by codex while reviewing this release's diff.
+
+- **Async fallback respects the health breaker and records its attempts.** `delegate --async` selected fallback agents with the raw router, so a background job kept handing work to a known-dead agent. It also overwrote each attempt's result and only wrote the final one to the ledger, which meant health could never learn from async failures at all. Both found by codex during implementation review.
+
+### Changed
+
+- **`diagnostic_hints` and rate-limit patterns are now one table** (`config.CommonFailurePatterns`). They were separate lists and both went stale: across 1282 attempts and 288 failures, `matched_hints` fired **zero times** — the only built-in patterns were for copilot (`"Access denied by policy"`, an April symptom long since replaced by `transient_bad_request`) and qoder, while codex, the agent with the most failures, had none. Each pattern now carries `Transient` (worth retrying elsewhere) and `AgentFault` (counts toward health), so the fallback decision and the user-facing hint can no longer drift apart. Matching is now case-insensitive, and every pattern is transcribed verbatim from observed CLI output.
+
+- **`preferences.task_size_warn_threshold` now defaults to disabled** (was 4000). The v0.8.24 analysis behind that threshold did not survive a larger sample: tasks over 4000 chars were only n=25, every stable bucket between 1000 and 3000 chars showed a timeout ratio of 0.84–1.11 (no signal), and the warned group actually timed out *less* than the unwarned one (10.8% vs 12.0%). The setting still works if set explicitly. The primary-agent prompt's `BEFORE DELEGATING` section no longer asserts the 3x claim and now tells the orchestrator to judge the work rather than the character count.
+
+- **Gemini CLI now ships disabled by default**, matching Copilot. Every gemini failure in the window was an account-eligibility error (`throwIneligibleOrProjectIdError`), not a task failure. Opt in with `enabled: true`.
+
+- **Speculative parallelism is documented as not recommended.** Over 55 speculative runs the backup won **twice** (3.6%) while burning 75 minutes of wall-time; 42 runs were "primary wins, backup wasted". The code default was already `0` (disabled). Speculative backup selection now also respects the health breaker and skips speculation entirely rather than racing a known-broken agent.
+
 ## [v0.8.25] - 2026-05-05
 
 ### Added
