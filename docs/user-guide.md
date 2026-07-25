@@ -73,6 +73,44 @@ For multi-phase tasks (analyze → implement → test), the AI can run a pipelin
 
 For background tasks, the AI manages the full lifecycle: launch, monitor, retrieve results, cancel, and clean up.
 
+### Agent Health
+
+QuanCode watches how each agent has been doing lately and stops routing work to one that is currently broken — out of quota, upstream rejecting everything, or logged out. After a few such failures in a row an agent is set aside for a while, with the wait growing longer the longer it stays broken.
+
+This only affects automatic routing. If you name an agent explicitly with `--agent`, it still runs; you just get a warning first. And if every agent looks unhealthy, QuanCode still tries one rather than leaving you stuck.
+
+Timeouts and ordinary task failures never count against an agent — a hard task is not a broken agent.
+
+Run `quancode agents` to see which agents are currently set aside and for how long.
+
+### Batch (`quancode batch`)
+
+When you have the same task to run across many items — one per scope, per chunk, per file — `batch` runs them one at a time and remembers which ones finished.
+
+```bash
+# check what would run, without executing anything
+quancode batch --template-file review.tmpl --items-file scopes.txt --dry-run
+
+# run it
+quancode batch --template-file review.tmpl --items-file scopes.txt
+
+# pick up where it left off — finished items are not redone
+quancode batch --resume batch_7f3a2b1c
+```
+
+The template is Go `text/template` with `{{.Item}}`, `{{.Index}}` (0-based), `{{.Number}}` (1-based), and `{{.Total}}`. The items file is one item per line; blank lines and `#` comments are ignored.
+
+Things worth knowing:
+
+- **Successful items never re-run.** Resume is safe to call repeatedly.
+- **Failures are treated differently depending on why.** Timeouts and rate limits retry automatically on the next run. A task that failed for its own reasons stays failed until you pass `--retry-failed`, so a genuinely broken item does not burn quota every time you resume.
+- **The template is frozen when the batch is created.** Editing your template file afterwards will not change a half-finished batch — create a new one instead.
+- **`--dry-run` checks every item renders** and shows you the first and last prompt. A typo in the template fails there rather than after 900 delegations.
+- **Items run one at a time.** Running them in parallel would multiply how fast a shared account hits its quota.
+- **Ctrl+C stops after the current item** and prints the resume command.
+
+`quancode batch --list` shows recent batches and their status.
+
 ## Optional Commands for Power Users
 
 These commands are useful for debugging, monitoring, or manual intervention. You can use QuanCode productively without ever touching them.
@@ -149,6 +187,23 @@ The following sections document all flags and behaviors in detail. They are prim
 | `--context-max-size <bytes>` | Override context budget (default 32KB) |
 | `--no-context` | Disable automatic context injection |
 | `--dry-run` | Preview full prompt without executing |
+
+### Batch Flags
+
+| Flag | Description |
+|---|---|
+| `--template <text>` | Inline task template |
+| `--template-file <path>` | Read the template from a file |
+| `--item <text>` | One item (repeatable) |
+| `--items-file <path>` | One item per line; `#` comments allowed |
+| `--resume <batch-id>` | Continue an existing batch |
+| `--retry-failed` | Also re-run items that failed for non-transient reasons |
+| `--stop-on-failure` | Halt at the first failed item |
+| `--dry-run` | Validate and preview without executing |
+| `--agent <name>` | Use one agent for every item (default: auto-route) |
+| `--isolation <mode>` | `inplace`, `worktree`, or `patch` |
+| `--timeout <secs>` | Per-item timeout |
+| `--list` | List recent batches |
 
 ### Job Management
 

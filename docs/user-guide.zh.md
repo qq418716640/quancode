@@ -71,9 +71,47 @@ AI 会把任务路由给最合适的子 agent：
 
 对于多阶段任务（分析 → 实现 → 测试），AI 可以运行流水线，每个阶段的输出流向下一个阶段。各阶段可以有独立的降级策略、验证命令和失败策略。
 
+### Agent 健康度
+
+QuanCode 会观察每个 agent 最近的表现，把当前明显坏掉的 agent（配额耗尽、上游持续拒绝、登录过期）暂时从自动路由里摘掉。连续失败几次后该 agent 会被搁置一段时间，坏得越久搁置越久。
+
+这只影响自动路由。你用 `--agent` 明确点名的 agent 照常执行，只是会先给你一条警告。如果所有 agent 看起来都不健康，QuanCode 仍会挑一个来试，不会让你无路可走。
+
+超时和普通任务失败不算在 agent 头上 —— 任务难不等于 agent 坏了。
+
+`quancode agents` 可以看当前哪些 agent 被搁置、还要多久恢复。
+
 ### 任务管理（`quancode job`）
 
 后台任务的完整生命周期管理：启动、监控、获取结果、取消、清理。
+
+### 批量派单（`quancode batch`）
+
+当同一个任务要跑很多个 item（每个 scope 一次、每个分片一次、每个文件一次）时，`batch` 会逐个执行，并记住哪些已经完成。
+
+```bash
+# 先看会跑什么，不实际执行
+quancode batch --template-file review.tmpl --items-file scopes.txt --dry-run
+
+# 正式执行
+quancode batch --template-file review.tmpl --items-file scopes.txt
+
+# 断点续跑 —— 已成功的 item 不会重做
+quancode batch --resume batch_7f3a2b1c
+```
+
+模板用 Go `text/template`，可用变量 `{{.Item}}`、`{{.Index}}`（从 0 开始）、`{{.Number}}`（从 1 开始）、`{{.Total}}`。items 文件每行一个 item，空行和 `#` 开头的行会被忽略。
+
+几点值得注意：
+
+- **成功的 item 永不重跑**，resume 可以放心反复执行。
+- **失败按原因区别对待**：超时、限流这类瞬时失败下次自动重试；任务自身的确定性失败会保持 failed，只有加 `--retry-failed` 才重跑 —— 免得一个真的跑不通的 item 每次 resume 都白烧一次配额。
+- **模板在创建批次时就冻结了**。之后再改模板文件不会影响跑到一半的批次，要换模板请新建批次。
+- **`--dry-run` 会校验每个 item 都能渲染**，并展示第一条和最后一条 prompt。模板打错字在这里就报错，而不是跑完 900 次委派才发现。
+- **item 串行执行**。并发会成倍加快共享账号耗尽配额的速度。
+- **Ctrl+C 会跑完当前 item 后停止**，并打印续跑命令。
+
+`quancode batch --list` 查看最近的批次和状态。
 
 ## 高级用户可选命令
 
