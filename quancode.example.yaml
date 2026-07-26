@@ -15,7 +15,8 @@ agents:
     delegate_args:
       - -p
       - --output-format
-      - text
+      - json
+    result_format: json_object
     timeout_secs: 300
     enabled: true
     preferred_for:
@@ -38,9 +39,11 @@ agents:
     prompt_file: AGENTS.md
     delegate_args:
       - exec
-      - --full-auto
+      - --sandbox
+      - workspace-write
       - --ephemeral
-    output_flag: --output-last-message
+      - --json
+    result_format: jsonl_events
     timeout_secs: 180
     enabled: true
     preferred_for:

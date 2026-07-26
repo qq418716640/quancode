@@ -333,6 +333,10 @@ func writeLedger(state *job.State, ar attemptResult, verifyJSON json.RawMessage)
 		entry.ChangedFiles = ar.changedFiles
 		entry.MatchedHints = ar.result.MatchedHints
 		entry.AgentFault = ar.agentFault
+		entry.CostUSD = ar.result.CostUSD
+		entry.TokensIn = ar.result.TokensIn
+		entry.TokensOut = ar.result.TokensOut
+		entry.AgentSessionID = ar.result.AgentSessionID
 	}
 	entry.TaskSizeWarning = ar.taskSizeWarning
 	// Map job status to ledger status for consistency.

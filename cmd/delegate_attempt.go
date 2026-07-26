@@ -309,6 +309,12 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 	logEntry.TaskSizeWarning = ar.taskSizeWarning
 	logEntry.FailureClass = ar.failureClass
 	logEntry.AgentFault = ar.agentFault
+	if ar.result != nil {
+		logEntry.CostUSD = ar.result.CostUSD
+		logEntry.TokensIn = ar.result.TokensIn
+		logEntry.TokensOut = ar.result.TokensOut
+		logEntry.AgentSessionID = ar.result.AgentSessionID
+	}
 	logEntry.ConflictFiles = ar.conflictFiles
 	if ar.patchApplyErr != nil {
 		logEntry.ChangedFiles = nil // patch was not applied to the main tree

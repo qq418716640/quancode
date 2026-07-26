@@ -88,7 +88,22 @@ Config lookup order:
 
 - Type: string
 - Default: empty
-- Meaning: flag used by CLIs that write their final answer to a file rather than stdout
+- Meaning: flag used by CLIs that write their final answer to a file rather than stdout. Only consulted when `output_mode` is `file`.
+
+### `result_format`
+
+- Type: string
+- Supported values: `json_object`, `jsonl_events`
+- Default: empty (no extraction)
+
+Meaning: how to interpret the CLI's raw stdout after a run, to pull out the human-readable answer plus whatever cost and token usage the CLI reports.
+
+- `json_object`: stdout is a single JSON object, as produced by `claude -p --output-format json`. `.result` replaces the stored output; `.total_cost_usd`, `.usage.*`, and `.session_id` are recorded. An `.api_error_status` of 429 additionally marks the failure as transient so fallback fires.
+- `jsonl_events`: stdout is a JSONL event stream, as produced by `codex exec --json`. The last `agent_message` item becomes the stored output; the `turn.completed` usage block supplies the token counts. Codex reports no dollar figure, so cost stays absent rather than being recorded as zero.
+
+This must be paired with the `delegate_args` flag that actually makes the CLI emit that format. It is backfilled automatically only for an agent still running the stock `delegate_args`; if you customize those, set `result_format` yourself or leave it empty. Output that does not parse is ignored — the stored output is left exactly as the CLI produced it.
+
+Captured values appear in the ledger as `cost_usd`, `tokens_in`, `tokens_out`, and `agent_session_id`, and in the dashboard's Cost card and delegation detail panel.
 
 ### `timeout_secs`
 
@@ -196,6 +211,7 @@ Meaning:
 ## Compatibility Notes
 
 - Older config files may omit newer adapter fields. `quancode` backfills missing known-agent defaults at load time.
+- A CLI can deprecate a flag QuanCode already wrote into your config. Backfill only fills *empty* fields, so it cannot help there; instead, a `delegate_args` list that byte-for-byte matches a superseded QuanCode default is upgraded to the current one at load time. Change any part of the list and it is yours — nothing rewrites it.
 - Different CLIs may require different combinations of `prompt_mode`, `task_mode`, and `output_mode`.
 - Avoid copying local proxy settings or machine-specific paths into shared example configs.
 

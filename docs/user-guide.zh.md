@@ -146,6 +146,14 @@ quancode dashboard --open         # 自动打开浏览器
 
 浏览器界面，含委派历史、异步任务状态、pipeline 可视化和 SSE 实时更新。仅监听 `127.0.0.1`，只读，无需认证。前端资源已内嵌，无需联网。
 
+### 成本与 token 用量
+
+CLI 自身会上报用量的 agent，每次委派都会记录：Claude 上报美元和 token，Codex 只上报 token（它按订阅计费，不按调用计费）。失败的委派同样记录——token 照样花掉了。
+
+Dashboard 的 Cost 卡片在显示总额的同时会标出有多少次委派真正贡献了这个数字，因为它永远覆盖不到不上报的 agent。单次委派的成本、token 和该 agent 自己的 session ID 在明细面板里；在 ledger 里对应 `cost_usd`、`tokens_in`、`tokens_out`、`agent_session_id` 四个字段。
+
+无需配置，Claude 和 Codex 默认开启。如果你改过这两个 agent 的 `delegate_args`，参见 [`result_format`](agent-config-schema.md#result_format)。
+
 ### 手动委派
 
 少数情况下你可能想从终端直接委派：

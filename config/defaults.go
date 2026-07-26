@@ -9,22 +9,31 @@ var KnownAgents = map[string]AgentConfig{
 		Description:  "Strong at architecture, complex reasoning, multi-file edits",
 		Strengths:    []string{"architecture", "complex-reasoning", "debugging", "multi-file-edits"},
 		PrimaryArgs:  []string{"--dangerously-skip-permissions", "--append-system-prompt"},
-		DelegateArgs: []string{"--dangerously-skip-permissions", "-p", "--output-format", "text"},
+		DelegateArgs: []string{"--dangerously-skip-permissions", "-p", "--output-format", "json"},
+		ResultFormat: "json_object",
 		TimeoutSecs:  480,
 		Enabled:      true,
 		PreferredFor: []string{"architecture", "refactor", "debug", "design", "plan"},
 		Priority:     10,
 	},
 	"codex": {
-		Name:         "Codex CLI",
-		Command:      "codex",
-		Description:  "Strong at quick edits, code generation, test writing",
-		Strengths:    []string{"quick-edits", "code-generation", "test-writing"},
-		PrimaryArgs:  []string{"-s", "danger-full-access"},
-		PromptMode:   "file",
-		PromptFile:   "AGENTS.md",
-		DelegateArgs: []string{"exec", "--full-auto", "--ephemeral"},
-		OutputFlag:   "--output-last-message",
+		Name:        "Codex CLI",
+		Command:     "codex",
+		Description: "Strong at quick edits, code generation, test writing",
+		Strengths:   []string{"quick-edits", "code-generation", "test-writing"},
+		PrimaryArgs: []string{"-s", "danger-full-access"},
+		PromptMode:  "file",
+		PromptFile:  "AGENTS.md",
+		// --sandbox workspace-write replaces the deprecated --full-auto
+		// (codex now warns "‑‑full-auto is deprecated; use --sandbox
+		// workspace-write instead" on every invocation).
+		DelegateArgs: []string{"exec", "--sandbox", "workspace-write", "--ephemeral", "--json"},
+		ResultFormat: "jsonl_events",
+		// No OutputFlag: --output-last-message was only ever reachable under
+		// output_mode: file, which codex never set, and it is now actively
+		// wrong — the runner would overwrite Stdout with the plain-text final
+		// message, leaving the JSONL parser nothing to read and dropping
+		// every token count. --json supersedes it.
 		TimeoutSecs:  480,
 		Enabled:      true,
 		PreferredFor: []string{"test", "fix", "generate", "create", "write", "quick"},

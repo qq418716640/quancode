@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 
@@ -96,6 +97,32 @@ type AgentConfig struct {
 	// stderr to give the user an actionable recovery step (e.g. "copilot
 	// logout && login").
 	DiagnosticHints []DiagnosticHint `yaml:"diagnostic_hints,omitempty"`
+	// ResultFormat tells the generic adapter how to interpret this agent's
+	// raw stdout after a run, to extract the human-readable answer plus any
+	// cost/token metadata the CLI reports. Explicit opt-in only — unwrapping
+	// happens whether the run succeeded or failed, so it must never fire for
+	// an agent whose stdout could legitimately be arbitrary JSON the task
+	// itself asked for.
+	//
+	//   ""             no extraction (default)
+	//   "json_object"  stdout is one JSON object (Claude Code --output-format
+	//                  json): ".result" (string) replaces Stdout, ".total_cost_usd"
+	//                  / ".usage.input_tokens" / ".usage.output_tokens" /
+	//                  ".session_id" are captured. ".api_error_status" == 429
+	//                  additionally marks the failure transient/agent-fault.
+	//   "jsonl_events" stdout is JSONL (Codex --json): the last
+	//                  {"type":"item.completed","item":{"type":"agent_message",...}}
+	//                  event's text replaces Stdout; the last
+	//                  {"type":"turn.completed","usage":{...}} event's tokens
+	//                  are captured.
+	//
+	// Output that does not parse — empty, an unexpected shape, a CLI that
+	// ignored the flag — is a silent no-op: Stdout is left untouched and no
+	// metadata is set. A stream killed mid-turn is the one partial case:
+	// whatever the agent emitted before the cut is still extracted, counts
+	// that never arrived stay unset, and the pre-parse text is kept in
+	// runner.Result.RawStdout so failure diagnosis still sees it.
+	ResultFormat string `yaml:"result_format,omitempty"`
 }
 
 // DiagnosticHint is a per-CLI failure pattern and recovery message.
@@ -140,6 +167,7 @@ var (
 	validPromptModes    = map[string]bool{"": true, "append_arg": true, "stdin": true, "env": true, "file": true}
 	validTaskModes      = map[string]bool{"": true, "arg": true, "stdin": true}
 	validOutputModes    = map[string]bool{"": true, "stdout": true, "file": true}
+	validResultFormats  = map[string]bool{"": true, "json_object": true, "jsonl_events": true}
 	validIsolationModes = map[string]bool{"": true, "inplace": true, "worktree": true, "patch": true}
 	validFallbackModes  = map[string]bool{"": true, "auto": true, "off": true}
 	validDashboardModes = map[string]bool{"": true, "auto": true, "off": true}
@@ -161,6 +189,7 @@ func Load(explicit string) (*Config, error) {
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return nil, fmt.Errorf("parse config %s: %w", explicit, err)
 		}
+		migrateDeprecatedDefaults(&cfg)
 		applyKnownAgentDefaults(&cfg)
 		applyPreferencesDefaults(&cfg.Preferences)
 		return &cfg, nil
@@ -181,6 +210,7 @@ func Load(explicit string) (*Config, error) {
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return nil, fmt.Errorf("parse config %s: %w", p, err)
 		}
+		migrateDeprecatedDefaults(&cfg)
 		applyKnownAgentDefaults(&cfg)
 		applyPreferencesDefaults(&cfg.Preferences)
 		return &cfg, nil
@@ -252,6 +282,76 @@ func applyKnownAgentDefaults(cfg *Config) {
 		if len(ac.DiagnosticHints) == 0 && len(def.DiagnosticHints) > 0 {
 			ac.DiagnosticHints = def.DiagnosticHints
 		}
+		// ResultFormat is only meaningful alongside the flags that make the
+		// CLI emit that format, so it is backfilled only for an agent still
+		// running the stock DelegateArgs (empty, or exactly the current
+		// default — migrateDeprecatedDefaults has already run). Backfilling
+		// it onto a customized argument list would arm a parser for output
+		// the CLI was never asked to produce, and a task whose own answer
+		// happened to look like the envelope would be silently rewritten.
+		if ac.ResultFormat == "" && (len(ac.DelegateArgs) == 0 || slices.Equal(ac.DelegateArgs, def.DelegateArgs)) {
+			ac.ResultFormat = def.ResultFormat
+		}
+		cfg.Agents[key] = ac
+	}
+}
+
+// deprecatedDelegateArgs maps a known-agent key to prior DelegateArgs values
+// that have since been superseded. migrateDeprecatedDefaults upgrades a
+// user's persisted config from one of these to the current KnownAgents
+// default, but ONLY on an exact match — so a config a user customized in any
+// way (even by only removing one flag) is left untouched.
+//
+// This exists because applyKnownAgentDefaults only fills *empty* fields:
+// once `quancode init` has written a concrete DelegateArgs list to
+// ~/.config/quancode/quancode.yaml, that value is not empty and a future
+// KnownAgents change (e.g. codex's --full-auto being deprecated by the CLI
+// itself) would otherwise never reach an existing install.
+var deprecatedDelegateArgs = map[string][][]string{
+	"codex": {
+		{"exec", "--full-auto", "--ephemeral"},
+		{"exec", "--sandbox", "workspace-write", "--ephemeral"},
+	},
+	"claude": {
+		{"--dangerously-skip-permissions", "-p", "--output-format", "text"},
+		{"-p", "--output-format", "text"}, // v0.1.0, before --dangerously-skip-permissions
+	},
+}
+
+// deprecatedOutputFlags maps a known-agent key to prior OutputFlag values
+// that the current default no longer sets. Same exact-match rule as
+// deprecatedDelegateArgs, and needed for the same reason: dropping a field
+// from KnownAgents does not reach a config that already persisted it.
+//
+// codex's --output-last-message became actively harmful once --json arrived:
+// under output_mode: file the runner overwrites Stdout with the plain-text
+// final message, leaving the JSONL parser nothing to read.
+var deprecatedOutputFlags = map[string][]string{
+	"codex": {"--output-last-message"},
+}
+
+// migrateDeprecatedDefaults upgrades fields that byte-for-byte match a
+// superseded default to the current KnownAgents default.
+//
+// The agent's Command must also still be the stock one. A config that points
+// an agent key at a pinned or forked binary is not the config these
+// migrations were written for, and swapping in flags that build of the CLI
+// may not accept would break it silently.
+func migrateDeprecatedDefaults(cfg *Config) {
+	for key, ac := range cfg.Agents {
+		def, ok := KnownAgents[key]
+		if !ok || ac.Command != def.Command {
+			continue
+		}
+		for _, prior := range deprecatedDelegateArgs[key] {
+			if slices.Equal(ac.DelegateArgs, prior) {
+				ac.DelegateArgs = def.DelegateArgs
+				break
+			}
+		}
+		if def.OutputFlag == "" && slices.Contains(deprecatedOutputFlags[key], ac.OutputFlag) {
+			ac.OutputFlag = ""
+		}
 		cfg.Agents[key] = ac
 	}
 }
@@ -319,6 +419,11 @@ func (c *Config) Validate() []string {
 		}
 		if !validPromptModes[ac.PromptMode] {
 			problems = append(problems, fmt.Sprintf("agent %q: invalid prompt_mode %q", key, ac.PromptMode))
+		}
+		// A typo here would otherwise disable parsing silently, leaving a raw
+		// JSON envelope as the delegation's answer and no cost data at all.
+		if !validResultFormats[ac.ResultFormat] {
+			problems = append(problems, fmt.Sprintf("agent %q: invalid result_format %q", key, ac.ResultFormat))
 		}
 		if !validTaskModes[ac.TaskMode] {
 			problems = append(problems, fmt.Sprintf("agent %q: invalid task_mode %q", key, ac.TaskMode))

@@ -640,6 +640,10 @@ func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int
 		logEntry.ChangedFiles = ar.changedFiles
 		logEntry.MatchedHints = ar.result.MatchedHints
 		logEntry.AgentFault = ar.agentFault
+		logEntry.CostUSD = ar.result.CostUSD
+		logEntry.TokensIn = ar.result.TokensIn
+		logEntry.TokensOut = ar.result.TokensOut
+		logEntry.AgentSessionID = ar.result.AgentSessionID
 	}
 	logEntry.TaskSizeWarning = ar.taskSizeWarning
 	logEntry.FailureClass = ar.failureClass

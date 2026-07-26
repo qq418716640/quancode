@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [v0.9.1] - 2026-07-26
+
+Both changes come from a survey of what Codex CLI and Claude Code shipped over the last two months. Both were verified against the installed CLIs (codex-cli 0.145.0, claude-code 2.1.219) rather than from release notes.
+
+### Fixed
+
+- **Codex's `--full-auto` is deprecated.** Every delegation to codex printed `--full-auto is deprecated; use --sandbox workspace-write instead`. Now `--sandbox workspace-write`.
+
+  Changing the built-in default is not enough on its own: `quancode init` writes concrete `delegate_args` into `~/.config/quancode/quancode.yaml`, and backfill only fills *empty* fields, so an existing install would keep sending the deprecated flag forever. Load-time migration now upgrades a `delegate_args` list that byte-for-byte matches a superseded QuanCode default — and only then. Customize any part of the list and it stays exactly as you wrote it.
+
+### Added
+
+- **Cost and token usage per delegation.** Claude reports dollars and tokens (`-p --output-format json`); codex reports tokens (`exec --json`). Both are recorded in the ledger as `cost_usd`, `tokens_in`, `tokens_out`, and `agent_session_id`, and surfaced in the dashboard as a Cost card plus per-delegation figures in the detail panel.
+
+  - **Recorded on failure too.** A failed turn still consumed tokens and money, and those are the runs worth accounting for.
+  - **"Not reported" and "$0" stay distinguishable.** Codex bills a subscription rather than the call, so it reports no dollar figure at all; that is stored as absent, not as zero. The dashboard's Cost card shows how many delegations contributed to the total instead of implying it covers all of them.
+  - **Claude's `input_tokens` counts only the uncached prompt** — a real turn reported 2 against 15273 cache-read and 6977 cache-write. `tokens_in` is the sum, since recording the bare field would understate the turn by four orders of magnitude.
+  - Driven by a new `result_format` agent config field (`json_object` / `jsonl_events`) rather than per-CLI Go code, so a fourth CLI that grows structured output needs config, not a code path. It is inferred only for an agent still running the stock `delegate_args`; customize those and the parser stays disarmed unless you set `result_format` yourself. Output that does not parse is left exactly as the CLI produced it.
+  - Claude's `api_error_status: 429` now classifies the failure directly, rather than depending on the error text happening to match a pattern.
+
+  Reviewed with codex over two rounds, which caught seven real problems in the first draft — among them that `result_format` was being inferred independently of the flags that produce it (so a task whose own answer looked like the envelope would have been silently rewritten), that unwrapping the envelope destroyed the failure evidence diagnostics scan, and that the oldest persisted claude config predates `--dangerously-skip-permissions` and so was missing from the migration table.
+
 ## [v0.9.0] - 2026-07-25
 
 A 10-week ledger review (2026-05-06 → 07-25, 1282 attempts across 1195 delegations) drove this release. Three of the findings invalidated assumptions baked into earlier versions.

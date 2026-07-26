@@ -144,6 +144,14 @@ quancode dashboard --open         # auto-open browser
 
 Browser-based UI with delegation history, async job status, pipeline visualization, and real-time updates via SSE. Listens on `127.0.0.1` only, read-only, no auth required. Frontend assets are embedded — no internet needed.
 
+### Cost and token usage
+
+Agents whose CLI reports usage have it recorded per delegation — Claude reports dollars and tokens, Codex reports tokens only (its subscription bills the account, not the call). Failed delegations are recorded too: they still spent the tokens.
+
+The dashboard's Cost card shows the total alongside how many delegations actually contributed to it, since the figure never covers agents that report nothing. Per-delegation cost, tokens, and the agent's own session ID are in the detail panel; in the ledger they are the `cost_usd`, `tokens_in`, `tokens_out`, and `agent_session_id` fields.
+
+Nothing to configure — this is on by default for Claude and Codex. If you have customized `delegate_args` for those agents, see [`result_format`](agent-config-schema.md#result_format).
+
 ### Manual Delegation
 
 In rare cases you may want to delegate directly from the terminal:

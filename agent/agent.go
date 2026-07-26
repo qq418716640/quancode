@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -176,6 +177,7 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (res
 		if result != nil {
 			result.DelegationID = delegationID
 		}
+		a.applyResultFormat(result)
 		a.applyDiagnosticHints(result, err)
 	}()
 
@@ -219,6 +221,7 @@ func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task st
 		if result != nil {
 			result.DelegationID = delegationID
 		}
+		a.applyResultFormat(result)
 		a.applyDiagnosticHints(result, err)
 	}()
 
@@ -258,6 +261,190 @@ func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task st
 	return runner.RunWithContext(ctx, workDir, env, a.cfg.Command, args...)
 }
 
+// claudeJSONResult is the schema of `claude -p --output-format json`'s single
+// stdout object, restricted to the fields QuanCode reads. Verified empirically
+// against claude-code 2.1.219, including the error path (an invalid --model
+// still yields a full object with is_error/result/api_error_status set).
+type claudeJSONResult struct {
+	Result         *string  `json:"result"`
+	TotalCostUSD   *float64 `json:"total_cost_usd"`
+	SessionID      *string  `json:"session_id"`
+	APIErrorStatus *int     `json:"api_error_status"`
+	Usage          *struct {
+		// InputTokens counts only the uncached portion of the prompt and is
+		// routinely a single-digit number on a cached turn (verified: a real
+		// turn reported input_tokens=2 against 15273 cache-read + 6977
+		// cache-write). Recording it alone would be actively misleading, so
+		// TokensIn is the sum of all three — every token the model read.
+		InputTokens             *int64 `json:"input_tokens"`
+		CacheCreationInputToken *int64 `json:"cache_creation_input_tokens"`
+		CacheReadInputTokens    *int64 `json:"cache_read_input_tokens"`
+		OutputTokens            *int64 `json:"output_tokens"`
+	} `json:"usage"`
+}
+
+// codexJSONLEvent is one line of `codex exec --json`'s JSONL event stream,
+// restricted to the two event shapes QuanCode reads. Verified empirically
+// against codex-cli 0.145.0.
+// Codex reports no dollar cost (the subscription bills the account, not the
+// call), so CostUSD stays nil for it — which is exactly what the pointer is
+// for: "not reported" is not "$0".
+type codexJSONLEvent struct {
+	Type     string `json:"type"`
+	ThreadID string `json:"thread_id"`
+	Item     *struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"item"`
+	// Unlike claude's, codex's input_tokens is the full prompt size, with
+	// cached_input_tokens reported separately as a subset. No summing.
+	Usage *struct {
+		InputTokens  *int64 `json:"input_tokens"`
+		OutputTokens *int64 `json:"output_tokens"`
+	} `json:"usage"`
+}
+
+// httpStatusRateLimited is the HTTP status Claude's JSON envelope reports for
+// a 429; used to mark the failure transient/agent-fault directly rather than
+// relying on text-pattern matching, which is what config.CommonFailurePatterns
+// falls back to for every other agent.
+const httpStatusRateLimited = 429
+
+// rateLimitHint must stay identical to the hint config.CommonFailurePatterns
+// attaches to "too many requests" so the two detection paths collapse to one
+// message when both fire on the same failure.
+const rateLimitHint = "Agent returned HTTP 429. Falling back to another agent."
+
+// applyResultFormat interprets result.Stdout according to the agent's
+// configured ResultFormat, replacing it with the human-readable answer and
+// populating cost/token metadata. Runs before applyDiagnosticHints so hint
+// matching sees the unwrapped text, not a JSON envelope.
+//
+// Applies on every completed process, success or failure alike — a failed
+// turn can still have consumed tokens and money, which is the case most
+// worth surfacing. Output that does not parse (empty, unexpected shape, a
+// CLI that ignored the flag) is a silent no-op: Stdout is left exactly as it
+// was and no metadata is set. A stream truncated mid-turn is the one partial
+// case — whatever the agent managed to emit is kept, unreported counts stay
+// nil, and the pre-parse text is preserved in RawStdout so hint matching
+// still sees the failure evidence.
+func (a *genericAgent) applyResultFormat(result *runner.Result) {
+	if result == nil {
+		return
+	}
+	switch a.cfg.ResultFormat {
+	case "json_object":
+		applyClaudeJSONResult(result)
+	case "jsonl_events":
+		applyCodexJSONLEvents(result)
+	}
+}
+
+func applyClaudeJSONResult(result *runner.Result) {
+	var r claudeJSONResult
+	if err := json.Unmarshal([]byte(strings.TrimSpace(result.Stdout)), &r); err != nil {
+		return
+	}
+	// A legitimate envelope always has at least one of these; an empty
+	// decode (e.g. Stdout was "{}" or unrelated JSON) is not one.
+	if r.Result == nil && r.TotalCostUSD == nil && r.Usage == nil && r.SessionID == nil && r.APIErrorStatus == nil {
+		return
+	}
+	// An empty .result carries no answer; replacing Stdout with it would
+	// throw the envelope away and leave the delegation with no output at all.
+	if r.Result != nil && *r.Result != "" {
+		result.RawStdout = result.Stdout
+		result.Stdout = *r.Result
+	}
+	// Otherwise leave Stdout as the raw envelope rather than blanking it —
+	// still readable, and better than losing the only text QuanCode captured.
+	if r.TotalCostUSD != nil {
+		result.CostUSD = r.TotalCostUSD
+	}
+	if r.SessionID != nil {
+		result.AgentSessionID = *r.SessionID
+	}
+	if r.Usage != nil {
+		if in := sumTokens(r.Usage.InputTokens, r.Usage.CacheCreationInputToken, r.Usage.CacheReadInputTokens); in != nil {
+			result.TokensIn = in
+		}
+		result.TokensOut = r.Usage.OutputTokens
+	}
+	if r.APIErrorStatus != nil && *r.APIErrorStatus == httpStatusRateLimited {
+		result.Transient = true
+		result.AgentFault = true
+		// Deliberately the same sentence config.CommonFailurePatterns uses
+		// for "too many requests": an envelope that carries both the status
+		// code and the text must not print the same diagnosis twice.
+		// applyDiagnosticHints does the printing and the dedupe.
+		result.MatchedHints = append(result.MatchedHints, rateLimitHint)
+	}
+}
+
+// sumTokens adds the non-nil counts, returning nil if all of them are absent
+// so an entirely missing usage block stays "not reported" rather than zero.
+func sumTokens(counts ...*int64) *int64 {
+	var total int64
+	seen := false
+	for _, c := range counts {
+		if c != nil {
+			total += *c
+			seen = true
+		}
+	}
+	if !seen {
+		return nil
+	}
+	return &total
+}
+
+func applyCodexJSONLEvents(result *runner.Result) {
+	var finalText, threadID *string
+	var tokensIn, tokensOut *int64
+
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var ev codexJSONLEvent
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			continue
+		}
+		switch ev.Type {
+		case "thread.started":
+			if ev.ThreadID != "" {
+				id := ev.ThreadID
+				threadID = &id
+			}
+		case "item.completed":
+			if ev.Item != nil && ev.Item.Type == "agent_message" {
+				text := ev.Item.Text
+				finalText = &text
+			}
+		case "turn.completed":
+			if ev.Usage != nil {
+				tokensIn = ev.Usage.InputTokens
+				tokensOut = ev.Usage.OutputTokens
+			}
+		}
+	}
+
+	if finalText != nil {
+		result.RawStdout = result.Stdout
+		result.Stdout = *finalText
+	}
+	if threadID != nil {
+		result.AgentSessionID = *threadID
+	}
+	if tokensIn != nil {
+		result.TokensIn = tokensIn
+	}
+	if tokensOut != nil {
+		result.TokensOut = tokensOut
+	}
+}
+
 // applyDiagnosticHints scans the combined stderr+stdout of a failed
 // delegation against the agent's configured hints and prints matching
 // recovery messages to stderr. Called from Delegate/DelegateWithContext
@@ -270,12 +457,27 @@ func (a *genericAgent) applyDiagnosticHints(result *runner.Result, runErr error)
 	if !failed || result == nil {
 		return
 	}
-	combined := result.Stderr + "\n" + result.Stdout
+	// RawStdout is included so unwrapping a structured envelope cannot hide
+	// the error text a pattern needs to see; it is empty unless a parser
+	// rewrote Stdout, so the common path scans exactly what it always did.
+	combined := result.Stderr + "\n" + result.Stdout + "\n" + result.RawStdout
 	m := config.MatchFailure(combined, a.cfg.DiagnosticHints)
-	for _, h := range m.Hints {
+
+	// Hints already on the Result were attached by applyResultFormat from a
+	// structured envelope and have not been printed yet. Printing happens
+	// here for both sources so a failure detected two ways — an api_error
+	// status code and the matching error text — is diagnosed once.
+	var hints []string
+	seen := map[string]bool{}
+	for _, h := range append(append([]string{}, result.MatchedHints...), m.Hints...) {
+		if seen[h] {
+			continue
+		}
+		seen[h] = true
+		hints = append(hints, h)
 		fmt.Fprintf(os.Stderr, "[quancode hint] %s\n", h)
 	}
-	result.MatchedHints = append(result.MatchedHints, m.Hints...)
+	result.MatchedHints = hints
 	if m.Transient {
 		result.Transient = true
 	}

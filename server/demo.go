@@ -129,7 +129,7 @@ func generateDemoEntries() []ledger.Entry {
 			}
 		}
 
-		entries = append(entries, ledger.Entry{
+		e := ledger.Entry{
 			Timestamp:    ts.UTC().Format(time.RFC3339),
 			Agent:        agent,
 			Task:         task,
@@ -140,7 +140,22 @@ func generateDemoEntries() []ledger.Entry {
 			Isolation:    isolation,
 			WorkDir:      "/home/dev/myproject",
 			DelegationID: fmt.Sprintf("del_%016x", rng.Int63()),
-		})
+		}
+		// Only the agents whose CLIs actually emit structured usage report
+		// anything, and only claude reports dollars. The demo mirrors that
+		// partial coverage rather than implying every adapter tracks usage.
+		switch agent {
+		case "claude", "codex":
+			tokensIn := 8000 + durationMs/12 + rng.Int63n(20000)
+			tokensOut := 200 + durationMs/400 + rng.Int63n(2000)
+			e.TokensIn = &tokensIn
+			e.TokensOut = &tokensOut
+			if agent == "claude" {
+				cost := float64(tokensIn)*3e-6 + float64(tokensOut)*15e-6
+				e.CostUSD = &cost
+			}
+		}
+		entries = append(entries, e)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {

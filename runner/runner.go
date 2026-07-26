@@ -36,6 +36,22 @@ type Result struct {
 	// itself rather than the task. Recorded in the ledger and counted by the
 	// health breaker.
 	AgentFault bool
+	// CostUSD, TokensIn, TokensOut, and AgentSessionID are populated by
+	// agent.applyResultFormat when the agent's AgentConfig.ResultFormat opts
+	// into structured output parsing. Pointers so "not reported by this CLI"
+	// (nil) is distinguishable from "reported as exactly zero" (non-nil 0) —
+	// a plain float64/int64 could not tell those apart.
+	CostUSD        *float64
+	TokensIn       *int64
+	TokensOut      *int64
+	AgentSessionID string
+	// RawStdout holds the pre-parse stdout when applyResultFormat replaced
+	// Stdout with the unwrapped answer. Failure evidence often lives in the
+	// parts of the envelope that unwrapping discards (a codex error event
+	// after the last agent_message, a claude field outside .result), so
+	// diagnostic-hint matching scans this too. Empty when nothing was
+	// rewritten — the parsers leave it alone on a no-op.
+	RawStdout string
 }
 
 // MergeEnv replaces env vars in base with values from extra (case-insensitive key match).

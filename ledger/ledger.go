@@ -88,6 +88,18 @@ type Entry struct {
 	// ledger alone, without re-reading output files.
 	AgentFault bool `json:"agent_fault,omitempty"`
 
+	// CostUSD, TokensIn, TokensOut, and AgentSessionID are populated when the
+	// agent's ResultFormat config opts into structured output parsing
+	// (currently: claude's json_object, codex's jsonl_events — see
+	// config.AgentConfig.ResultFormat). Pointers so "this CLI doesn't report
+	// cost" (nil/absent) is distinguishable from "reported as exactly $0"
+	// (present, zero). Populated whether the attempt succeeded or failed —
+	// failed attempts can still have consumed tokens and money.
+	CostUSD        *float64 `json:"cost_usd,omitempty"`
+	TokensIn       *int64   `json:"tokens_in,omitempty"`
+	TokensOut      *int64   `json:"tokens_out,omitempty"`
+	AgentSessionID string   `json:"agent_session_id,omitempty"`
+
 	// TaskSizeWarning is set when the user task length exceeded the
 	// configured warning threshold (preferences.task_size_warn_threshold).
 	// Empty when under threshold or warnings are disabled. Used by

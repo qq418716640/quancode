@@ -74,6 +74,14 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	todayCount := 0
 	today := time.Now().Format("2006-01-02")
 
+	// Cost is reported by some agents and not others (codex bills the
+	// subscription, not the call), and by none at all before v0.9.1. Counting
+	// how many entries carried a figure lets the UI present the total as
+	// partial coverage instead of implying it covers everything.
+	var totalCost float64
+	costReported, tokensReported := 0, 0
+	var totalTokensIn, totalTokensOut int64
+
 	for _, e := range entries {
 		// Apply filters.
 		if agentFilter != "" && e.Agent != agentFilter {
@@ -98,6 +106,19 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		}
 		totalDuration += e.DurationMs
 		agentCounts[e.Agent]++
+		if e.CostUSD != nil {
+			totalCost += *e.CostUSD
+			costReported++
+		}
+		if e.TokensIn != nil || e.TokensOut != nil {
+			tokensReported++
+		}
+		if e.TokensIn != nil {
+			totalTokensIn += *e.TokensIn
+		}
+		if e.TokensOut != nil {
+			totalTokensOut += *e.TokensOut
+		}
 		if len(e.Timestamp) >= 10 && e.Timestamp[:10] == today {
 			todayCount++
 		}
@@ -118,12 +139,24 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := map[string]any{
-		"total":        total,
-		"succeeded":    succeeded,
-		"success_rate": successRate,
-		"avg_duration": avgDuration,
-		"agents":       agentCounts,
-		"today":        todayCount,
+		"total":           total,
+		"succeeded":       succeeded,
+		"success_rate":    successRate,
+		"avg_duration":    avgDuration,
+		"agents":          agentCounts,
+		"today":           todayCount,
+		"cost_reported":   costReported,
+		"tokens_reported": tokensReported,
+		"tokens_in":       totalTokensIn,
+		"tokens_out":      totalTokensOut,
+	}
+	// null, not 0, when nothing reported: "$0 spent" and "no agent told us
+	// what it spent" are different claims, and the totals here are sums over
+	// a partial population either way. The *_reported counts say how partial.
+	if costReported > 0 {
+		result["cost_usd"] = totalCost
+	} else {
+		result["cost_usd"] = nil
 	}
 
 	// Only cache unfiltered results.

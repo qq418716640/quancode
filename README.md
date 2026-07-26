@@ -118,8 +118,8 @@ agents:
     enabled: true
     prompt_mode: file
     prompt_file: AGENTS.md
-    delegate_args: ["exec", "--full-auto", "--ephemeral"]
-    output_flag: --output-last-message
+    delegate_args: ["exec", "--sandbox", "workspace-write", "--ephemeral", "--json"]
+    result_format: jsonl_events
 ```
 
 For a fuller starter config, copy [`quancode.example.yaml`](quancode.example.yaml).
