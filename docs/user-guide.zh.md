@@ -154,6 +154,22 @@ Dashboard 的 Cost 卡片在显示总额的同时会标出有多少次委派真�
 
 无需配置，Claude 和 Codex 默认开启。如果你改过这两个 agent 的 `delegate_args`，参见 [`result_format`](agent-config-schema.md#result_format)。
 
+### 废弃警告
+
+agent CLI 会在 stderr 上宣告自己的破坏性变更，而 QuanCode 把每个 agent 的 stderr 捕获进 buffer，成功路径不打印——所以这些宣告以前根本没有任何路径能到达你。codex 每次委派都在警告 `--full-auto` 即将移除，警告了好几周才被发现。
+
+现在每次委派（包括成功的）都会从 agent 的 stderr 里提取生命周期警告并记录。`quancode doctor` 汇总最近出现过的：
+
+```
+  deprecation notices (last 7 days):
+    codex  warning: `--full-auto` is deprecated; use `--sandbox workspace-write` instead.
+          seen 9×, last just now
+```
+
+这行是 agent 原样打印的内容。QuanCode 无法判断它来自 CLI 自己的参数处理还是 CLI 调起的某个工具，所以只呈现原文而不替你解读——如果里面提到某个 flag，去查那个 agent 的 `delegate_args`。
+
+警告只是提示：不会把委派标记为失败、不触发 fallback、不计入 agent 健康度、不改变 `doctor` 的退出码。它们同样出现在 `delegate --format json` 和 `job result` 里，并且每条每命令只打印一次，所以大批量任务不会刷屏。
+
 ### 手动委派
 
 少数情况下你可能想从终端直接委派：

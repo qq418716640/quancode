@@ -61,6 +61,13 @@ type DelegationResult struct {
 	Verify        *VerifyResult    `json:"verify,omitempty"`
 	ConflictFiles []string         `json:"conflict_files,omitempty"`
 	Speculative   *SpeculativeInfo `json:"speculative,omitempty"`
+	// Deprecations are lifecycle warnings the agent CLI printed to stderr on
+	// this run. Advisory: they never change Status or ExitCode. Reported
+	// every time rather than deduplicated like the terminal message, because
+	// this is a machine interface and a caller that reads one result should
+	// not have to know whether some earlier result in the same process
+	// already mentioned it.
+	Deprecations []string `json:"deprecations,omitempty"`
 }
 
 // SpeculativeInfo describes the speculative execution context when both agents completed.
@@ -83,6 +90,7 @@ type CompanionResult struct {
 	DurationMs   int64    `json:"duration_ms"`
 	ChangedFiles []string `json:"changed_files,omitempty"`
 	Patch        string   `json:"patch,omitempty"`
+	Deprecations []string `json:"deprecations,omitempty"`
 }
 
 func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) DelegationResult {
@@ -100,6 +108,7 @@ func buildDelegationResult(agentKey, task, isolation string, ar attemptResult) D
 		dr.DurationMs = ar.result.DurationMs
 		dr.Output = ar.output
 		dr.ChangedFiles = ar.changedFiles
+		dr.Deprecations = ar.result.Deprecations
 	}
 	if isolation == "patch" && ar.patch != "" {
 		dr.Patch = ar.patch
@@ -401,7 +410,8 @@ var delegateCmd = &cobra.Command{
 			nextKey, nextA, nextReason := fl.nextAgent()
 			if nextA == nil {
 				fmt.Fprintf(os.Stderr, "[quancode] no fallback agents available\n")
-				err := finalizeDelegation(agentKey, task, workDir, isolation, meta, ar)
+				// Already logged above, before looking for a candidate.
+				err := reportDelegation(agentKey, task, isolation, ar)
 				ui.FallbackChain(chain)
 				return err
 			}

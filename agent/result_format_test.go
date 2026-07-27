@@ -279,3 +279,50 @@ func TestSumTokens(t *testing.T) {
 		t.Errorf("sumTokens(2, nil, 40) = %v, want 42", got)
 	}
 }
+
+// The whole reason this is a separate mechanism from applyDiagnosticHints:
+// a deprecation warning is what a working run looks like. Gating it on
+// failure, the way hints are gated, would miss every one of them.
+func TestDeprecationNoticesRecordedOnSuccess(t *testing.T) {
+	r := &runner.Result{
+		ExitCode: 0,
+		Stderr:   "warning: `--full-auto` is deprecated; use `--sandbox workspace-write` instead.\n",
+		Stdout:   "OK",
+	}
+	applyDeprecationNotices(r)
+
+	if len(r.Deprecations) != 1 {
+		t.Fatalf("Deprecations = %q, want one notice on a successful run", r.Deprecations)
+	}
+	// Advisory only: a deprecation is not a failure and must never reroute
+	// traffic or count against the agent's health.
+	if r.Transient || r.AgentFault {
+		t.Error("a deprecation notice must not mark the run transient or agent-fault")
+	}
+	if len(r.MatchedHints) != 0 {
+		t.Errorf("MatchedHints = %q, want notices kept out of the hint list", r.MatchedHints)
+	}
+	if r.Stdout != "OK" {
+		t.Errorf("Stdout = %q, want it untouched", r.Stdout)
+	}
+}
+
+// Asking an agent about deprecated APIs is an ordinary task, and its answer
+// lands in Stdout. Scanning it would turn every such task into a false
+// report about the agent's own flags.
+func TestDeprecationNoticesIgnoreStdout(t *testing.T) {
+	r := &runner.Result{
+		ExitCode: 0,
+		Stdout:   "I found three deprecated calls: parseX is deprecated, ...",
+		Stderr:   "",
+	}
+	applyDeprecationNotices(r)
+
+	if len(r.Deprecations) != 0 {
+		t.Errorf("Deprecations = %q, want none — that text is the answer, not a warning", r.Deprecations)
+	}
+}
+
+func TestDeprecationNoticesNilResult(t *testing.T) {
+	applyDeprecationNotices(nil) // a launch failure produces no Result
+}

@@ -100,6 +100,13 @@ type Entry struct {
 	TokensOut      *int64   `json:"tokens_out,omitempty"`
 	AgentSessionID string   `json:"agent_session_id,omitempty"`
 
+	// Deprecations records lifecycle warnings seen on the agent's stderr,
+	// one entry per matched line. Recorded here because stderr is captured
+	// into a buffer and discarded on success — the ledger is the only place
+	// a warning that fires on a *working* delegation can survive to be
+	// noticed. `quancode doctor` reads them back.
+	Deprecations []string `json:"deprecations,omitempty"`
+
 	// TaskSizeWarning is set when the user task length exceeded the
 	// configured warning threshold (preferences.task_size_warn_threshold).
 	// Empty when under threshold or warnings are disabled. Used by

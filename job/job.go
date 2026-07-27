@@ -80,4 +80,15 @@ type State struct {
 	// tasks via `quancode job result` so async users can see the warning
 	// without diving into the dashboard or ledger files.
 	TaskSizeWarning string `json:"task_size_warning,omitempty"`
+	// Deprecations, mirrored from the ledger entry, carry the agent CLI's
+	// own lifecycle warnings out to `quancode job result`. Async jobs run
+	// detached with no terminal at all, so this is the only path by which
+	// they can reach the user.
+	//
+	// Holds the final attempt's notices only, since the whole struct is
+	// attributed to ActualAgent and a fallback chain's earlier attempts ran
+	// under a different agent — listing them here would credit the wrong
+	// CLI. Every attempt's notices are in the ledger regardless, which is
+	// what `quancode doctor` reads.
+	Deprecations []string `json:"deprecations,omitempty"`
 }

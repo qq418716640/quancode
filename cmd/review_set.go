@@ -215,6 +215,12 @@ func runReviewSet(cmd *cobra.Command, args []string) error {
 		}
 		logAttempt(p.key, task, workDir, p.isolation, meta, ar)
 
+		// Fan-out attempts run Quiet so this command owns the UI, so none of
+		// them printed their own lifecycle notices.
+		if ar.result != nil {
+			printDeprecations(p.key, ar.result.Deprecations)
+		}
+
 		dr := buildDelegationResult(p.key, task, p.isolation, ar)
 		rsResult.Results = append(rsResult.Results, dr)
 		if dr.Status != StatusCompleted {

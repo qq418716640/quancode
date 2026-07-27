@@ -152,6 +152,22 @@ The dashboard's Cost card shows the total alongside how many delegations actuall
 
 Nothing to configure — this is on by default for Claude and Codex. If you have customized `delegate_args` for those agents, see [`result_format`](agent-config-schema.md#result_format).
 
+### Deprecation notices
+
+Agent CLIs announce their own breaking changes on stderr, and QuanCode captures each agent's stderr into a buffer that nothing prints when the run succeeds — so those announcements used to have no way of reaching you at all. Codex warned on every delegation for weeks that `--full-auto` was going away before anyone noticed.
+
+Lifecycle warnings are now pulled out of the agent's stderr and recorded on every delegation, successful ones included. `quancode doctor` summarizes what has been seen recently:
+
+```
+  deprecation notices (last 7 days):
+    codex  warning: `--full-auto` is deprecated; use `--sandbox workspace-write` instead.
+          seen 9×, last just now
+```
+
+The line is quoted exactly as the agent printed it. QuanCode cannot tell whether it came from the CLI's own argument handling or from a tool the CLI invoked, so it shows you what was said rather than guessing what it means — if it names a flag, check that agent's `delegate_args`.
+
+Notices are advisory. They never mark a delegation as failed, never trigger fallback, never count against an agent's health, and never change `doctor`'s exit code. They also appear in `delegate --format json` and `job result`, and are printed once per command so a large batch does not repeat them.
+
 ### Manual Delegation
 
 In rare cases you may want to delegate directly from the terminal:

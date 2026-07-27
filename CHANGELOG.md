@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning in spirit, with alpha releases allowed to change behavior more quickly while the public interface settles.
 
+## [Unreleased]
+
+### Added
+
+- **Agent CLIs' own deprecation warnings now reach the user.** Codex spent an unknown number of weeks printing `--full-auto is deprecated; use --sandbox workspace-write instead` on every single delegation, and nobody saw it — not because it scrolled past, but because QuanCode captures each agent's stderr into a buffer that nothing prints when the run succeeds. There was no path by which that warning could ever be seen. v0.9.1 fixed the flag; this makes the next one findable.
+
+  Lifecycle warnings are matched per line against the agent's stderr, on success as well as failure — success is precisely where they appear. They are recorded in the ledger, printed once per process, included in `delegate --format json` and `job result`, and summarized by `quancode doctor` with a count and how long ago each was last seen.
+
+  - **Advisory, never a failure.** Nothing here sets `transient` or `agent_fault`, and `doctor` reports notices without changing its exit code. A warning about next year's removal is not a broken agent, and a notice from before a config was fixed must not fail `doctor` for a week afterwards.
+  - **stderr only.** "Find the deprecated APIs in this package" is an ordinary thing to ask an agent, and the answer lands on stdout. Scanning it would turn every such task into a false report.
+  - **The matched line is quoted verbatim**, attributed to the agent rather than paraphrased. QuanCode cannot tell whether a line came from the CLI's own argument parsing or from something the CLI shelled out to, so the reader gets the evidence and judges. ANSI and control characters are stripped before anything is stored or replayed.
+  - Matching is deliberately broad — one stem, `deprecat` — where `CommonFailurePatterns` is deliberately exact. That table drives fallback and has to be precise; this one exists because the failure it addresses *was not knowing a deprecation existed*, and by the time the exact wording is known the discovery has already happened another way.
+
+### Fixed
+
+- **The same failed attempt was written to the ledger twice** when a transient failure had no fallback candidate left: the fallback loop logged it, then the finalizer logged it again. Every statistic derived from the ledger double-counted those attempts, including the health breaker's failure streaks.
+- **Async jobs that failed before the agent started were recorded as completed.** An attempt with no `runner.Result` left `exit_code` at zero, which the status mapper read as success — so `job status` said failed while the ledger said completed. The other three ledger paths already corrected this; async was missing it.
+- Adding a field to a delegation result no longer means editing four hand-maintained copies of the same block. All four ledger writers (plain, speculative, pipeline, async) now share one mapping.
+
 ## [v0.9.1] - 2026-07-26
 
 Both changes come from a survey of what Codex CLI and Claude Code shipped over the last two months. Both were verified against the installed CLIs (codex-cli 0.145.0, claude-code 2.1.219) rather than from release notes.

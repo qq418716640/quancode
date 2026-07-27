@@ -275,6 +275,9 @@ func writeJobResult(state *job.State, actualAgent string, ar attemptResult) erro
 	}
 	state.ChangedFiles = ar.changedFiles
 	state.TaskSizeWarning = ar.taskSizeWarning
+	if ar.result != nil {
+		state.Deprecations = ar.result.Deprecations
+	}
 
 	// Write agent output to file (capped).
 	if ar.output != "" {
@@ -325,24 +328,17 @@ func writeLedger(state *job.State, ar attemptResult, verifyJSON json.RawMessage)
 		WorkDir:   state.WorkDir,
 		Isolation: state.Isolation,
 	}
-	if ar.result != nil {
-		entry.ExitCode = ar.result.ExitCode
-		entry.TimedOut = ar.result.TimedOut
-		entry.Cancelled = ar.result.Cancelled
-		entry.DurationMs = ar.result.DurationMs
-		entry.ChangedFiles = ar.changedFiles
-		entry.MatchedHints = ar.result.MatchedHints
-		entry.AgentFault = ar.agentFault
-		entry.CostUSD = ar.result.CostUSD
-		entry.TokensIn = ar.result.TokensIn
-		entry.TokensOut = ar.result.TokensOut
-		entry.AgentSessionID = ar.result.AgentSessionID
+	applyAttemptFields(entry, ar)
+	// An attempt that failed before producing a Result leaves ExitCode at
+	// its zero value, which determineFinalStatus would read as success —
+	// recording a job the user sees as failed as "completed" in the ledger.
+	// The other three ledger paths already do this; async was missing it.
+	if ar.err != nil && entry.ExitCode == 0 {
+		entry.ExitCode = 1
 	}
-	entry.TaskSizeWarning = ar.taskSizeWarning
 	// Map job status to ledger status for consistency.
 	// Job uses "succeeded"; ledger uses "completed".
 	entry.FinalStatus = determineFinalStatus(entry.ExitCode, entry.TimedOut, entry.Cancelled, ar.verify)
-	entry.FailureClass = ar.failureClass
 	entry.VerifyRaw = verifyJSON
 
 	if err := ledger.Append(entry); err == nil {

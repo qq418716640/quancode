@@ -27,6 +27,7 @@ type jobResultOutput struct {
 	PatchFile       string   `json:"patch_file,omitempty"`
 	OutputTail      string   `json:"output_tail,omitempty"`
 	TaskSizeWarning string   `json:"task_size_warning,omitempty"`
+	Deprecations    []string `json:"deprecations,omitempty"`
 }
 
 var jobResultCmd = &cobra.Command{
@@ -60,6 +61,7 @@ var jobResultCmd = &cobra.Command{
 				PatchFile:       state.PatchFile,
 				OutputTail:      outputTail,
 				TaskSizeWarning: state.TaskSizeWarning,
+				Deprecations:    state.Deprecations,
 			}
 			data, _ := json.MarshalIndent(out, "", "  ")
 			fmt.Println(string(data))
@@ -74,6 +76,9 @@ var jobResultCmd = &cobra.Command{
 		}
 		if state.TaskSizeWarning != "" {
 			fmt.Fprintf(os.Stdout, "Warn:   %s\n", state.TaskSizeWarning)
+		}
+		for _, d := range state.Deprecations {
+			fmt.Fprintf(os.Stdout, "Notice: %s reported: %s\n", state.ActualAgent, d)
 		}
 		if len(state.ChangedFiles) > 0 {
 			fmt.Fprintf(os.Stdout, "\nChanged files:\n")

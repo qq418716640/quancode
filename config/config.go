@@ -393,6 +393,30 @@ func ConfigPath() string {
 	return "quancode.yaml"
 }
 
+// ResolvePath returns the config file Load would actually read for the same
+// argument, mirroring its search order.
+//
+// ConfigPath names only the per-user location. Telling someone to edit that
+// file when Load picked up a project-local ./quancode.yaml, or an explicit
+// --config, sends them to change a file that has no effect.
+func ResolvePath(explicit string) string {
+	if explicit != "" {
+		return explicit
+	}
+	paths := []string{"quancode.yaml"}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".config", "quancode", "quancode.yaml"))
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// Nothing on disk: Load falls back to built-in defaults, and the
+	// per-user path is where `quancode init` would put one.
+	return ConfigPath()
+}
+
 // Validate checks the config for common issues. Returns a list of problems.
 func (c *Config) Validate() []string {
 	var problems []string

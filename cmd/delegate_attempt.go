@@ -21,6 +21,41 @@ type verifySpec struct {
 }
 
 // attemptResult holds everything produced by a single delegation attempt.
+// applyAttemptFields copies every ledger field derived from an attempt onto
+// the entry.
+//
+// Four independent code paths build a ledger.Entry — plain delegation,
+// speculative, pipeline stages, and async jobs — and each had grown its own
+// hand-maintained copy of this block. Every new Result field then had to be
+// threaded through all four, and a missed one would silently drop that data
+// for only some kinds of delegation. Adding a field here reaches all four.
+//
+// Callers still set their own identifying fields (pipeline/batch/speculative
+// IDs) and any post-processing that depends on these values, such as
+// determineFinalStatus reading ExitCode.
+func applyAttemptFields(entry *ledger.Entry, ar attemptResult) {
+	entry.TaskSizeWarning = ar.taskSizeWarning
+	entry.FailureClass = ar.failureClass
+	// Derived from matching the agent's own output, so it is false whenever
+	// there is no result to match against.
+	entry.AgentFault = ar.agentFault
+
+	if ar.result == nil {
+		return
+	}
+	entry.ExitCode = ar.result.ExitCode
+	entry.TimedOut = ar.result.TimedOut
+	entry.Cancelled = ar.result.Cancelled
+	entry.DurationMs = ar.result.DurationMs
+	entry.ChangedFiles = ar.changedFiles
+	entry.MatchedHints = ar.result.MatchedHints
+	entry.Deprecations = ar.result.Deprecations
+	entry.CostUSD = ar.result.CostUSD
+	entry.TokensIn = ar.result.TokensIn
+	entry.TokensOut = ar.result.TokensOut
+	entry.AgentSessionID = ar.result.AgentSessionID
+}
+
 type attemptResult struct {
 	result       *runner.Result
 	err          error
@@ -91,6 +126,23 @@ func runDelegateAttempt(opts DelegateAttemptOptions) (ar attemptResult) {
 			fmt.Fprintf(os.Stderr, format, args...)
 		}
 	}
+
+	// Surface the agent CLI's own lifecycle warnings. runner captures the
+	// agent's stderr into a buffer that nothing prints on the success path,
+	// so without this a CLI can announce for months that a flag QuanCode
+	// passes is going away and no one ever sees it — which is exactly what
+	// happened with codex's --full-auto.
+	//
+	// Quiet attempts return before printDeprecations, not inside it: the
+	// once-per-process slot must not be claimed by an attempt that cannot
+	// show the line. review-set, speculative, and the async job runner all
+	// run attempts Quiet and surface notices through their own output.
+	defer func() {
+		if opts.Quiet || ar.result == nil {
+			return
+		}
+		printDeprecations(opts.AgentKey, ar.result.Deprecations)
+	}()
 
 	// Task-size warning. Opt-in since v0.9.0: a 10-week sample showed task
 	// length does not predict timeouts, so the message no longer claims it
@@ -298,23 +350,7 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 		BatchID:        meta.BatchID,
 		BatchItemID:    meta.BatchItemID,
 	}
-	if ar.result != nil {
-		logEntry.ExitCode = ar.result.ExitCode
-		logEntry.TimedOut = ar.result.TimedOut
-		logEntry.Cancelled = ar.result.Cancelled
-		logEntry.DurationMs = ar.result.DurationMs
-		logEntry.ChangedFiles = ar.changedFiles
-		logEntry.MatchedHints = ar.result.MatchedHints
-	}
-	logEntry.TaskSizeWarning = ar.taskSizeWarning
-	logEntry.FailureClass = ar.failureClass
-	logEntry.AgentFault = ar.agentFault
-	if ar.result != nil {
-		logEntry.CostUSD = ar.result.CostUSD
-		logEntry.TokensIn = ar.result.TokensIn
-		logEntry.TokensOut = ar.result.TokensOut
-		logEntry.AgentSessionID = ar.result.AgentSessionID
-	}
+	applyAttemptFields(logEntry, ar)
 	logEntry.ConflictFiles = ar.conflictFiles
 	if ar.patchApplyErr != nil {
 		logEntry.ChangedFiles = nil // patch was not applied to the main tree
@@ -340,7 +376,18 @@ func logAttempt(agentKey, task, workDir, isolation string, meta attemptMeta, ar 
 func finalizeDelegation(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult) error {
 	// Record to ledger
 	logAttempt(agentKey, task, workDir, isolation, meta, ar)
+	return reportDelegation(agentKey, task, isolation, ar)
+}
 
+// reportDelegation does everything finalizeDelegation does except write to
+// the ledger, for the one caller that already logged this attempt.
+//
+// The fallback loop logs each failed attempt as it decides whether to try
+// another agent. When no candidate is left it still has to report the
+// failure, and calling finalizeDelegation there wrote the same attempt to
+// the ledger a second time — inflating its own failure counts, the health
+// breaker's, and every statistic derived from them.
+func reportDelegation(agentKey, task, isolation string, ar attemptResult) error {
 	// Ceremony: show completion/failure summary
 	if ar.failureClass == "" && ar.err == nil && ar.patchApplyErr == nil {
 		var durationMs int64

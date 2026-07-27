@@ -367,6 +367,14 @@ func finalizeSpeculativeBothFailed(opts speculativeDelegationOpts, primary, spec
 func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attemptMeta, ar attemptResult, role string, selected bool, selectionReason string) {
 	outputFile := ledger.WriteOutput(ar.delegationID, ar.output, ledger.DefaultMaxOutputBytes)
 
+	// Both speculative attempts run Quiet so the orchestrator owns the
+	// spinner, which means neither prints its own lifecycle notices. This
+	// runs for the loser too: a deprecated flag on the agent that lost the
+	// race is still a deprecated flag.
+	if ar.result != nil {
+		printDeprecations(agentKey, ar.result.Deprecations)
+	}
+
 	logEntry := &ledger.Entry{
 		Agent:           agentKey,
 		Task:            task,
@@ -383,21 +391,7 @@ func logSpeculativeEntry(agentKey, task, workDir, isolation string, meta attempt
 		Selected:        selected,
 		SelectionReason: selectionReason,
 	}
-	if ar.result != nil {
-		logEntry.ExitCode = ar.result.ExitCode
-		logEntry.TimedOut = ar.result.TimedOut
-		logEntry.Cancelled = ar.result.Cancelled
-		logEntry.DurationMs = ar.result.DurationMs
-		logEntry.ChangedFiles = ar.changedFiles
-		logEntry.MatchedHints = ar.result.MatchedHints
-		logEntry.AgentFault = ar.agentFault
-		logEntry.CostUSD = ar.result.CostUSD
-		logEntry.TokensIn = ar.result.TokensIn
-		logEntry.TokensOut = ar.result.TokensOut
-		logEntry.AgentSessionID = ar.result.AgentSessionID
-	}
-	logEntry.TaskSizeWarning = ar.taskSizeWarning
-	logEntry.FailureClass = ar.failureClass
+	applyAttemptFields(logEntry, ar)
 	logEntry.ConflictFiles = ar.conflictFiles
 	if ar.patchApplyErr != nil {
 		logEntry.ChangedFiles = nil
@@ -439,6 +433,7 @@ func finalizeSpeculativeOutput(selected speculativeResult, companion *speculativ
 				DurationMs:   cdr.DurationMs,
 				ChangedFiles: cdr.ChangedFiles,
 				Patch:        cdr.Patch,
+				Deprecations: cdr.Deprecations,
 			}
 			dr.Speculative = &SpeculativeInfo{
 				Mode:            "collected",

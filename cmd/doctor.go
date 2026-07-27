@@ -5,10 +5,16 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/qq418716640/quancode/config"
 	"github.com/spf13/cobra"
 )
+
+// deprecationWindow is how far back `doctor` looks for lifecycle notices.
+// Long enough that an occasional user still sees one, short enough that a
+// notice fixed a while ago stops being reported.
+const deprecationWindow = 7 * 24 * time.Hour
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -87,6 +93,29 @@ var doctorCmd = &cobra.Command{
 		// 6. quancode binary in PATH
 		_, quanInPath := exec.LookPath("quancode")
 		check("quancode in PATH", quanInPath == nil, "add $HOME/go/bin to PATH or install to /usr/local/bin")
+
+		// 7. Deprecation notices seen in recent delegations.
+		//
+		// Reported as observations, never as failures: the ledger records
+		// that an agent said something, and cannot know whether it is still
+		// saying it. A notice from before the config was fixed would
+		// otherwise fail `doctor` for a week after the problem was gone.
+		notices, noticesErr := recentDeprecations(deprecationWindow)
+		if noticesErr != nil {
+			fmt.Println()
+			fmt.Printf("  note  could not read delegation history for deprecation notices: %v\n", noticesErr)
+			fmt.Printf("        agent checks above are unaffected.\n")
+		}
+		if len(notices) > 0 {
+			fmt.Println()
+			fmt.Printf("  deprecation notices (last %d days):\n", int(deprecationWindow.Hours()/24))
+			for _, n := range notices {
+				fmt.Printf("    %s  %s\n", n.Agent, n.Message)
+				fmt.Printf("          seen %d×, last %s\n", n.Count, humanizeSince(n.LastSeen))
+			}
+			fmt.Printf("        these come from the agent CLI itself, quoted verbatim.\n")
+			fmt.Printf("        if one names a flag, check that agent's args in %s\n", config.ResolvePath(cfgFile))
+		}
 
 		if hint := completionSetupHint(); hint != "" {
 			fmt.Println()

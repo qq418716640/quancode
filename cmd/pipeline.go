@@ -632,21 +632,7 @@ func logPipelineEntry(pipelineID, pipelineName, stageName string, stageIndex int
 		StageName:      stageName,
 		StageIndex:     stageIndex,
 	}
-	if ar.result != nil {
-		logEntry.ExitCode = ar.result.ExitCode
-		logEntry.TimedOut = ar.result.TimedOut
-		logEntry.Cancelled = ar.result.Cancelled
-		logEntry.DurationMs = ar.result.DurationMs
-		logEntry.ChangedFiles = ar.changedFiles
-		logEntry.MatchedHints = ar.result.MatchedHints
-		logEntry.AgentFault = ar.agentFault
-		logEntry.CostUSD = ar.result.CostUSD
-		logEntry.TokensIn = ar.result.TokensIn
-		logEntry.TokensOut = ar.result.TokensOut
-		logEntry.AgentSessionID = ar.result.AgentSessionID
-	}
-	logEntry.TaskSizeWarning = ar.taskSizeWarning
-	logEntry.FailureClass = ar.failureClass
+	applyAttemptFields(logEntry, ar)
 	if (ar.err != nil) && logEntry.ExitCode == 0 {
 		logEntry.ExitCode = 1
 	}

@@ -45,6 +45,12 @@ type Result struct {
 	TokensIn       *int64
 	TokensOut      *int64
 	AgentSessionID string
+	// Deprecations holds lifecycle warnings observed on this run's stderr —
+	// most importantly, a CLI announcing that a flag QuanCode passes is
+	// going away. Populated on success as well as failure, since that is
+	// where these appear: the run works, and only the warning says it will
+	// not keep working. Purely advisory; never affects fallback or health.
+	Deprecations []string
 	// RawStdout holds the pre-parse stdout when applyResultFormat replaced
 	// Stdout with the unwrapped answer. Failure evidence often lives in the
 	// parts of the envelope that unwrapping discards (a codex error event

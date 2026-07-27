@@ -178,6 +178,7 @@ func (a *genericAgent) Delegate(workDir, task string, opts DelegateOptions) (res
 			result.DelegationID = delegationID
 		}
 		a.applyResultFormat(result)
+		applyDeprecationNotices(result)
 		a.applyDiagnosticHints(result, err)
 	}()
 
@@ -222,6 +223,7 @@ func (a *genericAgent) DelegateWithContext(ctx context.Context, workDir, task st
 			result.DelegationID = delegationID
 		}
 		a.applyResultFormat(result)
+		applyDeprecationNotices(result)
 		a.applyDiagnosticHints(result, err)
 	}()
 
@@ -443,6 +445,27 @@ func applyCodexJSONLEvents(result *runner.Result) {
 	if tokensOut != nil {
 		result.TokensOut = tokensOut
 	}
+}
+
+// applyDeprecationNotices records lifecycle warnings from the agent's
+// stderr — a CLI announcing that a flag QuanCode passes is on its way out.
+//
+// Unlike applyDiagnosticHints this runs regardless of exit code, because a
+// deprecation warning is what a *successful* run looks like right before it
+// stops being successful. It is also why the warning is so easy to miss:
+// runner captures stderr into a buffer that nothing reads on the success
+// path, so these never reach a terminal on their own. Recording them is the
+// entire point.
+//
+// Advisory only. Nothing here touches Transient, AgentFault, or
+// MatchedHints: a deprecation is not a failure, and folding it into the
+// hint list would corrupt both health analysis and the meaning of that
+// field in the ledger.
+func applyDeprecationNotices(result *runner.Result) {
+	if result == nil {
+		return
+	}
+	result.Deprecations = config.MatchDeprecations(result.Stderr)
 }
 
 // applyDiagnosticHints scans the combined stderr+stdout of a failed
